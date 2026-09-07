@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Claude Code</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: transparent;
+      overflow: hidden;
+    }
+    .card {
+      position: relative;
+      background: #16161a;
+      border: 1px solid #2a2a30;
+      border-radius: 12px;
+      padding: 12px 14px;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+    .title {
+      color: #d97757;
+      font-size: 16px;
+      font-weight: 600;
+      flex: 1;
+    }
+    .updated {
+      color: #777;
+      font-size: 11px;
+      font-weight: 400;
+    }
+    .close {
+      -webkit-app-region: no-drag;
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .close:hover {
+      color: #fff;
+    }
+    .limit {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 7px;
+      font-size: 13px;
+      color: #ccc;
+    }
+    .limit .lbl {
+      flex: 0 0 84px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .limit .lbl .per {
+      color: #888;
+      font-size: 11px;
+    }
+    .limit .pct {
+      flex: 0 0 34px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .limit .rst {
+      flex: 0 0 100px;
+      text-align: center;
+      font-size: 11px;
+      color: #777;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .bar {
+      flex: 1;
+      height: 8px;
+      background: #2a2a30;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+    .limit .rst .countdown {
+      color: #999;
+      display: block;
+      text-align: center;
+      font-size: 12.5px;
+    }
+    .limit .rst .dow {
+      color: #d97757;
+      font-weight: 600;
+    }
+    .countdown {
+      font-family: 'Cascadia Mono', Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+      color: #4caf7d;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-shadow: 0 0 6px rgba(76, 175, 125, 0.5);
+    }
+    .countdown.warn {
+      color: #e0a93e;
+      text-shadow: 0 0 6px rgba(224, 169, 62, 0.5);
+    }
+    .countdown.crit {
+      color: #d9534f;
+      text-shadow: 0 0 6px rgba(217, 83, 79, 0.6);
+    }
+    .error {
+      color: #d9534f;
+      font-size: 14px;
+      margin-top: 8px;
+      word-break: break-word;
+    }
+    .temps {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #2a2a30;
+      font-size: 13px;
+      color: #ccc;
+    }
+    .maint-btn {
+      -webkit-app-region: no-drag;
+      position: absolute;
+      right: 0;
+      /* +4px compensa o padding-top:8px da .temps p/ alinhar com CPU/GPU/relogio */
+      top: calc(50% + 4px);
+      transform: translateY(-50%);
+      background: #24242b;
+      border: 1px solid #33333b;
+      border-radius: 6px;
+      color: #bbb;
+      font-size: 13px;
+      line-height: 1;
+      padding: 4px 7px;
+      cursor: pointer;
+    }
+    .maint-btn:hover { background: #2f2f38; color: #fff; }
+    .maint-btn:disabled { opacity: 0.6; cursor: default; }
+    .maint-btn.spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+    .maint-status {
+      -webkit-app-region: no-drag;
+      display: none;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #2a2a30;
+      font-size: 11px;
+      color: #999;
+      white-space: pre-line;
+      line-height: 1.5;
+    }
+    .maint-status.on { display: block; }
+    .rst-stale { color: #e0a93e; font-size: 11px; }
+
+    .modal-overlay {
+      -webkit-app-region: no-drag;
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      background: rgba(8, 8, 10, 0.72);
+      backdrop-filter: blur(3px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+      z-index: 10;
+    }
+    .modal-overlay.on { display: flex; }
+    /* Janela tem altura do card; garante espaco p/ o modal nao ser cortado. */
+    .card.modal-open { min-height: 250px; }
+    .card.modal-open-lg { min-height: 340px; }
+    .modal {
+      width: 100%;
+      max-width: 340px;
+      background: #1c1c22;
+      border: 1px solid #33333b;
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+      padding: 16px 16px 14px;
+      animation: pop 0.16s ease;
+    }
+    @keyframes pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-title {
+      color: #d97757;
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .modal-body {
+      color: #c5c5cc;
+      font-size: 12.5px;
+      line-height: 1.55;
+      margin-bottom: 14px;
+    }
+    .modal-body b { color: #e8e8ee; }
+    .modal-body .note {
+      color: #888;
+      font-size: 11.5px;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .btn {
+      -webkit-app-region: no-drag;
+      border: none;
+      border-radius: 7px;
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 7px 14px;
+      cursor: pointer;
+    }
+    .btn-ghost { background: #2a2a32; color: #bbb; }
+    .btn-ghost:hover { background: #34343d; color: #fff; }
+    .btn-primary { background: #d97757; color: #16161a; }
+    .btn-primary:hover { background: #e08a6d; }
+    .mode-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .mode-opt {
+      -webkit-app-region: no-drag;
+      flex: 1;
+      background: #24242b;
+      border: 1px solid #33333b;
+      border-radius: 7px;
+      color: #bbb;
+      font-size: 12px;
+      padding: 7px 4px;
+      cursor: pointer;
+    }
+    .mode-opt.sel {
+      background: #d97757;
+      border-color: #d97757;
+      color: #16161a;
+      font-weight: 600;
+    }
+    .field { margin-bottom: 8px; }
+    .field label {
+      display: block;
+      color: #888;
+      font-size: 11px;
+      margin-bottom: 3px;
+    }
+    .field input {
+      -webkit-app-region: no-drag;
+      width: 100%;
+      background: #141418;
+      border: 1px solid #33333b;
+      border-radius: 6px;
+      color: #ddd;
+      font-size: 12px;
+      padding: 6px 8px;
+      font-family: 'Cascadia Mono', Consolas, monospace;
+    }
+    .field input:focus { outline: none; border-color: #d97757; }
+    /* Toggle da credencial, no cabecalho: e ali que se troca de conta. */
+    .auth-toggle {
+      -webkit-app-region: no-drag;
+      display: flex;
+      background: #24242b;
+      border: 1px solid #33333b;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .auth-toggle button {
+      background: none;
+      border: none;
+      color: #777;
+      font-family: inherit;
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 3px 7px;
+      cursor: pointer;
+    }
+    .auth-toggle button:hover { color: #fff; }
+    .auth-toggle button.sel { background: #d97757; color: #16161a; }
+    .auth-toggle button.sel:hover { color: #16161a; }
+    .auth-toggle.busy { opacity: 0.45; pointer-events: none; }
+    .temp-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .temp-label {
+      color: #888;
+      font-weight: 600;
+    }
+    .temp-val {
+      font-family: 'Cascadia Mono', Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    /* --- Sentry: erros nao resolvidos, de todos os projetos da org --- */
+    .sentry {
+      border-top: 1px solid #26262c;
+      margin-top: 9px;
+      padding-top: 8px;
+    }
+    .sentry-head {
+      -webkit-app-region: no-drag;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+    }
+    .sentry-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #4caf7d;
+      flex: none;
+    }
+    .sentry-dot.aviso { background: #e0a93e; }
+    .sentry-dot.alerta {
+      background: #d9534f;
+      animation: pulseDot 1.8s infinite;
+    }
+    @keyframes pulseDot {
+      0% { box-shadow: 0 0 0 0 rgba(217, 83, 79, 0.65); }
+      70% { box-shadow: 0 0 0 7px rgba(217, 83, 79, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(217, 83, 79, 0); }
+    }
+    .sentry-title {
+      color: #b9b9c2;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .sentry-count {
+      font-family: 'Cascadia Mono', Consolas, monospace;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #d9534f;
+    }
+    .sentry-count.zero { color: #4caf7d; }
+    .sentry-novos {
+      background: #d9534f;
+      color: #16161a;
+      font-size: 9.5px;
+      font-weight: 700;
+      border-radius: 8px;
+      padding: 1px 6px;
+    }
+    .sentry-when {
+      flex: 1;
+      text-align: right;
+      color: #666;
+      font-size: 10.5px;
+    }
+    .sentry-caret { color: #777; font-size: 10px; }
+    .sentry-list {
+      display: none;
+      -webkit-app-region: no-drag;
+      margin-top: 6px;
+      max-height: 196px;
+      overflow-y: auto;
+    }
+    .sentry.aberto .sentry-list { display: block; }
+    .sentry-list::-webkit-scrollbar { width: 6px; }
+    .sentry-list::-webkit-scrollbar-thumb { background: #33333b; border-radius: 3px; }
+    .sy-item {
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
+      padding: 5px 0;
+      border-top: 1px solid #202027;
+    }
+    .sy-item:first-child { border-top: none; }
+    .sy-bar {
+      width: 3px;
+      border-radius: 2px;
+      background: #e0a93e;
+      flex: none;
+    }
+    .sy-main { flex: 1; min-width: 0; }
+    .sy-top { display: flex; align-items: center; gap: 5px; }
+    .sy-proj {
+      background: #24242b;
+      color: #8f8fa0;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      border-radius: 4px;
+      padding: 1px 5px;
+      flex: none;
+    }
+    .sy-tit {
+      color: #dcdce2;
+      font-size: 11.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sy-sub {
+      color: #7a7a85;
+      font-size: 10px;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sy-item.novo .sy-tit { color: #fff; }
+    .sy-item.novo .sy-proj { background: #d9534f; color: #16161a; }
+    .sy-acts { display: flex; gap: 3px; flex: none; align-items: center; }
+    .sy-btn {
+      -webkit-app-region: no-drag;
+      background: #24242b;
+      border: 1px solid #33333b;
+      border-radius: 5px;
+      color: #8a8a96;
+      font-size: 11px;
+      line-height: 1;
+      padding: 4px 6px;
+      cursor: pointer;
+    }
+    .sy-btn:hover { background: #31313a; color: #fff; }
+    .sy-btn.ok:hover { color: #4caf7d; border-color: #4caf7d; }
+    .sy-btn:disabled { opacity: 0.4; cursor: default; }
+    .sy-btn.confirmar {
+      background: #d97757;
+      border-color: #d97757;
+      color: #16161a;
+      font-weight: 700;
+      font-size: 9.5px;
+    }
+    .sy-vazio { color: #6a6a75; font-size: 11px; padding: 6px 0; }
+    .sy-erro { color: #d9534f; font-size: 10.5px; padding: 5px 0; }
+    /* Faixa de alerta: e ela que "avisa na hora" quando a notificacao
+       do Windows esta desligada na maquina. */
+    .sy-alerta {
+      background: #35191a;
+      border: 1px solid #d9534f;
+      border-radius: 6px;
+      color: #f0b3b0;
+      font-size: 11px;
+      padding: 5px 8px;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card.piscando {
+      border-color: #d9534f;
+      animation: piscaCard 1s ease-in-out 5;
+    }
+    @keyframes piscaCard {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(217, 83, 79, 0); }
+      50% { box-shadow: 0 0 0 3px rgba(217, 83, 79, 0.4); }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <span class="title">Claude Code <span id="updatedAt" class="updated"></span></span>
+      <span class="auth-toggle" id="authToggle" title="Trocar credencial · botão direito edita a chave">
+        <button data-mode="max">MAX</button>
+        <button data-mode="api">API</button>
+      </span>
+      <button class="close" id="closeBtn">✕</button>
+    </div>
+    <div id="content"></div>
+
+    <div id="sentryBox" class="sentry">
+      <div class="sentry-head" id="sentryHead" title="Erros não resolvidos no Sentry · clique para abrir a lista">
+        <span class="sentry-dot" id="sentryDot"></span>
+        <span class="sentry-title">Sentry</span>
+        <span class="sentry-count zero" id="sentryCount">…</span>
+        <span class="sentry-novos" id="sentryNovos" style="display:none"></span>
+        <span class="sentry-when" id="sentryWhen"></span>
+        <span class="sentry-caret" id="sentryCaret">▸</span>
+      </div>
+      <div class="sentry-list" id="sentryList"></div>
+    </div>
+
+    <div id="temps" class="temps">
+      <div class="temp-item" id="cpuItem" style="display:none"><span class="temp-label">CPU</span><span id="cpuTemp" class="temp-val">--</span></div>
+      <div class="temp-item" id="gpuItem" style="display:none"><span class="temp-label">GPU</span><span id="gpuTemp" class="temp-val">--</span></div>
+      <div class="temp-item"><span id="clock" class="temp-val">--:--:--</span></div>
+      <button class="maint-btn" id="maintBtn" title="Limpar cache do Windows">🧹</button>
+    </div>
+    <div id="maintStatus" class="maint-status"></div>
+
+    <div id="maintModal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-title">Limpar cache do Windows</div>
+        <div class="modal-body">
+          Vai limpar Temp, Prefetch, miniaturas, INetCache, Windows Update e DNS.<br><br>
+          <b>Recentes</b> e <b>Acesso rápido</b> do Explorer <b>não</b> serão apagados.<br>
+          <span class="note">Uma janela de permissão (UAC) vai aparecer.</span>
+        </div>
+        <div class="modal-actions">
+          <button id="maintCancel" class="btn btn-ghost">Cancelar</button>
+          <button id="maintOk" class="btn btn-primary">Limpar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="authModal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-title">Credencial do Claude Code</div>
+        <div class="modal-body">
+          <div class="mode-row">
+            <button class="mode-opt" id="optMax" data-mode="max">Assinatura Max</button>
+            <button class="mode-opt" id="optApi" data-mode="api">API / gateway</button>
+          </div>
+          <div id="apiFields">
+            <div class="field">
+              <label for="authUrl">ANTHROPIC_BASE_URL</label>
+              <input id="authUrl" type="text" spellcheck="false" placeholder="https://...">
+            </div>
+            <div class="field">
+              <label for="authKey">ANTHROPIC_AUTH_TOKEN</label>
+              <input id="authKey" type="password" spellcheck="false" placeholder="colar chave">
+            </div>
+          </div>
+          <span class="note" id="authNote"></span>
+        </div>
+        <div class="modal-actions">
+          <button id="authCancel" class="btn btn-ghost">Cancelar</button>
+          <button id="authOk" class="btn btn-primary">Aplicar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      window.api.closeApp();
+    });
+
+    function barColor(pct) {
+      if (pct >= 90) return '#d9534f';
+      if (pct >= 70) return '#e0a93e';
+      return '#4caf7d';
+    }
+
+    function fmtHora(iso) {
+      return new Date(iso).toLocaleTimeString('pt-BR', {
+        timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    function fmtDiaHora(iso) {
+      const dt = new Date(iso);
+      let dia = dt.toLocaleDateString('pt-BR', {
+        timeZone: 'America/Sao_Paulo', weekday: 'short'
+      }).replace('.', '').replace(',', '');
+      dia = dia.charAt(0).toUpperCase() + dia.slice(1);
+      const data = dt.toLocaleDateString('pt-BR', {
+        timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit'
+      });
+      return '<span class="dow">' + dia + ' ' + data + '</span> ' + fmtHora(iso);
+    }
+
+    function fmtClock(ms) {
+      if (ms <= 0) return '00:00:00';
+      const totalSec = Math.floor(ms / 1000);
+      const d = Math.floor(totalSec / 86400);
+      const h = Math.floor((totalSec % 86400) / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      const pad = n => String(n).padStart(2, '0');
+      if (d > 0) return d + 'd ' + pad(h) + 'h ' + pad(m) + 'm';
+      return pad(h) + ':' + pad(m) + ':' + pad(s);
+    }
+
+    function tickCountdowns() {
+      document.querySelectorAll('.countdown').forEach(el => {
+        const resta = new Date(el.dataset.resets) - new Date();
+        if (resta <= 0) {
+          el.textContent = '00:00:00';
+          el.className = 'countdown crit';
+        } else {
+          el.textContent = fmtClock(resta);
+          const hrs = resta / 3600000;
+          el.className = 'countdown' + (hrs < 1 ? ' crit' : hrs < 6 ? ' warn' : '');
+        }
+      });
+      const agora = new Date();
+      const diaHoje = agora.toLocaleDateString('pt-BR', { weekday: 'long' }).split('-')[0].toUpperCase();
+      const dataHoje = agora.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      document.getElementById('clock').textContent =
+        diaHoje + ' ' + dataHoje + ' - ' + agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    let lastH = 0;
+    function reportHeight() {
+      requestAnimationFrame(() => {
+        const card = document.querySelector('.card');
+        const h = Math.ceil(card.getBoundingClientRect().height);
+        if (h && h !== lastH) { lastH = h; window.api.resizeHeight(h); }
+      });
+    }
+
+    function renderLimit(label, per, info) {
+      if (!info) return '';
+      const pct = Math.min(100, Math.round(info.utilization || 0));
+      // Sessão (curta): cronômetro regressivo ao vivo. Semanais: dia e hora do reset.
+      let rst = '';
+      if (info.resets_at) {
+        const restaMs = new Date(info.resets_at) - new Date();
+        if (restaMs <= 0) {
+          // dado velho, não mostra nada
+          rst = '';
+        } else {
+          rst = '<span class="countdown" data-resets="' + info.resets_at + '"></span>';
+        }
+      }
+      return '<div class="limit">' +
+        '<span class="lbl"><span>' + label + '</span><span class="per">' + per + '</span></span>' +
+        '<div class="bar"><div class="fill" style="width:' + pct + '%;background:' + barColor(pct) + '"></div></div>' +
+        '<span class="pct">' + pct + '%</span>' +
+        '<span class="rst">' + rst + '</span>' +
+        '</div>';
+    }
+
+    localStorage.removeItem('authMode');
+
+    const POLL_MS = 5 * 60 * 1000;
+    const MAX_BACKOFF_MS = 30 * 60 * 1000;
+    let hasData = false;
+    let backoffMs = 0;
+    let refreshTimer = null;
+    let lastFetchAt = 0;
+
+    // Quando um resets_at ja passou, o dado exibido esta velho (API em backoff/offline).
+    // Agenda busca para no minimo 60s apos a ultima, para nao entrar em loop na API.
+    let forcedPending = false;
+    function maybeForceRefresh() {
+      if (forcedPending) return;
+      const espera = Math.max(1500, lastFetchAt + 60 * 1000 - Date.now());
+      if (refreshTimer) clearTimeout(refreshTimer);
+      forcedPending = true;
+      refreshTimer = setTimeout(update, espera);
+    }
+
+    function horaCurta(date) {
+      return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function render(d, at) {
+      const content = document.getElementById('content');
+      let html = '';
+      html += renderLimit('Sessão', '5h', d.five_hour);
+      html += renderLimit('Semana', '7d', d.seven_day);
+      html += renderLimit('Opus', '7d', d.seven_day_opus);
+      // Limites por modelo (Fable etc.) vêm no array "limits" como weekly_scoped
+      for (const lim of d.limits || []) {
+        const model = lim.scope && lim.scope.model && lim.scope.model.display_name;
+        if (lim.group === 'weekly' && model) {
+          html += renderLimit(model, '7d', { utilization: lim.percent, resets_at: lim.resets_at });
+        }
+      }
+      content.innerHTML = html || '<div class="error">Sem dados de uso.</div>';
+      document.getElementById('updatedAt').textContent = at ? '· ' + horaCurta(new Date(at)) : '';
+      tickCountdowns();
+      reportHeight();
+    }
+
+    async function update() {
+      if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+      forcedPending = false;
+      lastFetchAt = Date.now();
+      const content = document.getElementById('content');
+      const result = await window.api.getUsage();
+      let delay = POLL_MS;
+      if (result.error) {
+        if (result.status === 429) {
+          // rate limit: dobra a espera a cada 429 seguido, até 30 min
+          backoffMs = Math.min(backoffMs ? backoffMs * 2 : POLL_MS, MAX_BACKOFF_MS);
+          delay = backoffMs;
+        }
+        if (!hasData) {
+          const tryAt = horaCurta(new Date(Date.now() + delay));
+          content.innerHTML = '<div class="error">' + result.error +
+            '<br>nova tentativa às ' + tryAt + '</div>';
+        }
+      } else {
+        backoffMs = 0;
+        hasData = true;
+        const at = Date.now();
+        try {
+          localStorage.setItem('lastUsage', JSON.stringify({ data: result.data, at }));
+        } catch (e) {}
+        render(result.data, at);
+      }
+      // se um refresh forcado foi agendado durante o render, nao sobrescreve
+      if (!refreshTimer) refreshTimer = setTimeout(update, delay);
+    }
+
+    // mostra o último dado salvo enquanto a primeira consulta não responde
+    try {
+      const cached = JSON.parse(localStorage.getItem('lastUsage'));
+      if (cached && cached.data) {
+        hasData = true;
+        render(cached.data, cached.at);
+      }
+    } catch (e) {}
+
+    update();
+    setInterval(tickCountdowns, 1000);
+
+    // --- Botao de manutencao (limpar cache + reiniciar driver de video) ---
+    const maintBtn = document.getElementById('maintBtn');
+    const maintStatus = document.getElementById('maintStatus');
+    let maintPoll = null;
+    let maintTicks = 0;
+
+    function endMaint() {
+      if (maintPoll) { clearInterval(maintPoll); maintPoll = null; }
+      maintBtn.disabled = false;
+      maintBtn.classList.remove('spin');
+    }
+
+    function showMaint(txt, on) {
+      maintStatus.textContent = txt;
+      maintStatus.classList.toggle('on', !!on);
+      reportHeight();
+    }
+
+    async function pollMaint() {
+      maintTicks++;
+      const s = await window.api.getMaintenance();
+      const started = s && Array.isArray(s.steps) && s.steps.length;
+      if (started) {
+        const linhas = s.steps.map(st =>
+          '• ' + st.name + (st.freedMB > 0 ? ' — ' + st.freedMB + ' MB' : ''));
+        const total = s.steps.reduce((a, st) => a + (st.freedMB || 0), 0);
+        let head = s.running ? 'Limpando…' : 'Concluído · ' + total.toFixed(1) + ' MB liberados';
+        showMaint(head + '\n' + linhas.join('\n'), true);
+      }
+      if (s && !s.running) {
+        endMaint();
+        setTimeout(() => showMaint('', false), 8000);
+        return;
+      }
+      // Ainda nao comecou apos ~40s => UAC cancelado ou falhou. Libera o botao.
+      if (!started && maintTicks > 26) {
+        endMaint();
+        showMaint('Cancelado ou sem permissão (UAC).', true);
+        setTimeout(() => showMaint('', false), 6000);
+      }
+    }
+
+    const maintModal = document.getElementById('maintModal');
+    const cardEl = document.querySelector('.card');
+    function openModal(el, grande) {
+      cardEl.classList.add(grande ? 'modal-open-lg' : 'modal-open');
+      el.classList.add('on');
+      reportHeight();
+    }
+    function closeModal(el) {
+      el.classList.remove('on');
+      cardEl.classList.remove('modal-open', 'modal-open-lg');
+      reportHeight();
+    }
+
+    maintBtn.addEventListener('click', () => {
+      if (maintBtn.disabled) return;
+      openModal(maintModal, false);
+    });
+    document.getElementById('maintCancel').addEventListener('click', () => closeModal(maintModal));
+    maintModal.addEventListener('click', (e) => { if (e.target === maintModal) closeModal(maintModal); });
+
+    document.getElementById('maintOk').addEventListener('click', async () => {
+      closeModal(maintModal);
+      maintBtn.disabled = true;
+      maintBtn.classList.add('spin');
+      showMaint('Aguardando permissão (UAC)…', true);
+      const r = await window.api.runMaintenance();
+      if (!r || !r.launched) {
+        endMaint();
+        showMaint('Falha ao iniciar: ' + (r && r.error || 'desconhecido'), true);
+        return;
+      }
+      if (maintPoll) clearInterval(maintPoll);
+      maintTicks = 0;
+      maintPoll = setInterval(pollMaint, 1500);
+    });
+
+    // --- Troca de credencial (assinatura Max <-> API/gateway) ---
+    const authModal = document.getElementById('authModal');
+    const authToggle = document.getElementById('authToggle');
+    const authUrl = document.getElementById('authUrl');
+    const authKey = document.getElementById('authKey');
+    const authNote = document.getElementById('authNote');
+    const apiFields = document.getElementById('apiFields');
+    const optMax = document.getElementById('optMax');
+    const optApi = document.getElementById('optApi');
+    let authMode = 'max';
+    let authAtual = null;
+
+    function pintaModo(m) {
+      authMode = m;
+      optMax.classList.toggle('sel', m === 'max');
+      optApi.classList.toggle('sel', m === 'api');
+      apiFields.style.display = m === 'api' ? 'block' : 'none';
+      reportHeight();
+    }
+
+    function pintaToggle(m) {
+      authToggle.querySelectorAll('button').forEach(b => {
+        b.classList.toggle('sel', b.dataset.mode === m);
+      });
+    }
+
+    async function carregaAuth() {
+      try {
+        authAtual = await window.api.getAuth();
+        pintaToggle(authAtual.mode);
+      } catch (e) {}
+      return authAtual;
+    }
+
+    optMax.addEventListener('click', () => pintaModo('max'));
+    optApi.addEventListener('click', () => pintaModo('api'));
+
+    function abreModalAuth(a, forcarModo) {
+      authUrl.value = a.baseUrl || a.defaultUrl || '';
+      // Chave salva nunca volta em texto puro: campo vazio = manter a existente.
+      authKey.value = '';
+      authKey.placeholder = a.keyHint ? 'salva: ' + a.keyHint : 'colar chave';
+      authNote.textContent = 'Grava no settings.json e nas variáveis de ambiente. Vale na próxima sessão do Claude Code.';
+      pintaModo(forcarModo || a.mode);
+      openModal(authModal, true);
+    }
+
+    // Clique no toggle troca direto; sem chave salva, abre o modal para colar.
+    authToggle.addEventListener('click', async (e) => {
+      const alvo = e.target.dataset && e.target.dataset.mode;
+      if (!alvo) return;
+      const a = await carregaAuth() || { mode: 'max' };
+      // Sem atalho para "ja esta nesse modo": reaplicar e idempotente e realinha
+      // settings.json com as variaveis de ambiente caso um dos dois esteja velho.
+      if (alvo === 'api' && !a.keyHint) {
+        abreModalAuth(a, 'api');
+        return;
+      }
+      authToggle.classList.add('busy');
+      const r = await window.api.setAuth({ mode: alvo, baseUrl: a.baseUrl || a.defaultUrl, key: '' });
+      authToggle.classList.remove('busy');
+      if (!r || !r.ok) {
+        showMaint('Falha ao trocar: ' + ((r && r.error) || 'desconhecido'), true);
+        setTimeout(() => showMaint('', false), 6000);
+        return;
+      }
+      pintaToggle(r.mode);
+      avisaTroca(r.mode);
+    });
+
+    // Botao direito no toggle: editar URL/chave.
+    authToggle.addEventListener('contextmenu', async (e) => {
+      e.preventDefault();
+      abreModalAuth(await carregaAuth() || { mode: 'max' });
+    });
+
+    function avisaTroca(m) {
+      showMaint((m === 'api' ? 'Modo API ativo.' : 'Modo assinatura Max ativo.') +
+        '\nVale na próxima sessão do Claude Code.', true);
+      setTimeout(() => showMaint('', false), 6000);
+    }
+
+    document.getElementById('authCancel').addEventListener('click', () => closeModal(authModal));
+    authModal.addEventListener('click', (e) => { if (e.target === authModal) closeModal(authModal); });
+
+    document.getElementById('authOk').addEventListener('click', async () => {
+      const btn = document.getElementById('authOk');
+      btn.disabled = true;
+      const r = await window.api.setAuth({
+        mode: authMode,
+        baseUrl: authUrl.value,
+        key: authKey.value
+      });
+      btn.disabled = false;
+      if (!r || !r.ok) {
+        authNote.textContent = 'Falha: ' + ((r && r.error) || 'desconhecido');
+        reportHeight();
+        return;
+      }
+      pintaToggle(r.mode);
+      closeModal(authModal);
+      avisaTroca(r.mode);
+    });
+
+    carregaAuth();
+
+    function tempColor(t, warm, hot) {
+      if (t == null) return '#888';
+      if (t >= hot) return '#d9534f';
+      if (t >= warm) return '#e0a93e';
+      return '#4caf7d';
+    }
+
+    function setTemp(elId, t, warm, hot) {
+      const el = document.getElementById(elId);
+      el.textContent = (t == null) ? '--' : t + '°';
+      el.style.color = tempColor(t, warm, hot);
+    }
+
+    async function updateTemps() {
+      const cpuItem = document.getElementById('cpuItem');
+      const gpuItem = document.getElementById('gpuItem');
+      let ok = false;
+      try {
+        const r = await window.api.getTemps();
+        ok = !!(r && !r.error && (r.cpu != null || r.gpu != null));
+        if (ok) {
+          setTemp('cpuTemp', r.cpu, 75, 90);
+          setTemp('gpuTemp', r.gpu, 75, 84);
+        }
+      } catch (e) {}
+      cpuItem.style.display = ok ? 'flex' : 'none';
+      gpuItem.style.display = ok ? 'flex' : 'none';
+      reportHeight();
+      setTimeout(updateTemps, 3000);
+    }
+    updateTemps();
+
+    // ------------------------------------------------------------------
+    // Sentry: lista de erros não resolvidos de todos os projetos da org.
+    // O processo principal varre a API e empurra a lista aqui; o renderer
+    // só desenha. Toast de erro novo também sai de lá.
+    // ------------------------------------------------------------------
+    const SY_COR = {
+      fatal: '#d9534f', error: '#d9534f', warning: '#e0a93e',
+      info: '#5a8dd6', debug: '#777'
+    };
+    let syDados = { issues: [], novos: [], erro: null, atualizadoEm: null, alerta: null };
+    let syAlertaEm = null;      // carimbo do último alerta já tratado aqui
+    let syAlertaVivo = false;   // faixa vermelha visível
+    let syAlertaTimer = null;
+
+    function syHa(iso) {
+      if (!iso) return '';
+      const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+      if (s < 60) return 'agora';
+      if (s < 3600) return 'há ' + Math.floor(s / 60) + ' min';
+      if (s < 86400) return 'há ' + Math.floor(s / 3600) + ' h';
+      return 'há ' + Math.floor(s / 86400) + ' d';
+    }
+
+    // Título de issue vem da API e pode conter < > & — sempre escapar.
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"]/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
+      ));
+    }
+
+    function renderSentry() {
+      const total = syDados.issues.length;
+      const novos = (syDados.novos || []).length;
+      const setNovos = new Set(syDados.novos || []);
+
+      const cnt = document.getElementById('sentryCount');
+      cnt.textContent = syDados.erro ? '—'
+        : (total === 0 ? 'limpo' : total + (total === 1 ? ' erro' : ' erros'));
+      cnt.className = 'sentry-count' + (total === 0 && !syDados.erro ? ' zero' : '');
+
+      const dot = document.getElementById('sentryDot');
+      dot.className = 'sentry-dot' + (novos ? ' alerta' : (total ? ' aviso' : ''));
+
+      const nv = document.getElementById('sentryNovos');
+      nv.style.display = novos ? 'inline-block' : 'none';
+      nv.textContent = novos + (novos === 1 ? ' novo' : ' novos');
+
+      document.getElementById('sentryWhen').textContent =
+        syDados.erro ? syDados.erro : syHa(syDados.atualizadoEm);
+
+      const list = document.getElementById('sentryList');
+      const faixa = (syAlertaVivo && syDados.alerta)
+        ? '<div class="sy-alerta" title="' + esc(syDados.alerta.resumo) + '">⚠ ' +
+            syDados.alerta.quantos + ' alerta(s) agora · ' + esc(syDados.alerta.resumo) + '</div>'
+        : '';
+      if (!total) {
+        list.innerHTML = faixa + (syDados.erro
+          ? '<div class="sy-erro">Sentry inacessível: ' + esc(syDados.erro) + '</div>'
+          : '<div class="sy-vazio">Nenhum erro em aberto nos últimos 90 dias.</div>');
+      } else {
+        list.innerHTML = faixa + syDados.issues.map(i => {
+          const cor = SY_COR[i.nivel] || '#e0a93e';
+          const ev = i.eventos + (i.eventos === 1 ? ' evento' : ' eventos');
+          const us = i.usuarios ? ' · ' + i.usuarios + (i.usuarios === 1 ? ' usuário' : ' usuários') : '';
+          return '<div class="sy-item' + (setNovos.has(i.id) ? ' novo' : '') + '" data-id="' + esc(i.id) + '">' +
+            '<span class="sy-bar" style="background:' + cor + '"></span>' +
+            '<div class="sy-main">' +
+              '<div class="sy-top">' +
+                '<span class="sy-proj">' + esc(i.projeto) + '</span>' +
+                '<span class="sy-tit" title="' + esc(i.titulo) + '">' + esc(i.titulo) + '</span>' +
+              '</div>' +
+              '<div class="sy-sub">' + ev + us + ' · ' + syHa(i.ultimo) + ' · ' + esc(i.shortId) + '</div>' +
+            '</div>' +
+            '<div class="sy-acts">' +
+              '<button class="sy-btn" data-act="abrir" data-link="' + esc(i.link) + '" title="Abrir no Sentry">↗</button>' +
+              '<button class="sy-btn ok" data-act="resolver" title="Marcar como resolvido">✓</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+      reportHeight();
+    }
+
+    document.getElementById('sentryHead').addEventListener('click', () => {
+      const box = document.getElementById('sentryBox');
+      const abriu = box.classList.toggle('aberto');
+      document.getElementById('sentryCaret').textContent = abriu ? '▾' : '▸';
+      if (abriu) {
+        // Olhou a lista: as marcações de "novo" deixam de piscar.
+        window.api.sentrySeen();
+        syDados.novos = [];
+        renderSentry();
+      } else {
+        reportHeight();
+      }
+    });
+
+    document.getElementById('sentryList').addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('.sy-btn');
+      if (!btn) return;
+      const item = btn.closest('.sy-item');
+      if (btn.dataset.act === 'abrir') {
+        window.api.sentryOpen(btn.dataset.link);
+        return;
+      }
+      // Resolver escreve no Sentry de verdade: exige o segundo clique.
+      // Sem isso um clique torto marcaria issue de produção como resolvida.
+      if (!btn.classList.contains('confirmar')) {
+        btn.classList.add('confirmar');
+        btn.textContent = 'ok?';
+        btn.title = 'Clique de novo para resolver no Sentry';
+        clearTimeout(btn._t);
+        btn._t = setTimeout(() => {
+          btn.classList.remove('confirmar');
+          btn.textContent = '✓';
+          btn.title = 'Marcar como resolvido';
+        }, 4000);
+        return;
+      }
+      clearTimeout(btn._t);
+      btn.disabled = true;
+      btn.textContent = '…';
+      const r = await window.api.sentryResolve(item.dataset.id, 'resolved');
+      if (!r || !r.ok) {
+        btn.disabled = false;
+        btn.classList.remove('confirmar');
+        btn.textContent = '✓';
+        document.getElementById('sentryWhen').textContent = 'falha ao resolver';
+      }
+    });
+
+    // Alerta chegou: abre a lista sozinho, acende a faixa e pisca a borda.
+    // Não depende da notificação do Windows (que está desligada nesta máquina).
+    function syAcende() {
+      const box = document.getElementById('sentryBox');
+      if (!box.classList.contains('aberto')) {
+        box.classList.add('aberto');
+        document.getElementById('sentryCaret').textContent = '▾';
+      }
+      const card = document.querySelector('.card');
+      card.classList.remove('piscando');
+      void card.offsetWidth;          // reinicia a animação
+      card.classList.add('piscando');
+      syAlertaVivo = true;
+      if (syAlertaTimer) clearTimeout(syAlertaTimer);
+      // A faixa some sozinha; a marcação de "novo" na issue continua até ser vista.
+      syAlertaTimer = setTimeout(() => {
+        syAlertaVivo = false;
+        card.classList.remove('piscando');
+        renderSentry();
+      }, 60000);
+    }
+
+    window.api.onSentry((payload) => {
+      const novoAlerta = payload.alerta && payload.alerta.em !== syAlertaEm;
+      syDados = payload;
+      if (novoAlerta) {
+        syAlertaEm = payload.alerta.em;
+        syAcende();
+      }
+      renderSentry();
+    });
+
+    (async () => {
+      syDados = await window.api.sentryGet();
+      // Alerta que já existia antes do widget abrir não pisca de novo.
+      syAlertaEm = syDados.alerta ? syDados.alerta.em : null;
+      renderSentry();
+    })();
+    // Só para os "há X min" não envelhecerem na tela entre varreduras.
+    setInterval(renderSentry, 30000);
+  </script>
+</body>
+</html>

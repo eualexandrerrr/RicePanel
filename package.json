@@ -1,0 +1,13 @@
+{
+  "name": "ricepanel",
+  "version": "1.0.0",
+  "description": "Painel do monitor vertical: cotas do Claude Code, consoles do servidor e notas",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "productName": "RicePanel"
+}

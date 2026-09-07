@@ -1,0 +1,47 @@
+﻿{
+    "running":  false,
+    "ok":  true,
+    "steps":  [
+                  {
+                      "name":  "Temp do usuario",
+                      "freedMB":  1417.6
+                  },
+                  {
+                      "name":  "Temp do Windows",
+                      "freedMB":  3.5
+                  },
+                  {
+                      "name":  "Prefetch",
+                      "freedMB":  0
+                  },
+                  {
+                      "name":  "Cache miniaturas",
+                      "freedMB":  42.2
+                  },
+                  {
+                      "name":  "Cache INetCache",
+                      "freedMB":  0
+                  },
+                  {
+                      "name":  "Relatorios de erro",
+                      "freedMB":  0
+                  },
+                  {
+                      "name":  "Delivery Optimization",
+                      "freedMB":  0
+                  },
+                  {
+                      "name":  "Windows Update cache",
+                      "freedMB":  1.5
+                  },
+                  {
+                      "name":  "Flush DNS",
+                      "freedMB":  0
+                  },
+                  {
+                      "name":  "Liberar RAM (standby)",
+                      "freedMB":  8436.1
+                  }
+              ],
+    "finishedAt":  "2026-09-04T19:26:47.4901565-03:00"
+}
