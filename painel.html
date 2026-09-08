@@ -414,13 +414,20 @@
        O papel de parede continua mandando de outro jeito: nítido nas faixas
        entre os blocos e nas bordas, e desfocado (mas presente, é a mesma
        imagem) atrás de cada placa. */
+    /* Coluna estreita e centralizada. Placa de ponta a ponta num monitor de
+       1080 vira barra, não widget: o olho lê uma pilha de faixas, e o papel de
+       parede só aparece em duas frestas nas laterais. Com 620px o wallpaper
+       fica dos dois lados de tudo, e cada placa volta a ter silhueta.
+       A Estação é o oposto de propósito: lá a largura toda é o produto, porque
+       console de terminal quer coluna larga. */
     body.em-mirante .tapete {
       display: flex; flex-direction: column;
-      align-items: stretch;
+      align-items: center;
       gap: 12px;
       padding: 10px 12px 12px;
       overflow: visible;
     }
+    body.em-mirante .tapete > * { width: min(100%, 620px); }
     /* A hora empurra o resto para cima e fica no pé. O vão que sobra entre a
        máquina e ela é papel de parede, e é o único respiro grande da página. */
     .m-hora { margin-top: auto; }
@@ -490,8 +497,8 @@
       background-position: center, center;
       background-attachment: scroll, fixed;
       background-repeat: no-repeat, no-repeat;
-      -webkit-mask-image: radial-gradient(105% 92% at 50% 50%, #000 42%, transparent 100%);
-      mask-image: radial-gradient(105% 92% at 50% 50%, #000 42%, transparent 100%);
+      -webkit-mask-image: radial-gradient(96% 84% at 50% 50%, #000 22%, transparent 97%);
+      mask-image: radial-gradient(96% 84% at 50% 50%, #000 22%, transparent 97%);
       z-index: -2;
       pointer-events: none;
     }
@@ -589,7 +596,7 @@
     .mes-grade {
       display: grid; grid-template-columns: repeat(7, 1fr);
       grid-template-rows: auto;   /* o cabeçalho não é linha de semana */
-      padding: 8px 12px 4px;
+      padding: 8px 10px 4px;
     }
     .mes-cab {
       font-family: 'Archivo Narrow', sans-serif;
@@ -605,7 +612,7 @@
          `::before` do hoje, em `z-index: -1`, ia parar atrás do fundo da placa
          e o círculo do dia sumia. */
       z-index: 0;
-      height: 38px;
+      height: 40px;
       display: flex; align-items: center; justify-content: center;
       font-size: 14px; font-weight: 400;
       font-variant-numeric: tabular-nums;
@@ -704,8 +711,8 @@
        era o desenho que mais incomodava. */
     .medidores {
       display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px 24px;
-      padding: 12px 16px 8px;
+      gap: 10px 22px;
+      padding: 12px 14px 8px;
     }
     .med { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
     .med .topo { display: flex; align-items: baseline; gap: 8px; }
