@@ -142,31 +142,47 @@
     }
     .marca span { color: var(--ambar); }
 
-    /* Seleção de barramento: uma tecla por modo, a acesa com a lâmpada. */
+    /* Barramento no idioma da waybar: o painel e a barra do desktop são a mesma
+       casa, e até 08/09/2026 falavam sotaques diferentes — a barra com pílula de
+       raio 14 e ativo em degradê, o painel com tecla retangular âmbar.
+       Copiado da waybar, não reinterpretado: grupo `alpha(base, 0.82)` com aresta
+       de `surface0`, botão de raio 9 com margem 3, ativo em
+       `linear-gradient(135deg, mauve, blue)` sobre `base`, e a mesma curva de
+       200ms. A fonte também é a de lá, JetBrains Mono, que o painel já carrega
+       para o console. */
     .barramento {
       -webkit-app-region: no-drag;
-      display: flex; gap: 4px;
-      background: var(--sulco);
-      border: 1px solid var(--aresta);
-      border-radius: 5px; padding: 3px;
+      display: flex;
+      background: rgba(30, 30, 46, 0.82);
+      border: 1px solid rgba(49, 50, 68, 0.9);
+      border-radius: 14px;
+      padding: 0 6px;
     }
     .tecla {
-      display: flex; align-items: center; gap: 7px;
-      background: none; border: 1px solid transparent; border-radius: 3px;
-      color: var(--serigrafia-fraca);
-      font-family: 'Archivo Narrow', sans-serif;
-      font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-      padding: 7px 14px; cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      margin: 3px 2px;
+      background: transparent; border: none; border-radius: 9px;
+      color: var(--subtext0);
+      font-family: 'JetBrains Mono', 'JetBrainsMono Nerd Font', monospace;
+      font-size: 12px; font-weight: 600; letter-spacing: 0;
+      padding: 7px 15px; cursor: pointer;
+      transition: background 200ms var(--saida), color 200ms var(--saida);
     }
-    .tecla:hover { color: var(--leitura); background: #1e222a; }
-    .tecla.on { background: var(--ambar); color: #12140f; }
+    .tecla:hover { color: var(--text); background: rgba(49, 50, 68, 0.8); }
+    .tecla.on {
+      background: linear-gradient(135deg, var(--mauve), var(--blue));
+      color: var(--base);
+      font-weight: 700;
+    }
     .tecla .marcador {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--led-off); border: 1px solid #07080a;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--surface1);
     }
-    .tecla.on .marcador { background: #12140f; border-color: #12140f; }
-    .tecla .marcador.aceso { background: var(--vermelho); border-color: #5a1414; }
-    .tecla.on .marcador.aceso { background: #7a1010; border-color: #7a1010; }
+    .tecla.on .marcador { background: var(--base); opacity: 0.55; }
+    .tecla .marcador.aceso { background: var(--red); }
+    .tecla.on .marcador.aceso { background: var(--base); opacity: 1; }
+    /* Mirante não tem lâmpada: nada nele fica pendente esperando ser tratado. */
+    .tecla:not(:has(.marcador)) { padding-left: 17px; }
 
     /* A cota e a unica peca elastica da travessa: se um limite novo entrar e
        nao couber, ela encolhe e corta ali dentro, sem empurrar o resto. */
@@ -325,27 +341,21 @@
     .modo { display: none; min-height: 0; }
     .modo.on { display: grid; }
 
-    /* ---------- páginas (nível de cima do barramento) ---------- */
-    .paginas {
-      -webkit-app-region: no-drag;
-      display: flex; gap: 3px;
-      background: var(--sulco);
-      border: 1px solid var(--aresta);
-      border-radius: var(--raio-peca); padding: 3px;
+    /* Um barramento só, com os quatro destinos, igual em toda página: um clique
+       leva de qualquer lugar para qualquer lugar. Em dois níveis, sair do
+       Mirante para um console custava dois cliques e o de baixo mudava de
+       conteúdo conforme a página — barra que muda de forma não vira músculo. */
+    .travessa > .botao {
+      border-radius: 9px;
+      background: rgba(30, 30, 46, 0.82);
+      border: 1px solid rgba(49, 50, 68, 0.9);
+      transition: background 200ms var(--saida), color 200ms var(--saida);
     }
-    .pag-tecla {
-      background: none; border: 1px solid transparent; border-radius: 6px;
-      color: var(--serigrafia-fraca);
-      font-family: 'Archivo Narrow', sans-serif;
-      font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-      padding: 7px 15px; cursor: pointer;
-      transition: color 160ms var(--saida), background 160ms var(--saida);
+    .travessa > .botao:hover { background: rgba(49, 50, 68, 0.8); color: var(--text); }
+    .marca {
+      font-family: 'JetBrains Mono', 'JetBrainsMono Nerd Font', monospace;
+      letter-spacing: 0.16em;
     }
-    .pag-tecla:hover { color: var(--leitura); background: var(--face-alta); }
-    .pag-tecla.on { background: var(--acento); color: var(--sobre-acento); }
-    /* Barramento de baixo só existe dentro da Estação: seletor de coisa
-       escondida é ruído, e na página do Mirante não há modo a escolher. */
-    body.em-mirante #barramento { display: none; }
 
     /* ======================= Mirante · luz sobre vidro =======================
        Mundo visual próprio da página 1, separado do "mesa de som" que continua
@@ -374,12 +384,20 @@
       margin: 12px 16px;
       background: var(--vidro);
       border: 1px solid var(--vidro-aresta);
-      border-radius: 18px;
+      border-radius: 14px;
       box-shadow: inset 0 1px 0 var(--vidro-brilho);
       overflow: hidden;
     }
     body.em-mirante .travessa { margin-bottom: 0; }
     body.em-mirante .rodape { margin-top: 0; }
+
+    /* No Mirante o rodapé perde o que os widgets já dizem melhor (relógio e
+       térmica) e o que não é assunto desta página: a cota de token da IA. Esta
+       página é hora, agenda e máquina — quanto sobrou do Claude é trabalho, e
+       trabalho mora na Estação. */
+    body.em-mirante .rodape .cel-relogio,
+    body.em-mirante .rodape .cel-temp,
+    body.em-mirante .rodape .cel-cota { display: none; }
 
     /* --- o tapete: ocupa o monitor de cima a baixo ---
        A coluna usa a altura inteira do monitor em pé. Quem absorve a sobra é a
@@ -1830,17 +1848,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
   <div class="travessa">
     <span class="marca">Mesa<span>.</span></span>
-    <span class="paginas" id="paginas">
-      <button class="pag-tecla on" data-pagina="mirante">Mirante</button>
-      <button class="pag-tecla" data-pagina="estacao">Estação</button>
-    </span>
     <span class="barramento" id="barramento">
-      <button class="tecla on" data-modo="servidores"><span class="marcador"></span>Servidores</button>
+      <button class="tecla on" data-modo="mirante">Mirante</button>
+      <button class="tecla" data-modo="servidores"><span class="marcador"></span>Servidores</button>
       <button class="tecla" data-modo="dev"><span class="marcador" id="marcadorDev"></span>Dev</button>
       <button class="tecla" data-modo="monitor"><span class="marcador" id="marcadorMonitor"></span>Monitor</button>
     </span>
     <span class="vao"></span>
-    <span class="cota-topo" id="cotaTopo"></span>
     <button class="botao" id="ajusteServ" title="Configurar os servidores" aria-label="Configurar os servidores"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
     <button class="botao" id="closeBtn" title="Fechar o painel" aria-label="Fechar o painel">
       <svg viewBox="0 0 16 16"><use href="#ic-x"/></svg>

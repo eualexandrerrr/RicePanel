@@ -84,43 +84,19 @@ document.getElementById('closeBtn').addEventListener('click', () => window.api.c
 
 // ---------------------------------------------------------------- barramento
 //
-// Dois níveis. Em cima as duas páginas — Mirante (os widgets, onde o olho pousa
-// o dia todo) e Estação (o trabalho: consoles, dev, monitor). O barramento de
-// baixo só existe dentro da Estação; na página do Mirante ele some, porque
-// seletor de coisa escondida é ruído.
-let modoAtual = 'servidores';
-let paginaAtual = 'mirante';
-
-function trocaPagina(pagina) {
-  paginaAtual = pagina;
-  document.querySelectorAll('.pag-tecla').forEach(t => t.classList.toggle('on', t.dataset.pagina === pagina));
-  document.body.classList.toggle('em-mirante', pagina === 'mirante');
-  try { localStorage.setItem('pagina', pagina); } catch (e) {}
-
-  if (pagina !== 'mirante') { trocaModo(modoAtual); return; }
-
-  document.querySelectorAll('.modo').forEach(s => s.classList.remove('on'));
-  document.getElementById('modoMirante').classList.add('on');
-  garanteModuloEmCasa();
-  posicionaBarra('mirante');
-  window.api.devMostrar(false);
-  // Os widgets param de desenhar quando a página sai da frente: animação em
-  // section com display:none continua custando quadro.
-  if (window.mirante) window.mirante.acorda(true);
-}
+// Um barramento só, com os quatro destinos. Antes eram dois níveis (páginas em
+// cima, modos embaixo) e isso custava dois cliques para sair do Mirante e
+// escolher um console, além de mudar o conteúdo da barra de baixo conforme a
+// página. Barra que muda de forma não vira músculo.
+let modoAtual = 'mirante';
 
 function trocaModo(modo) {
   modoAtual = modo;
-  if (paginaAtual === 'mirante') {
-    paginaAtual = 'estacao';
-    document.querySelectorAll('.pag-tecla').forEach(t => t.classList.toggle('on', t.dataset.pagina === 'estacao'));
-    document.body.classList.remove('em-mirante');
-    try { localStorage.setItem('pagina', 'estacao'); } catch (e) {}
-  }
-  if (window.mirante) window.mirante.acorda(false);
+  const noMirante = modo === 'mirante';
   document.querySelectorAll('.tecla').forEach(t => t.classList.toggle('on', t.dataset.modo === modo));
   document.querySelectorAll('.modo').forEach(s => s.classList.remove('on'));
   document.getElementById('modo' + modo.charAt(0).toUpperCase() + modo.slice(1)).classList.add('on');
+  document.body.classList.toggle('em-mirante', noMirante);
   try { localStorage.setItem('modo', modo); } catch (e) {}
   garanteModuloEmCasa();
   posicionaBarra(modo);
@@ -128,6 +104,9 @@ function trocaModo(modo) {
   // quando o barramento muda. Some/reaparece junto com o modo Dev.
   window.api.devMostrar(modo === 'dev');
   if (modo === 'dev') setTimeout(encaixaEmulador, 250);
+  // Os widgets param de desenhar quando a página sai da frente: animação em
+  // section com display:none continua custando quadro.
+  if (window.mirante) window.mirante.acorda(noMirante);
 }
 
 // A barra de estado é uma só. No barramento Servidores ela se muda para entre
@@ -150,10 +129,6 @@ document.getElementById('barramento').addEventListener('click', (e) => {
   if (t) trocaModo(t.dataset.modo);
 });
 
-document.getElementById('paginas').addEventListener('click', (e) => {
-  const t = e.target.closest('.pag-tecla');
-  if (t) trocaPagina(t.dataset.pagina);
-});
 
 // Clicar num indicador abre a lista numa janela de 60% da tela, por cima do que
 // ele estava fazendo. Trocar de barramento tirava os consoles da frente inteira
@@ -1618,8 +1593,12 @@ function fmtRelogio(ms) {
 // qualquer no lugar do que interessa.
 const FIXOS_TOPO = ['Sessão', 'Semana'];
 
+// A cota saiu da travessa em 08/09/2026: quanto sobrou de token da IA é
+// trabalho, e o topo passou a ser só navegação. A leitura continua no rodapé,
+// dentro da Estação. A função fica porque o elemento pode voltar.
 function pintaCotaTopo() {
   const alvo = document.getElementById('cotaTopo');
+  if (!alvo) return;
   if (!cotaLimites.length) { alvo.innerHTML = ''; return; }
   const fixos = FIXOS_TOPO
     .map(nome => cotaLimites.find(l => l.rotulo === nome))
@@ -2443,18 +2422,14 @@ document.getElementById('authOk').addEventListener('click', async () => {
 });
 carregaAuth();
 
-// Volta na página e no barramento em que ele estava. O padrão é o Mirante: é a
-// página que fica na tela quando ninguém pediu nada.
+// Volta no barramento em que ele estava. O padrão é o Mirante: é a página que
+// fica na tela quando ninguém pediu nada.
+let modoInicial = 'mirante';
 try {
-  const modoGuardado = localStorage.getItem('modo');
-  if (modoGuardado && ['servidores', 'dev', 'monitor'].indexOf(modoGuardado) >= 0) modoAtual = modoGuardado;
+  const guardado = localStorage.getItem('modo');
+  if (guardado && ['mirante', 'servidores', 'dev', 'monitor'].indexOf(guardado) >= 0) modoInicial = guardado;
 } catch (e) {}
-try {
-  const pag = localStorage.getItem('pagina');
-  trocaPagina('estacao'); // TESTE
-} catch (e) {
-  trocaPagina('mirante');
-}
+trocaModo(modoInicial);
 tickRestantes();
 
 // ------------------------------------------------------- trava do teclado
