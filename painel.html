@@ -967,6 +967,26 @@
       transition: transform 1000ms linear;
     }
 
+    /* Controles: só aparecem quando quem toca aceita comando (Spotify, aqui).
+       Botão redondo e discreto — a placa continua sendo sobre a música, não
+       sobre a botoeira; o dedo acha porque o alvo é grande, não porque grita. */
+    .musica-marca { flex: none; width: 22px; height: 22px; display: block; }
+    .musica-controles { display: flex; align-items: center; gap: 4px; flex: none; }
+    .musica-controles .botao-musica {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border: 0; border-radius: 999px; cursor: pointer;
+      background: transparent; color: var(--subtext0);
+      transition: background 160ms linear, color 160ms linear;
+    }
+    .musica-controles .botao-musica svg { width: 16px; height: 16px; display: block; }
+    .musica-controles .botao-musica:hover { background: rgba(205, 214, 244, 0.10); color: var(--text); }
+    /* O do meio é o que ele procura primeiro, então é o único com corpo. */
+    .musica-controles .principal {
+      background: rgba(205, 214, 244, 0.10); color: var(--text);
+    }
+    .musica-controles .principal:hover { background: var(--acento); color: var(--sobre-acento); }
+
     @media (prefers-reduced-motion: reduce) {
       .m-hora .aurora, .ondas, .bruma, .agenda-vazio .selo-calmo { display: none; }
       .anel .arco, .med .trilho i, .musica-trilho i, .m-relogio .dp { transition: none; }
@@ -1956,6 +1976,25 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <g id="ic-x" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
         <path d="M4 4l8 8M12 4l-8 8"/>
       </g>
+      <!-- Marca de terceiro, como o Sentry e o GTA: o desenho é dela, então
+           entra com a cor dela e sem o traço da casa. Grade 16x16. -->
+      <g id="ic-spotify" fill="#1DB954">
+        <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.67 11.55a.62.62 0 0 1-.86.2c-2.34-1.43-5.29-1.75-8.76-.96a.62.62 0 1 1-.28-1.21c3.8-.87 7.06-.5 9.69 1.11.3.18.39.57.21.86zm.98-2.19a.78.78 0 0 1-1.07.26C9 8.1 5.4 7.68 2.6 8.53a.78.78 0 1 1-.45-1.49c3.2-.97 7.17-.5 10.02 1.25.37.23.48.71.26 1.07zm.08-2.28C10.2 5.5 5.68 5.36 3.2 6.11a.93.93 0 1 1-.54-1.78C5.5 3.47 10.5 3.63 13.68 5.52a.93.93 0 1 1-.95 1.6z"/>
+      </g>
+      <g id="ic-anterior" fill="currentColor">
+        <path d="M4.6 3.4h1.8v9.2H4.6z"/>
+        <path d="M12.4 3.9v8.2L6.9 8z"/>
+      </g>
+      <g id="ic-proximo" fill="currentColor">
+        <path d="M9.6 3.4h1.8v9.2H9.6z"/>
+        <path d="M3.6 3.9v8.2L9.1 8z"/>
+      </g>
+      <g id="ic-pausa" fill="currentColor">
+        <path d="M4.9 3.4h2.1v9.2H4.9zM9 3.4h2.1v9.2H9z"/>
+      </g>
+      <g id="ic-toca" fill="currentColor">
+        <path d="M5 3.4v9.2L12.4 8z"/>
+      </g>
       <g id="ic-recarrega" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75"/>
         <path d="M13.4 2.6v3.1h-3.1"/>
@@ -2143,10 +2182,16 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <!-- Toca só quando há player; some inteiro sem ele. -->
       <div class="placa m-musica" id="wMusica" hidden>
         <div class="ondas" id="wOndas" aria-hidden="true"></div>
+        <svg class="musica-marca" id="wMusicaMarca" viewBox="0 0 16 16" aria-hidden="true" hidden><use href="#ic-spotify"/></svg>
         <div class="musica-corpo">
           <span class="rotulo" id="wMusicaPlayer">—</span>
           <span class="musica-titulo" id="wMusicaTitulo">—</span>
           <span class="musica-artista" id="wMusicaArtista">—</span>
+        </div>
+        <div class="musica-controles" id="wMusicaControles" hidden>
+          <button class="botao-musica" id="wMusicaAnterior" title="Faixa anterior" aria-label="Faixa anterior"><svg viewBox="0 0 16 16"><use href="#ic-anterior"/></svg></button>
+          <button class="botao-musica principal" id="wMusicaAlterna" title="Pausar" aria-label="Pausar"><svg viewBox="0 0 16 16"><use href="#ic-pausa" id="wMusicaAlternaIcone"/></svg></button>
+          <button class="botao-musica" id="wMusicaProximo" title="Próxima faixa" aria-label="Próxima faixa"><svg viewBox="0 0 16 16"><use href="#ic-proximo"/></svg></button>
         </div>
         <div class="musica-trilho"><i id="wMusicaFio"></i></div>
       </div>

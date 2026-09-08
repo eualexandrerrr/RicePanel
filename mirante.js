@@ -598,11 +598,43 @@
   // ------------------------------------------------------------- música
 
   const elMusica = $('wMusica');
+  const elMusicaMarca = $('wMusicaMarca');
+  const elMusicaControles = $('wMusicaControles');
+  const elMusicaAlternaIcone = $('wMusicaAlternaIcone');
   let musicaAnim = null;
+  let playerAtual = '';
+
+  // Só o Spotify ganha marca e botões: é o player que ele usa e o que responde
+  // a MPRIS de forma confiável. Outro player continua aparecendo, sem botoeira,
+  // porque metade dos botões que não funcionam é pior que nenhum.
+  function ehSpotify(m) {
+    return /spotify/i.test((m && m.player) || '');
+  }
+
+  function mandaMusica(verbo) {
+    window.api.musicaComando(verbo, playerAtual).catch(() => {});
+  }
+
+  $('wMusicaAnterior').addEventListener('click', () => mandaMusica('anterior'));
+  $('wMusicaProximo').addEventListener('click', () => mandaMusica('proximo'));
+  $('wMusicaAlterna').addEventListener('click', () => mandaMusica('alterna'));
 
   function pintaMusica(m) {
     if (!m || !m.titulo) { elMusica.hidden = true; if (musicaAnim) musicaAnim.pause(); return; }
     elMusica.hidden = false;
+    playerAtual = m.player || '';
+
+    const spotify = ehSpotify(m);
+    elMusicaMarca.hidden = !spotify;
+    elMusicaControles.hidden = !spotify;
+    if (spotify) {
+      // O botão do meio mostra o que ele VAI fazer, não o estado atual.
+      const botao = $('wMusicaAlterna');
+      elMusicaAlternaIcone.setAttribute('href', m.tocando ? '#ic-pausa' : '#ic-toca');
+      botao.title = m.tocando ? 'Pausar' : 'Tocar';
+      botao.setAttribute('aria-label', botao.title);
+    }
+
     $('wMusicaTitulo').textContent = m.titulo;
     $('wMusicaArtista').textContent = m.artista || '—';
     $('wMusicaPlayer').textContent =

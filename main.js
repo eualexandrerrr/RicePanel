@@ -436,6 +436,22 @@ ipcMain.handle('get-temps', async () => {
 ipcMain.handle('vidro-get', async () => vidro.atual());
 
 // --- Agenda (Google Calendar por iCal) -------------------------------------
+// --- Música: os três botões da placa do Spotify ----------------------------
+// Whitelist fechada: o renderer manda um verbo, nunca uma linha de comando. O
+// player também é escolhido aqui — `-p spotify` evita mandar o comando para o
+// player do Chromium quando os dois estão vivos ao mesmo tempo.
+const COMANDOS_MUSICA = { anterior: 'previous', proximo: 'next', alterna: 'play-pause' };
+
+ipcMain.handle('musica-comando', async (e, verbo, player) => {
+  const cmd = COMANDOS_MUSICA[verbo];
+  if (!cmd) return { ok: false, error: 'comando desconhecido' };
+  const alvo = /^[A-Za-z0-9._-]{1,40}$/.test(String(player || '')) ? String(player) : '';
+  const args = alvo ? ['-p', alvo, cmd] : [cmd];
+  await sistema.roda('playerctl', args, 2500);
+  // O tique de 2 s já traz o estado novo; devolver ok só fecha o clique.
+  return { ok: true };
+});
+
 ipcMain.handle('flamengo-get', async () => flamengo.atual());
 ipcMain.handle('flamengo-refresh', async () => flamengo.forcar());
 
