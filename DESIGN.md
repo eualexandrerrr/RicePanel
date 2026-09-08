@@ -77,12 +77,34 @@ que ele apontou como feio. A página 1 ganhou mundo próprio, e ele tem dois mat
 
 - **LUZ** — tipo fino e filete desenhados direto no papel de parede, sem recipiente nenhum. É a
   hora, a linha de semana/dia/uptime e a ficha da máquina.
-- **VIDRO** — placa translúcida de raio 24, um fio de luz na aresta de cima e **nenhuma sombra
+- **VIDRO** — placa translúcida de raio 28, um fio de luz na aresta de cima e **nenhuma sombra
   projetada**. Existe só onde há grade ou lista para agrupar: mês+agenda numa placa, vitais em
   outra. Nunca como moldura de um número solto.
+- **BRUMA** — quatro massas de cor enormes à deriva atrás da página inteira, no ritmo de um minuto
+  por volta, desfocadas e mascaradas. É atmosfera, nunca informação.
 
 O que o Mirante **não** faz: fileira de cards do mesmo tamanho, cada um com seu rótulo no canto.
 Era isso que dava cara de tela de depuração.
+
+#### Tudo centrado, menos a travessa (08/09/2026)
+
+A coluna se centra nos dois eixos, e o que se centra junto é o conteúdo de dentro dela: o rótulo do
+cabeçalho fica no meio da placa (os botões saem do fluxo, encostados na direita), a ficha da máquina
+e a linha de rede ficam no meio, a lista da agenda vira uma coluna de 430px centrada — nela a linha
+continua alinhada à esquerda, porque agenda com margem esquerda serrilhada não se lê.
+
+A **travessa é a única coisa que continua ancorada no topo**: é barra de navegação, não conteúdo, e
+barra no meio da tela não existe.
+
+O desenho anterior colava a hora no pé (`margin-top: auto`) e empilhava o resto no alto. O que
+sobrava — quase um terço do monitor — virava um buraco no **meio** da tela, e vão grande no meio lê
+como falha de layout. O mesmo vão dividido em cima e embaixo lê como margem.
+
+Nada aqui é obrigado a ser retângulo. A placa da música é **pílula** (uma linha de conteúdo, nenhuma
+grade dentro: o canto reto não estava separando nada), o workspace é pastilha redonda, o trilho do
+medidor e o botão de cabeçalho são de raio total. A gaze é elipse estreita e de queda longa — com a
+coluna centrada as duas zonas de LUZ ficaram vizinhas, e a gaze quase retangular de antes encostava
+uma na outra e lia como uma caixa translúcida só.
 
 **A escala é de painel de parede, não de app de mesa.** Hora em 152px/200, dia do mês em 19px em
 célula de 62px, anel térmico de 124px com o número em 34px/300. Foi a escala, e não esticar caixa,
@@ -139,6 +161,31 @@ que o texto está legível. Só as duas zonas de LUZ a usam.
 - A opacidade da janela **não é cravada**: quem abre a fresta é o `inactive_opacity` do desktop
   (0,90, no menu do Meta+O). Assim o painel obedece o mesmo slider que o resto dos apps.
 
+#### O rodapé também é do idioma da travessa (08/09/2026)
+
+No Mirante o rodapé deixa de ser ilha e vira dois grupos de pílula soltos, com os mesmos valores do
+`.barramento` — `alpha(base, 0.82)`, aresta de `surface0`, raio 14. E eles fecham na **mesma prumada
+da coluna** (620px centrados), não nas bordas do monitor.
+
+Enquanto ele era uma placa de 1080 de ponta a ponta, era a última coisa da página que não obedecia à
+coluna: o olho descia da placa de 620 e batia numa faixa do dobro da largura, com outro raio e outro
+material. Espalhados nos 1080, os dois grupos ficavam a mais de 200px de qualquer coisa da página e
+liam como sobra, não como rodapé.
+
+#### A escala é de leitura a dois metros
+
+Rótulo é **11,5px em `subtext0`**, não 10px em `overlay1`; valor de ficha (kernel, distro, máquina) é
+**14px em `text`**, não 12px em `subtext0`. Isto fica num monitor em pé a dois metros, sobre uma
+ilustração saturada — o cinza médio de card de app não sobrevive ali, e rótulo que some leva junto o
+número que ele nomeia. Quando um par rótulo+valor precisa perder peso, quem perde é o **rótulo**:
+`7.2.3-zen1-3-zen` se reconhece sem a palavra KERNEL na frente.
+
+A janela em foco não escreve o nome do próprio painel: ele está na frente o dia todo, e a linha
+passava a maior parte do tempo dizendo "Mirante" para quem já olha para o Mirante.
+
+A hora deixou de ser o pé da coluna e passou a ser o bloco que a fecha dentro do grupo centrado.
+O gesto continua o mesmo — é a leitura de mais longe, e é a última coisa da pilha.
+
 Relógio e térmica **saem do rodapé** enquanto o Mirante está na frente: os widgets já dizem os dois,
 em tamanho de ler de longe. A mesma informação em dois lugares da mesma tela é ruído, não
 redundância — a mesma regra que aposentou o medidor vertical da cota em 27/08/2026.
@@ -150,6 +197,14 @@ que é tela de trabalho. O Mirante abre uma exceção medida:
 
 - **Aurora Lottie** atrás da hora. Ambiente, nunca informação: fica atrás, recortada pela ilha, a
   30% de opacidade e desfocada, e nunca disputa contraste com o número.
+- **Bruma Lottie** atrás da página inteira, a 30% e com `blur(46px)`. Ela existe por causa da
+  centralização: com a coluna no meio sobra papel de parede em cima e embaixo, e sobra parada lê como
+  tela travada. O ciclo é de 60 s de propósito — isto fica no canto do olho o dia todo, e movimento
+  que se repete a cada poucos segundos vira tique.
+- **Calmo Lottie** no vazio da agenda: um aro que respira devagar acima da frase. A frase sozinha no
+  meio de uma placa alta lia como espera de carregamento, e não como a regra 4. Ele é montado e
+  desmontado a cada pintura da lista, porque o `innerHTML` apaga o container — guardá-lo no array
+  geral deixaria um Lottie órfão cobrando quadro para sempre.
 - **Dois-pontos do relógio** piscando a cada segundo. É o único lugar do painel onde o segundo
   aparece — e como brilho, não como dígito girando no canto do olho. O resto do número só é
   reescrito na virada do minuto: reescrever a hora 60 vezes por minuto obriga o Chromium a remedir
@@ -253,7 +308,11 @@ Dia com compromisso ganha **ponto** no calendário, nunca cor de fundo: estado n
   ninguém na frente da máquina deixaria a limpeza parada esperando resposta de ninguém — o mesmo
   raciocínio que valia para o UAC. Avisa por notificação nas duas pontas: "Limpando cache" ao
   disparar e "Cache limpo · liberado X MB" quando o status volta a `running=false`.
-- **Lançamento do GTA VI** (28/08/2026), primeiro morador da prateleira: marca "VI" desenhada na
+- **Lançamento do GTA VI** (28/08/2026), primeiro morador da prateleira. Desde 08/09/2026 ela é a
+  **última placa da coluna do Mirante**, e não mais uma faixa do rodapé: enquanto ocupava os 1080 de
+  ponta a ponta colada no pé, era o único elemento da página que não obedecia à coluna de 620 —
+  largura, raio e material todos diferentes do resto —, e de longe lia como pedaço de outra tela
+  grudado embaixo. O desenho de dentro é o mesmo: marca "VI" desenhada na
   grade de 63×40 com o degradê de pôr do sol da própria Rockstar, nome e data à esquerda, pastilhas
   de plataforma, e a contagem regressiva encostada na borda direita — dias, horas e minutos, **sem
   segundos**, pela mesma razão do relógio. Chegado o dia, a contagem vira recado ("É hoje",

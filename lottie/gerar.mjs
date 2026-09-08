@@ -89,6 +89,34 @@ salva('aurora', comp('aurora', 600, 320, 30, 900, [
   })
 ]));
 
+// ---------------------------------------------------------------------- bruma
+// Ambiente da página inteira: quatro massas enormes à deriva atrás da coluna,
+// no ritmo de um minuto por volta. Ela existe por causa da centralização — com
+// a coluna no meio sobra papel de parede em cima e embaixo, e sobra parada lê
+// como tela travada. A bruma dá batimento a esse vazio sem colocar caixa nele.
+//
+// O ciclo é longo de propósito (1800 quadros, 60 s): isto fica ligado o dia
+// todo no canto do olho dele, e movimento que se repete a cada poucos segundos
+// vira tique. O borrão e a máscara são do CSS, como na aurora.
+salva('bruma', comp('bruma', 900, 1600, 30, 1800, [
+  camada(1, 'mauve', 1800, [grupo([elipse([620, 520]), preenche(MAUVE, 60), tr()])], {
+    p: anima([[0, [300, 420, 0]], [600, [520, 300, 0]], [1200, [250, 620, 0]], [1800, [300, 420, 0]]]),
+    s: anima([[0, [100, 100, 100]], [900, [132, 116, 100]], [1800, [100, 100, 100]]])
+  }),
+  camada(2, 'blue', 1800, [grupo([elipse([560, 640]), preenche(BLUE, 52), tr()])], {
+    p: anima([[0, [640, 1080, 0]], [520, [420, 1240, 0]], [1180, [700, 940, 0]], [1800, [640, 1080, 0]]]),
+    s: anima([[0, [112, 100, 100]], [820, [90, 124, 100]], [1800, [112, 100, 100]]])
+  }),
+  camada(3, 'teal', 1800, [grupo([elipse([480, 460]), preenche(TEAL, 40), tr()])], {
+    p: anima([[0, [250, 1360, 0]], [700, [520, 1460, 0]], [1300, [180, 1180, 0]], [1800, [250, 1360, 0]]]),
+    s: anima([[0, [100, 100, 100]], [960, [124, 108, 100]], [1800, [100, 100, 100]]])
+  }),
+  camada(4, 'pink', 1800, [grupo([elipse([520, 420]), preenche(PINK, 36), tr()])], {
+    p: anima([[0, [660, 260, 0]], [640, [480, 160, 0]], [1260, [720, 420, 0]], [1800, [660, 260, 0]]]),
+    s: anima([[0, [104, 100, 100]], [880, [88, 118, 100]], [1800, [104, 100, 100]]])
+  })
+]));
+
 // ---------------------------------------------------------------------- pulso
 // Um canal recebeu alerta: anel que sai de dentro do número e some. Este é o
 // único movimento com cor de alarme no painel.

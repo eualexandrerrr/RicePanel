@@ -113,6 +113,12 @@
     for (const a of animacoes) {
       try { ligado ? a.play() : a.pause(); } catch (e) {}
     }
+    // O `calmo` não mora no array: ele nasce e morre junto com o estado vazio da
+    // agenda, então é preciso alcançá-lo à parte. Sem isto ele seguiria cobrando
+    // quadro com o Mirante escondido, que é exatamente o que `acorda` evita.
+    if (calmoAnim) {
+      try { ligado ? calmoAnim.play() : calmoAnim.pause(); } catch (e) {}
+    }
   }
 
   // ---------------------------------------------------------------- relógio
@@ -238,6 +244,48 @@
     return fmtDiaAgenda.format(d);
   }
 
+  // O vazio da agenda ganhou desenho (08/09/2026): antes era uma frase solta em
+  // serigrafia fraca no meio de uma placa grande, que lia como espera de
+  // carregamento. O `calmo` é um aro que respira devagar — diz "está tudo bem,
+  // não há nada", que é a regra 4 do DESIGN.md.
+  //
+  // A animação é montada e desmontada a cada pintura porque o `innerHTML` da
+  // lista apaga o container: guardá-la no array geral de `poeLottie` deixaria um
+  // Lottie órfão cobrando quadro para sempre a cada refresh da agenda.
+  let calmoAnim = null;
+
+  function soltaCalmo() {
+    if (!calmoAnim) return;
+    try { calmoAnim.destroy(); } catch (e) {}
+    calmoAnim = null;
+  }
+
+  function pintaAgendaVazia(texto) {
+    soltaCalmo();
+    const vazio = document.createElement('div');
+    vazio.className = 'agenda-vazio';
+    const selo = document.createElement('span');
+    selo.className = 'selo-calmo';
+    selo.setAttribute('aria-hidden', 'true');
+    const frase = document.createElement('span');
+    frase.textContent = texto;
+    vazio.append(selo, frase);
+    elAgendaLista.replaceChildren(vazio);
+
+    if (typeof window.lottie === 'undefined') return;
+    try {
+      calmoAnim = window.lottie.loadAnimation({
+        container: selo,
+        renderer: 'svg',
+        loop: true,
+        autoplay: acordado,
+        path: 'lottie/calmo.json'
+      });
+    } catch (e) {
+      calmoAnim = null;
+    }
+  }
+
   function pintaAgenda() {
     const ev = agendaEstado.eventos || [];
     diasComEvento = new Set(ev.map(e => chaveDia(new Date(e.inicio))));
@@ -248,15 +296,15 @@
       : (agendaEstado.atualizadoEm ? 'lida ' + hhmm(agendaEstado.atualizadoEm) : '');
 
     if (!agendaEstado.temUrl) {
-      elAgendaLista.innerHTML =
-        '<div class="agenda-vazio">Sem calendário ligado — abra o ajuste e cole o endereço iCal.</div>';
+      pintaAgendaVazia('Sem calendário ligado — abra o ajuste e cole o endereço iCal.');
       return;
     }
     if (!ev.length) {
       // Vazio é estado de calma, não de erro.
-      elAgendaLista.innerHTML = '<div class="agenda-vazio">Nada marcado pelos próximos dias.</div>';
+      pintaAgendaVazia('Nada marcado pelos próximos dias.');
       return;
     }
+    soltaCalmo();
 
     const agora = Date.now();
     let html = '';
@@ -473,7 +521,11 @@
       '<span class="ws' + (w.ativo ? ' ativo' : '') + '">' + w.id +
       (w.janelas ? '<span class="n">' + w.janelas + '</span>' : '') + '</span>'
     ).join('');
-    elJanela.textContent = h.janela ? h.janela.titulo : '';
+    // O próprio painel não conta como janela em foco: ele fica na frente o dia
+    // todo, então a linha passava a maior parte do tempo escrevendo "Mirante"
+    // para quem já está olhando para o Mirante.
+    const classe = h.janela ? (h.janela.classe || '') : '';
+    elJanela.textContent = /^ricepanel$/i.test(classe) ? '' : (h.janela ? h.janela.titulo : '');
   }
 
   function linhaFicha(rotulo, valor) {
@@ -586,6 +638,7 @@
   // Primeira pintura sem esperar tique nenhum.
   pintaRelogio(true);
   pintaMes();
+  poeLottie('brumaMirante', 'bruma.json', { rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } });
   poeLottie('auroraHora', 'aurora.json', { rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } });
   musicaAnim = poeLottie('wOndas', 'ondas.json');
   buscaAgenda(false);
