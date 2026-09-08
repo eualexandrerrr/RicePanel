@@ -429,6 +429,7 @@
       // A foto fica entre o anel e o nome: é a peça que aquele número mede.
       (foto ? '<img class="anel-foto" src="' + esc(foto) + '" alt="" aria-hidden="true">' : '') +
       '<span class="rotulo">' + rotulo + '</span>' +
+      '<span class="anel-dados" id="' + id + 'Dados"></span>' +
     '</div>';
   }
 
@@ -536,7 +537,9 @@
 
   // Os medidores de disco só existem depois do primeiro retrato: a quantidade
   // de volumes é da máquina, não do HTML.
-  let medidoresMontados = false;
+  // Guarda a fila montada: o swap entra e sai conforme o uso, e a grade tem de
+  // acompanhar sem remontar a cada tique.
+  let medidoresMontados = '';
 
   function montaMedidores(r) {
     // Rótulo curto: a coluna da serigrafia é estreita para o trilho ficar
@@ -545,54 +548,36 @@
     (r.discos || []).forEach((d, i) => {
       html += med('mDisco' + i, d.ponto === '/' ? 'Root' : 'Home');
     });
-    if (r.memoria && r.memoria.swapTotal) html += med('mSwap', 'Swap');
+    // Swap praticamente zerado é linha morta: a máquina tem 32 GB e o kernel
+    // deixa alguns megabytes lá parados. Só entra quando passa de 256 MB.
+    if (r.memoria && r.memoria.swapTotal && r.memoria.swapUsado > 256 * 1048576) {
+      html += med('mSwap', 'Swap');
+    }
     elMedidores.innerHTML = html;
-    medidoresMontados = true;
   }
 
-  // -------------------------------------------------- processador e placas
+  // -------------------------------------------------- números da peça
 
-  // O anel dá a temperatura; esta faixa dá o resto — quanto está sendo usado e
-  // de quanta memória. Uma linha por peça, na mesma ordem dos anéis, para as
-  // duas leituras baterem sem o olho ter de procurar.
-  const elPecas = $('wPecas');
-
+  // O anel dá a temperatura; esta linha, logo abaixo do nome, dá o resto: o
+  // quanto a peça está sendo usada e de quanta memória. Uma linha por coluna,
+  // curta — quem quer detalhe abre o Monitor.
   function fmtVram(mib) {
     if (mib == null) return null;
-    return (mib / 1024).toFixed(1).replace('.', ',') + ' GB';
+    const gb = mib / 1024;
+    return (gb >= 10 ? Math.round(gb) : gb.toFixed(1).replace('.', ',')) + '';
   }
 
-  // A foto da peça mora no anel da térmica, não aqui: aqui é a linha de números.
-  function linhaPeca(nome, pct, extras) {
-    return '<div class="peca">' +
-      '<span class="rotulo">' + esc(nome) + '</span>' +
-      '<span class="dados">' +
-        '<b>' + (pct == null ? '—' : pct + '%') + '</b>' +
-        // Sempre as duas células, mesmo vazias: é o que mantém a terceira
-        // coluna da grade no lugar quando uma peça não tem o dado.
-        extras.slice(0, 2).map(t => '<i class="rotulo">' + esc(t || '') + '</i>').join('') +
-      '</span></div>';
+  function poeDados(id, texto) {
+    const el = $(id + 'Dados');
+    if (el) el.textContent = texto || '';
   }
 
-  function pintaPecas(r) {
-    if (!elPecas) return;
-    let html = '';
-    if (r.cpu) {
-      html += linhaPeca(r.cpu.modelo || 'Processador', r.cpu.pct, [
-        r.cpu.ghz ? r.cpu.ghz.toFixed(1).replace('.', ',') + ' GHz' : '—',
-        r.cpu.fios ? r.cpu.fios + ' fios' : '—'
-      ]);
-    }
-    for (const g of (listaGpus(r) || [])) {
-      const vram = (g.vramUsada != null && g.vramTotal != null)
-        ? fmtVram(g.vramUsada) + ' / ' + fmtVram(g.vramTotal)
-        : '';
-      html += linhaPeca(g.nome || 'GPU', g.uso, [
-        vram || '—',
-        g.watts != null ? Math.round(g.watts) + ' W' : '—'
-      ]);
-    }
-    elPecas.innerHTML = html;
+  function dadosDaGpu(g) {
+    const uso = g.uso == null ? '—' : g.uso + '%';
+    const vram = (g.vramUsada != null && g.vramTotal != null)
+      ? fmtVram(g.vramUsada) + '/' + fmtVram(g.vramTotal) + ' GB'
+      : '';
+    return [uso, vram].filter(Boolean).join(' · ');
   }
 
   // ------------------------------------------------------------- música
@@ -776,11 +761,21 @@
 
     montaAneis(r);
     pintaAnel('anCpu', r.cpu ? r.cpu.temp : null);
-    (listaGpus(r) || []).forEach((g, i) => pintaAnel('anGpu' + i, g.temp));
+    if (r.cpu) {
+      poeDados('anCpu', [
+        r.cpu.pct == null ? '—' : r.cpu.pct + '%',
+        r.cpu.ghz ? r.cpu.ghz.toFixed(1).replace('.', ',') + ' GHz' : ''
+      ].filter(Boolean).join(' · '));
+    }
+    (listaGpus(r) || []).forEach((g, i) => {
+      pintaAnel('anGpu' + i, g.temp);
+      poeDados('anGpu' + i, dadosDaGpu(g));
+    });
     pintaAnel('anNvme', r.nvme);
-    pintaPecas(r);
 
-    if (!medidoresMontados) montaMedidores(r);
+    const filaMed = (r.discos || []).map(d => d.ponto).join(',') +
+      (r.memoria && r.memoria.swapTotal && r.memoria.swapUsado > 256 * 1048576 ? '+swap' : '');
+    if (filaMed !== medidoresMontados) { medidoresMontados = filaMed; montaMedidores(r); }
 
     if (r.cpu) pintaMed('mCpu', r.cpu.pct, r.cpu.pct == null ? '—' : r.cpu.pct + '%');
     if (r.memoria) {

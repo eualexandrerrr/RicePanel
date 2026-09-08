@@ -782,9 +782,9 @@
        quem conta é o retrato. `--n-aneis` chega do mirante.js. */
     .aneis {
       display: grid; grid-template-columns: repeat(var(--n-aneis, 3), 1fr);
-      padding: 12px 16px 10px;
+      padding: 12px 14px 8px;
     }
-    .anel { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .anel { display: flex; flex-direction: column; align-items: center; gap: 6px; }
     /* O rótulo do anel virou o nome da placa ("RTX 3090"): com quatro colunas
        a coluna fica estreita, e nome comprido tem de cortar em vez de empurrar
        o anel do vizinho. */
@@ -792,7 +792,7 @@
       color: var(--subtext0);
       max-width: 100%; overflow: hidden; text-overflow: ellipsis;
     }
-    .anel svg { width: 92px; height: 92px; display: block; }
+    .anel svg { width: 76px; height: 76px; display: block; }
     .anel .trilho { fill: none; stroke: rgba(205, 214, 244, 0.10); stroke-width: 3; }
     /* Traço fino: anel grosso vira rosquinha de dashboard, que é o oposto do
        que esta página é. */
@@ -801,7 +801,7 @@
       transition: stroke-dashoffset 800ms var(--saida), stroke 800ms linear;
     }
     .anel .centro {
-      font-family: 'Archivo', sans-serif; font-weight: 300; font-size: 30px;
+      font-family: 'Archivo', sans-serif; font-weight: 300; font-size: 27px;
       fill: var(--text); font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
     }
@@ -812,7 +812,7 @@
        quadrado e a placa de vídeo é comprida — cada um mantém sua proporção sem
        mexer na altura da fila. A sombra descola a peça do vidro. */
     .anel-foto {
-      width: 100%; max-width: 108px; height: 54px; display: block;
+      width: 100%; max-width: 96px; height: 42px; display: block;
       object-fit: contain; object-position: center;
       margin-top: -2px;
       filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
@@ -824,24 +824,6 @@
        temperatura; aqui fica o que não cabe dentro do anel — quanto está sendo
        usado e de quanta memória. Nome à esquerda, números à direita, para o
        olho descer a coluna dos números sem procurar. */
-    /* Grade, não três linhas soltas: com flex cada linha alinhava o próprio
-       número na ponta e a coluna de porcentagem saía torta (12%, 0%, 25% em
-       três posições diferentes). Aqui as colunas são as mesmas para todas as
-       peças, e o olho desce uma coluna só. */
-    .m-pecas {
-      display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
-      align-items: baseline;
-      column-gap: 16px; row-gap: 10px;
-      padding: 6px 16px 12px;
-    }
-    .m-pecas .peca { display: contents; }
-    .m-pecas .dados { display: contents; }
-    .m-pecas .dados > * { text-align: right; }
-    .m-pecas b {
-      font-size: 15px; font-weight: 400; color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-
     .m-cinta { height: 1px; margin: 0 20px; background: rgba(205, 214, 244, 0.09); }
 
     /* Medidor compacto: rótulo e valor na mesma linha, trilho curto logo
@@ -849,10 +831,10 @@
        era o desenho que mais incomodava. */
     .medidores {
       display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px 22px;
-      padding: 12px 14px 8px;
+      gap: 9px 20px;
+      padding: 10px 14px 6px;
     }
-    .med { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .med { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .med .topo { display: flex; align-items: baseline; gap: 8px; }
     .med .valor {
       margin-left: auto;
@@ -890,7 +872,7 @@
 
     .m-rede {
       display: flex; align-items: baseline; justify-content: center; gap: 8px;
-      padding: 2px 16px 13px;
+      padding: 2px 16px 11px;
     }
     .m-rede .par { display: flex; align-items: baseline; gap: 7px; }
     .m-rede .par + .par { margin-left: 20px; }
@@ -2162,7 +2144,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <div class="aneis" id="wAneis"></div>
         <div class="m-cinta"></div>
         <div class="medidores" id="wMedidores"></div>
-        <div class="m-pecas" id="wPecas"></div>
         <div class="m-rede">
           <span class="par"><i class="rotulo">Baixando</i><b class="num" id="wRedeRx">—</b></span>
           <span class="par"><i class="rotulo">Subindo</i><b class="num" id="wRedeTx">—</b></span>
