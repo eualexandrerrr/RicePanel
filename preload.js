@@ -19,6 +19,11 @@ contextBridge.exposeInMainWorld('api', {
   // agenda (Google Calendar por iCal)
   musicaComando: (verbo, player) => ipcRenderer.invoke('musica-comando', verbo, player),
 
+  videoGet: () => ipcRenderer.invoke('video-get'),
+  videoPausaNavegador: () => ipcRenderer.invoke('video-pausa-navegador'),
+  videoTocaNavegador: () => ipcRenderer.invoke('video-toca-navegador'),
+  onVideo: (cb) => ipcRenderer.on('video-update', (e, d) => cb(d)),
+
   flamengoGet: () => ipcRenderer.invoke('flamengo-get'),
   flamengoRefresh: () => ipcRenderer.invoke('flamengo-refresh'),
   onFlamengo: (cb) => ipcRenderer.on('flamengo-update', (e, d) => cb(d)),

@@ -17,6 +17,7 @@ const discord = require('./discord-notas');
 const sistema = require('./sistema');
 const agenda = require('./agenda');
 const flamengo = require('./flamengo');
+const video = require('./video');
 const dev = require('./dev');
 const vidro = require('./vidro');
 
@@ -32,6 +33,9 @@ app.setAppUserModelId('com.alexandre.mirante');
 // `no_blur` ao painel. Quem cede é o app, não a config: assim o compositor
 // continua sendo o dono da colocação, que é o lugar certo dela no Wayland.
 app.commandLine.appendSwitch('class', 'ricepanel');
+// O vídeo do navegador que o Mirante assume precisa começar a tocar sozinho:
+// não existe clique nenhum num painel de parede.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 // Log gravado no proprio diretorio do app, com rotacao simples.
 const LOG_FILE = path.join(__dirname, 'mirante.log');
@@ -299,6 +303,7 @@ function createWindow() {
   discord.iniciar(deps);
   agenda.iniciar(deps);
   flamengo.iniciar(deps);
+  video.iniciar(deps);
   dev.iniciar({ log, empurra, getWindow: () => mainWindow });
   vidro.iniciar({ app, log, empurra });
 
@@ -390,6 +395,9 @@ async function tique() {
       sistema.retrato(), sistema.hyprland(), sistema.musica()
     ]);
     empurra('sistema-update', { retrato, hypr, musica });
+    // O vídeo tem leitura própria (MPRIS + hyprctl) e cadência de 2 s igual à
+    // deste tique; aqui só vai o retrato mais recente para a tela.
+    empurra('video-update', video.atual());
   } catch (e) {
     log('tique de sistema falhou: ' + e.message);
   }
@@ -451,6 +459,10 @@ ipcMain.handle('musica-comando', async (e, verbo, player) => {
   // O tique de 2 s já traz o estado novo; devolver ok só fecha o clique.
   return { ok: true };
 });
+
+ipcMain.handle('video-get', async () => video.atual());
+ipcMain.handle('video-pausa-navegador', async () => video.pausaNavegador());
+ipcMain.handle('video-toca-navegador', async () => video.tocaNavegador());
 
 ipcMain.handle('flamengo-get', async () => flamengo.atual());
 ipcMain.handle('flamengo-refresh', async () => flamengo.forcar());

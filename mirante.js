@@ -677,6 +677,131 @@
       ' a atualizar';
   }
 
+  // ---------------------------------------- vídeo do navegador
+
+  // Regra: o painel só assume o vídeo quando a janela que toca não está à vista
+  // dele. Assumir significa montar o player do YouTube na posição em que ele
+  // parou e pausar a aba do navegador — dois áudios ao mesmo tempo seria o pior
+  // resultado possível.
+  const elVideo = $('wVideo');
+  let videoMontado = '';          // id + site do que está na placa agora
+
+  function desmontaVideo() {
+    if (!videoMontado) return;
+    videoMontado = '';
+    elVideo.innerHTML = '';
+    elVideo.hidden = true;
+  }
+
+  function montaYoutube(v) {
+    const inicio = Math.max(0, (v.posicao || 0) - 1);
+    // Página normal do YouTube, não o `/embed`: o embed recusa quem não tem
+    // origem HTTP (erro 153), e a página do painel é `file://`. A página cheia
+    // carrega sem reclamar; o que sobra dela — cabeçalho, sugestões,
+    // comentários — some no CSS injetado logo abaixo.
+    const src = 'https://www.youtube.com/watch?v=' + encodeURIComponent(v.id) +
+      '&t=' + inicio + 's';
+    elVideo.innerHTML =
+      '<span class="video-quadro">' +
+        '<webview id="wVideoQuadro" partition="persist:video-mirante" allowpopups="false"></webview>' +
+      '</span>' +
+      '<span class="video-pe">' +
+        '<span class="video-titulo">' + esc(v.titulo || 'Vídeo') + '</span>' +
+        '<span class="rotulo video-onde">YouTube</span>' +
+      '</span>';
+    elVideo.hidden = false;
+
+    // O embed do YouTube recusa página sem origem (erro 153): de `file://` não
+    // vai `Referer` nenhum e ele acha que está sendo embutido de lugar
+    // proibido. `loadURL` com `httpReferrer` resolve — é o mesmo cabeçalho que
+    // o navegador mandaria a partir de uma página do próprio YouTube.
+    const quadro = $('wVideoQuadro');
+    if (!quadro) return;
+
+    // O que fica da página é só o vídeo. Sem isto o painel viraria uma janela
+    // do YouTube na parede, com barra de busca e coluna de sugestões.
+    const SO_O_VIDEO = [
+      '#masthead-container, ytd-masthead, #secondary, #below, #chat,',
+      'ytd-comments, tp-yt-app-drawer, ytd-mini-guide-renderer,',
+      'ytd-watch-metadata, #related, .ytp-chrome-top, .ytp-gradient-top,',
+      'ytd-merch-shelf-renderer { display: none !important; }',
+      'html, body { overflow: hidden !important; background: #000 !important; }',
+      'ytd-app, #content, ytd-page-manager, ytd-watch-flexy { background: #000 !important; }',
+      '#primary, #primary-inner, #player, #player-container,',
+      '#player-container-inner, #movie_player, .html5-video-player {',
+      '  margin: 0 !important; padding: 0 !important;',
+      '  width: 100vw !important; max-width: 100vw !important;',
+      '  height: 100vh !important; max-height: 100vh !important; }',
+      '.html5-video-container, video { width: 100% !important; height: 100% !important;',
+      '  left: 0 !important; top: 0 !important; object-fit: contain !important; }'
+    ].join('\n');
+
+    // `insertCSS` sozinho não segura: o YouTube é uma página que se redesenha
+    // inteira depois do `dom-ready` e leva a folha junto. Um `<style>` cravado
+    // no documento, reposto a cada carga, fica.
+    const injeta = () => {
+      const script =
+        '(function(){' +
+        '  var id="ricepanel-so-o-video";' +
+        '  var e=document.getElementById(id);' +
+        '  if(!e){ e=document.createElement("style"); e.id=id;' +
+        '          document.documentElement.appendChild(e); }' +
+        '  e.textContent=' + JSON.stringify(SO_O_VIDEO) + ';' +
+        '  var v=document.querySelector("video");' +
+        '  if(v){ v.muted=false; v.play().catch(function(){}); }' +
+        '  return true;})()';
+      try { quadro.executeJavaScript(script); } catch (e) {}
+    };
+
+    quadro.addEventListener('dom-ready', () => {
+      try { quadro.setAudioMuted(false); } catch (e) {}
+      injeta();
+    }, { once: true });
+    quadro.addEventListener('did-finish-load', injeta);
+    // O player só assume a página inteira depois que o YouTube termina de
+    // montar; três repescagens curtas cobrem isso sem ficar rodando para sempre.
+    quadro.addEventListener('dom-ready', () => {
+      [800, 2500, 6000].forEach(ms => setTimeout(injeta, ms));
+    }, { once: true });
+
+    quadro.src = src;
+  }
+
+  function montaDrm(v) {
+    elVideo.innerHTML =
+      '<span class="video-drm">' +
+        '<span class="rotulo">Tocando no navegador</span>' +
+        '<span class="video-titulo">' + esc(v.titulo || '—') + '</span>' +
+        '<span class="rotulo">O serviço usa DRM e não roda dentro do painel</span>' +
+      '</span>';
+    elVideo.hidden = false;
+  }
+
+  function pintaVideo(v) {
+    if (!v || !v.site || v.janelaVisivel) {
+      // Ele voltou para a janela: o painel devolve o vídeo e sai da frente.
+      if (videoMontado && /^youtube/.test(videoMontado)) window.api.videoTocaNavegador().catch(() => {});
+      desmontaVideo();
+      return;
+    }
+
+    const assinatura = v.site + ':' + v.id;
+    if (assinatura === videoMontado) return;
+
+    if (v.site === 'youtube') {
+      montaYoutube(v);
+      videoMontado = assinatura;
+      // A aba fica em silêncio enquanto a parede toca.
+      window.api.videoPausaNavegador().catch(() => {});
+      return;
+    }
+    montaDrm(v);
+    videoMontado = assinatura;
+  }
+
+  window.api.onVideo(pintaVideo);
+  window.api.videoGet().then(pintaVideo).catch(() => {});
+
   // -------------------------------------------------- próximo jogo
 
   // Fonte: API pública do ESPN, pelo `flamengo.js` do main (mesma que o
