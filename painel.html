@@ -778,12 +778,20 @@
     /* ------------------------------------------------------------ vitais */
     /* Térmica e carga numa placa só, em duas faixas. */
     .m-vitais { padding: 2px 0 0; }
+    /* Uma coluna por sensor: a máquina pode ter uma placa de vídeo ou três, e
+       quem conta é o retrato. `--n-aneis` chega do mirante.js. */
     .aneis {
-      display: grid; grid-template-columns: repeat(3, 1fr);
+      display: grid; grid-template-columns: repeat(var(--n-aneis, 3), 1fr);
       padding: 12px 16px 10px;
     }
     .anel { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .anel .rotulo { color: var(--subtext0); }
+    /* O rótulo do anel virou o nome da placa ("RTX 3090"): com quatro colunas
+       a coluna fica estreita, e nome comprido tem de cortar em vez de empurrar
+       o anel do vizinho. */
+    .anel .rotulo {
+      color: var(--subtext0);
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+    }
     .anel svg { width: 92px; height: 92px; display: block; }
     .anel .trilho { fill: none; stroke: rgba(205, 214, 244, 0.10); stroke-width: 3; }
     /* Traço fino: anel grosso vira rosquinha de dashboard, que é o oposto do
@@ -797,7 +805,42 @@
       fill: var(--text); font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
     }
-    .anel .grau { font-size: 12.5px; fill: var(--subtext0); letter-spacing: 0.1em; }
+    /* O grau é sobrescrito, na mesma linha do número. Menor e mais claro para
+       ser unidade, não dado. */
+    /* A foto da peça, entre o anel e o nome: o número mede uma coisa que existe,
+       e a foto é o que diz qual. Caixa fixa com `contain` porque o processador é
+       quadrado e a placa de vídeo é comprida — cada um mantém sua proporção sem
+       mexer na altura da fila. A sombra descola a peça do vidro. */
+    .anel-foto {
+      width: 100%; max-width: 108px; height: 54px; display: block;
+      object-fit: contain; object-position: center;
+      margin-top: -2px;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    }
+
+    .anel .grau { font-size: 12.5px; fill: var(--subtext0); letter-spacing: 0.04em; }
+
+    /* Processador e placas de vídeo, uma linha cada. O anel em cima já deu a
+       temperatura; aqui fica o que não cabe dentro do anel — quanto está sendo
+       usado e de quanta memória. Nome à esquerda, números à direita, para o
+       olho descer a coluna dos números sem procurar. */
+    /* Grade, não três linhas soltas: com flex cada linha alinhava o próprio
+       número na ponta e a coluna de porcentagem saía torta (12%, 0%, 25% em
+       três posições diferentes). Aqui as colunas são as mesmas para todas as
+       peças, e o olho desce uma coluna só. */
+    .m-pecas {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
+      align-items: baseline;
+      column-gap: 16px; row-gap: 10px;
+      padding: 6px 16px 12px;
+    }
+    .m-pecas .peca { display: contents; }
+    .m-pecas .dados { display: contents; }
+    .m-pecas .dados > * { text-align: right; }
+    .m-pecas b {
+      font-size: 15px; font-weight: 400; color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
 
     .m-cinta { height: 1px; margin: 0 20px; background: rgba(205, 214, 244, 0.09); }
 
@@ -817,18 +860,32 @@
       font-variant-numeric: tabular-nums; color: var(--text);
       white-space: nowrap;
     }
+    /* O trilho é um sulco: fundo mais escuro que a placa e um fio de luz na
+       borda de baixo, como o resto da chapa. Barra chapada de 4px lia como
+       risco de placeholder. */
     .med .trilho {
-      height: 4px; border-radius: 999px;
-      background: rgba(205, 214, 244, 0.10);
+      height: 7px; border-radius: 999px;
+      background: rgba(17, 17, 27, 0.55);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45),
+                  inset 0 -1px 0 rgba(205, 214, 244, 0.07);
       overflow: hidden;
     }
     /* Preenchimento por `transform`, não por `width`: largura animada remede o
        layout a cada quadro, e isto roda 24 h num painel sem aceleração de GPU. */
+    /* O preenchimento tem volume: clareia em cima, escurece embaixo e acende um
+       halo da própria cor. É a mesma luz do resto da página, não tinta chapada.
+       A cor vem do JS em `background-color`; o gradiente é só verniz por cima,
+       então trocar de cor continua funcionando. */
     .med .trilho i {
       display: block; height: 100%; width: 100%; border-radius: 999px;
-      background: var(--acento);
+      background-color: var(--acento);
+      background-image: linear-gradient(to bottom,
+        rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.04) 55%,
+        rgba(0, 0, 0, 0.18));
+      box-shadow: 0 0 10px -1px currentColor;
+      color: inherit;
       transform: scaleX(0); transform-origin: left center;
-      transition: transform 800ms var(--saida), background 800ms linear;
+      transition: transform 800ms var(--saida), background-color 800ms linear;
     }
 
     .m-rede {
@@ -854,24 +911,6 @@
       display: flex; align-items: center; justify-content: center;
       flex-wrap: wrap; gap: 8px 18px;
     }
-    .workspaces { display: flex; gap: 6px; }
-    .ws {
-      min-width: 26px; height: 26px; padding: 0 8px;
-      display: flex; align-items: center; justify-content: center; gap: 4px;
-      /* Pastilha redonda, não quadradinho: o workspace é uma conta, e conta
-         mora em círculo. Também é a única forma da página que se repete em
-         fileira — quadrado ali refazia a parede de lajotas. */
-      border-radius: 999px;
-      background: rgba(205, 214, 244, 0.07);
-      border: 1px solid var(--vidro-aresta);
-      font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums;
-      color: var(--subtext0);
-    }
-    .ws.ativo {
-      background: var(--acento); border-color: var(--acento); color: var(--sobre-acento);
-      font-weight: 600;
-    }
-    .ws .n { font-size: 8px; opacity: 0.65; }
     .janela-foco {
       font-size: 13.5px; color: var(--subtext0); text-align: center;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1421,6 +1460,43 @@
        colada no pé, era o único elemento do Mirante que não obedecia à coluna
        de 620 — largura, raio e material todos diferentes do resto. De longe
        lia como pedaço de outra tela grudado embaixo. */
+    /* ---------- próximo jogo ----------
+       Mora ao lado da prateleira do GTA porque é do mesmo tipo de conteúdo:
+       coisa dele, não leitura de serviço. Dois escudos e a hora — de dois
+       metros o escudo é o que se reconhece primeiro, então ele é o que é
+       grande; o texto vem depois, para quem chega perto. */
+    .m-jogo { padding: 14px 18px; }
+    .jogo {
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+    }
+    .jogo-escudos { display: flex; align-items: center; gap: 10px; flex: none; }
+    .jogo-escudos img {
+      width: 42px; height: 42px; object-fit: contain; display: block;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    }
+    .jogo-versus {
+      font-family: 'Archivo Narrow', sans-serif; font-size: 12px; font-weight: 700;
+      letter-spacing: 0.18em; color: var(--subtext0);
+    }
+    .jogo-ident { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .jogo-times {
+      font-size: 15px; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .jogo-quando {
+      font-family: 'Archivo Narrow', 'Segoe UI', sans-serif;
+      font-size: 12.5px; font-weight: 600; letter-spacing: 0.06em;
+      color: var(--subtext0);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    /* Jogo rolando é o único estado vivo da placa: acende como o resto do
+       painel acende — cor no dado, não no recipiente. */
+    .jogo.rolando .jogo-quando { color: var(--verde); }
+    .jogo-placar {
+      font-size: 27px; font-weight: 800; letter-spacing: -0.035em; line-height: 1;
+      color: var(--leitura); font-variant-numeric: tabular-nums; flex: none;
+    }
+
     .m-lancamento { padding: 16px 20px; }
     .lancamento {
       display: flex; align-items: center; justify-content: center; gap: 18px;
@@ -2047,6 +2123,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <div class="aneis" id="wAneis"></div>
         <div class="m-cinta"></div>
         <div class="medidores" id="wMedidores"></div>
+        <div class="m-pecas" id="wPecas"></div>
         <div class="m-rede">
           <span class="par"><i class="rotulo">Baixando</i><b class="num" id="wRedeRx">—</b></span>
           <span class="par"><i class="rotulo">Subindo</i><b class="num" id="wRedeTx">—</b></span>
@@ -2056,10 +2133,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
       <!-- 4 · a máquina em si, sem recipiente -->
       <div class="m-maquina gasa">
-        <div class="linha">
-          <div class="workspaces" id="wWorkspaces"></div>
-          <span class="rotulo" id="wCargaModelo"></span>
-        </div>
         <div class="janela-foco" id="wJanela"></div>
         <div class="linha">
           <div class="ficha" id="wFicha"></div>
@@ -2088,8 +2161,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <span class="m-meta">
           <span><i class="rotulo">Semana</i><b class="num" id="wSemana">—</b></span>
           <span><i class="rotulo">Dia</i><b class="num" id="wDiaAno">—</b></span>
-          <span><i class="rotulo">De pé há</i><b class="num" id="wUptime">—</b></span>
+          <span><i class="rotulo">Uptime</i><b class="num" id="wUptime">—</b></span>
         </span>
+      </div>
+
+      <!-- Próximo jogo do Flamengo. Some inteiro quando não há jogo marcado
+           nem resposta do ESPN: placa vazia é pior que placa nenhuma. -->
+      <div class="placa m-jogo" id="wJogo" hidden>
+        <div class="jogo" id="wJogoCorpo"></div>
       </div>
 
       <!-- A prateleira: coisa dele, não trabalho. Fecha a coluna abaixo da hora,

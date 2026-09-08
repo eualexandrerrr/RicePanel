@@ -3,3 +3,4 @@ node_modules/
 pos.json
 maintenance.status.json
 mirante-stop.flag
+.playwright-mcp/

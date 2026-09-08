@@ -398,7 +398,19 @@
     return 'var(--verde)';
   }
 
-  function svgAnel(id, rotulo) {
+  // Foto real da peça, dos arquivos em `fotos/` (crédito em fotos/CREDITOS.md).
+  // É a peça de referência, não a desta máquina: no tamanho em que aparece o que
+  // se reconhece é o formato — pastilha de processador, cooler de três hélices,
+  // placa pequena de uma hélice, bastão de M.2.
+  function fotoDaPeca(tipo, nome, marca) {
+    if (tipo === 'cpu') return /ryzen/i.test(nome || '') ? 'fotos/cpu-ryzen.png' : '';
+    if (tipo === 'nvme') return 'fotos/ssd-nvme.png';
+    if (/nvidia/i.test(marca || '')) return 'fotos/gpu-nvidia.png';
+    if (/amd|radeon/i.test(marca || '')) return 'fotos/gpu-amd.png';
+    return '';
+  }
+
+  function svgAnel(id, rotulo, foto) {
     return '<div class="anel">' +
       '<svg viewBox="0 0 84 84">' +
         '<circle class="trilho" cx="42" cy="42" r="' + R + '"></circle>' +
@@ -406,19 +418,71 @@
           ' stroke-dasharray="' + VOLTA.toFixed(2) + '"' +
           ' stroke-dashoffset="' + VOLTA.toFixed(2) + '"' +
           ' transform="rotate(-90 42 42)"></circle>' +
-        '<text class="centro" id="' + id + 'Txt" x="42" y="42" text-anchor="middle" dominant-baseline="central">--</text>' +
-        '<text class="grau" x="42" y="60" text-anchor="middle">°C</text>' +
+        // Número e grau na MESMA linha de texto. Em dois `<text>` empilhados o
+        // "°C" caía em cima da barriga dos dígitos e o miolo do anel ficava
+        // apertado; sobrescrito, o grau é sinal de unidade e não segunda linha.
+        '<text class="centro" x="42" y="44" text-anchor="middle" dominant-baseline="central">' +
+          '<tspan id="' + id + 'Txt">--</tspan>' +
+          '<tspan class="grau" dy="-9">°C</tspan>' +
+        '</text>' +
       '</svg>' +
+      // A foto fica entre o anel e o nome: é a peça que aquele número mede.
+      (foto ? '<img class="anel-foto" src="' + esc(foto) + '" alt="" aria-hidden="true">' : '') +
       '<span class="rotulo">' + rotulo + '</span>' +
     '</div>';
   }
 
-  const SENSORES = [
-    { id: 'anCpu', rotulo: 'CPU' },
-    { id: 'anGpu', rotulo: 'GPU' },
-    { id: 'anNvme', rotulo: 'SSD' }
-  ];
-  elAneis.innerHTML = SENSORES.map(s => svgAnel(s.id, s.rotulo)).join('');
+  // Quantos anéis existem é da máquina, não do HTML: esta tem duas placas de
+  // vídeo, outra pode ter uma só. Enquanto o primeiro retrato não chega, a fila
+  // é a antiga — CPU, GPU, SSD — para a placa não nascer com um buraco.
+  let aneisMontados = '';
+
+  // O nome da placa vale mais que a palavra "GPU" quando há duas: é por ele que
+  // ele sabe qual anel é a de trabalho e qual é a que só toca vídeo.
+  function rotuloGpu(g, i, quantas) {
+    if (quantas < 2) return 'GPU';
+    return g.nome || ('GPU ' + (i + 1));
+  }
+
+  function listaGpus(r) {
+    if (!r) return null;
+    if (Array.isArray(r.gpus)) return r.gpus;
+    return r.gpu ? [r.gpu] : [];
+  }
+
+  function montaAneis(r) {
+    const gpus = listaGpus(r);
+    const modeloCpu = r && r.cpu ? r.cpu.modelo : '';
+    const sensores = [{
+      id: 'anCpu',
+      rotulo: 'CPU',
+      foto: fotoDaPeca('cpu', modeloCpu, 'AMD')
+    }];
+    if (gpus == null) {
+      sensores.push({ id: 'anGpu0', rotulo: 'GPU', foto: '' });
+    } else {
+      gpus.forEach((g, i) => sensores.push({
+        id: 'anGpu' + i,
+        rotulo: rotuloGpu(g, i, gpus.length),
+        foto: fotoDaPeca('gpu', g.nome, g.marca)
+      }));
+    }
+    sensores.push({
+      id: 'anNvme',
+      rotulo: (r && r.nvmeModelo) || 'SSD',
+      foto: fotoDaPeca('nvme')
+    });
+
+    // Só remonta quando a fila muda de verdade: reescrever o innerHTML a cada
+    // dois segundos apagaria a transição de 800 ms dos arcos.
+    const assinatura = sensores.map(x => x.id + ':' + x.rotulo + ':' + x.foto).join('|');
+    if (assinatura === aneisMontados) return;
+    aneisMontados = assinatura;
+    elAneis.style.setProperty('--n-aneis', sensores.length);
+    elAneis.innerHTML = sensores.map(x => svgAnel(x.id, x.rotulo, x.foto)).join('');
+  }
+
+  montaAneis(null);
 
   function pintaAnel(id, t) {
     const arco = $(id + 'Arco');
@@ -479,11 +543,56 @@
     // longo, e "Processador" já saía cortado em "Processad".
     let html = med('mCpu', 'CPU') + med('mRam', 'RAM');
     (r.discos || []).forEach((d, i) => {
-      html += med('mDisco' + i, d.ponto === '/' ? 'Raiz' : 'Casa');
+      html += med('mDisco' + i, d.ponto === '/' ? 'Root' : 'Home');
     });
     if (r.memoria && r.memoria.swapTotal) html += med('mSwap', 'Swap');
     elMedidores.innerHTML = html;
     medidoresMontados = true;
+  }
+
+  // -------------------------------------------------- processador e placas
+
+  // O anel dá a temperatura; esta faixa dá o resto — quanto está sendo usado e
+  // de quanta memória. Uma linha por peça, na mesma ordem dos anéis, para as
+  // duas leituras baterem sem o olho ter de procurar.
+  const elPecas = $('wPecas');
+
+  function fmtVram(mib) {
+    if (mib == null) return null;
+    return (mib / 1024).toFixed(1).replace('.', ',') + ' GB';
+  }
+
+  // A foto da peça mora no anel da térmica, não aqui: aqui é a linha de números.
+  function linhaPeca(nome, pct, extras) {
+    return '<div class="peca">' +
+      '<span class="rotulo">' + esc(nome) + '</span>' +
+      '<span class="dados">' +
+        '<b>' + (pct == null ? '—' : pct + '%') + '</b>' +
+        // Sempre as duas células, mesmo vazias: é o que mantém a terceira
+        // coluna da grade no lugar quando uma peça não tem o dado.
+        extras.slice(0, 2).map(t => '<i class="rotulo">' + esc(t || '') + '</i>').join('') +
+      '</span></div>';
+  }
+
+  function pintaPecas(r) {
+    if (!elPecas) return;
+    let html = '';
+    if (r.cpu) {
+      html += linhaPeca(r.cpu.modelo || 'Processador', r.cpu.pct, [
+        r.cpu.ghz ? r.cpu.ghz.toFixed(1).replace('.', ',') + ' GHz' : '—',
+        r.cpu.fios ? r.cpu.fios + ' fios' : '—'
+      ]);
+    }
+    for (const g of (listaGpus(r) || [])) {
+      const vram = (g.vramUsada != null && g.vramTotal != null)
+        ? fmtVram(g.vramUsada) + ' / ' + fmtVram(g.vramTotal)
+        : '';
+      html += linhaPeca(g.nome || 'GPU', g.uso, [
+        vram || '—',
+        g.watts != null ? Math.round(g.watts) + ' W' : '—'
+      ]);
+    }
+    elPecas.innerHTML = html;
   }
 
   // ------------------------------------------------------------- música
@@ -511,16 +620,14 @@
 
   // ------------------------------------------------------------- máquina
 
-  const elWorkspaces = $('wWorkspaces');
   const elJanela = $('wJanela');
   const elFicha = $('wFicha');
 
+  // A fileira de pastilhas de workspace saiu (08/09/2026): num painel que fica
+  // na parede, saber em qual workspace o Hyprland está não é informação — ele
+  // já está olhando para a tela que responde a isso. Sobrou a janela em foco.
   function pintaHypr(h) {
-    if (!h) { elWorkspaces.innerHTML = ''; elJanela.textContent = ''; return; }
-    elWorkspaces.innerHTML = (h.workspaces || []).map(w =>
-      '<span class="ws' + (w.ativo ? ' ativo' : '') + '">' + w.id +
-      (w.janelas ? '<span class="n">' + w.janelas + '</span>' : '') + '</span>'
-    ).join('');
+    if (!h) { elJanela.textContent = ''; return; }
     // O próprio painel não conta como janela em foco: ele fica na frente o dia
     // todo, então a linha passava a maior parte do tempo escrevendo "Mirante"
     // para quem já está olhando para o Mirante.
@@ -537,15 +644,81 @@
     elFicha.innerHTML =
       linhaFicha('Sistema', r.distro || '—') +
       linhaFicha('Kernel', r.kernel || '—') +
-      linhaFicha('Máquina', (r.usuario || '') + '@' + (r.host || '')) +
-      linhaFicha('Carga', (r.carga || []).map(n => n.toFixed(2).replace('.', ',')).join('  ') || '—');
+      linhaFicha('Máquina', (r.usuario || '') + '@' + (r.host || ''));
   }
 
+  // Uma conta só, com a origem entre parênteses: o número é o que ele procura,
+  // e a divisão repo/AUR é o que diz se a atualização é baixar ou compilar.
   function pintaPacotes(p) {
     const el = $('wPacotes');
     if (!p || !p.total) { el.textContent = 'sistema em dia'; return; }
-    el.textContent = p.total + (p.total === 1 ? ' pacote a atualizar' : ' pacotes a atualizar');
+    const partes = [];
+    if (p.repo) partes.push(p.repo + ' repo');
+    if (p.aur) partes.push(p.aur + ' AUR');
+    el.textContent = p.total + (p.total === 1 ? ' pacote' : ' pacotes') +
+      (partes.length > 1 ? ' · ' + partes.join(' · ') : partes.length ? ' do ' + partes[0].split(' ')[1] : '') +
+      ' a atualizar';
   }
+
+  // -------------------------------------------------- próximo jogo
+
+  // Fonte: API pública do ESPN, pelo `flamengo.js` do main (mesma que o
+  // MeuMengaoApp usa). Sem chave, então não há segredo para guardar aqui.
+  const elJogo = $('wJogo');
+  const elJogoCorpo = $('wJogoCorpo');
+
+  const fmtDiaJogo = new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long', day: 'numeric', month: 'short'
+  });
+
+  // "Hoje 21:30" vale mais que "Quinta, 11 de set. 21:30" quando é hoje — é a
+  // mesma regra que a agenda já usa dois blocos acima.
+  function quandoDoJogo(d) {
+    const hoje = new Date();
+    const amanha = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
+    const hora = doisDig(d.getHours()) + ':' + doisDig(d.getMinutes());
+    if (mesmoDia(d, hoje)) return 'Hoje, ' + hora;
+    if (mesmoDia(d, amanha)) return 'Amanhã, ' + hora;
+    return fmtDiaJogo.format(d) + ', ' + hora;
+  }
+
+  function escudo(t) {
+    if (!t.escudo) return '<span class="jogo-versus">' + esc(t.sigla || '?') + '</span>';
+    return '<img src="' + esc(t.escudo) + '" alt="" aria-hidden="true">';
+  }
+
+  function pintaJogo(d) {
+    const j = d && d.jogo;
+    if (!j) { elJogo.hidden = true; return; }
+    elJogo.hidden = false;
+
+    const quando = new Date(j.quando);
+    const rolando = j.estado === 'in';
+    const terminou = j.estado === 'post';
+    const temPlacar = j.casa.placar != null && j.fora.placar != null;
+
+    const linhaQuando = rolando
+      ? 'AGORA · ' + j.competicao
+      : terminou
+        ? 'Fim de jogo · ' + j.competicao
+        : quandoDoJogo(quando) + ' · ' + j.competicao;
+
+    elJogoCorpo.className = 'jogo' + (rolando ? ' rolando' : '');
+    elJogoCorpo.innerHTML =
+      '<span class="jogo-escudos">' + escudo(j.casa) +
+        '<span class="jogo-versus">×</span>' + escudo(j.fora) + '</span>' +
+      '<span class="jogo-ident">' +
+        '<span class="jogo-times">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span>' +
+        '<span class="jogo-quando">' + esc(linhaQuando) + '</span>' +
+        (j.local ? '<span class="rotulo">' + esc(j.local) + '</span>' : '') +
+      '</span>' +
+      ((rolando || terminou) && temPlacar
+        ? '<span class="jogo-placar">' + j.casa.placar + '–' + j.fora.placar + '</span>'
+        : '');
+  }
+
+  window.api.onFlamengo(pintaJogo);
+  window.api.flamengoGet().then(pintaJogo).catch(() => {});
 
   // ---------------------------------------------------------------- vidro
 
@@ -569,18 +742,15 @@
     ultimoRetrato = r;
     if (!acordado) return;
 
+    montaAneis(r);
     pintaAnel('anCpu', r.cpu ? r.cpu.temp : null);
-    pintaAnel('anGpu', r.gpu ? r.gpu.temp : null);
+    (listaGpus(r) || []).forEach((g, i) => pintaAnel('anGpu' + i, g.temp));
     pintaAnel('anNvme', r.nvme);
+    pintaPecas(r);
 
     if (!medidoresMontados) montaMedidores(r);
 
-    if (r.cpu) {
-      pintaMed('mCpu', r.cpu.pct, r.cpu.pct == null ? '—' : r.cpu.pct + '%');
-      $('wCargaModelo').textContent =
-        [r.cpu.modelo, r.cpu.ghz ? r.cpu.ghz.toFixed(1).replace('.', ',') + ' GHz' : '']
-          .filter(Boolean).join(' · ');
-    }
+    if (r.cpu) pintaMed('mCpu', r.cpu.pct, r.cpu.pct == null ? '—' : r.cpu.pct + '%');
     if (r.memoria) {
       pintaMed('mRam', r.memoria.pct, fmtGB(r.memoria.usada) + ' / ' + fmtGB(r.memoria.total));
       if (r.memoria.swapTotal && $('mSwapFio')) {

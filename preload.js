@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('api', {
   onVidro: (cb) => ipcRenderer.on('vidro-update', (e, d) => cb(d)),
 
   // agenda (Google Calendar por iCal)
+  flamengoGet: () => ipcRenderer.invoke('flamengo-get'),
+  flamengoRefresh: () => ipcRenderer.invoke('flamengo-refresh'),
+  onFlamengo: (cb) => ipcRenderer.on('flamengo-update', (e, d) => cb(d)),
+
   agendaGet: () => ipcRenderer.invoke('agenda-get'),
   agendaRefresh: () => ipcRenderer.invoke('agenda-refresh'),
   agendaUrlPista: () => ipcRenderer.invoke('agenda-url-pista'),

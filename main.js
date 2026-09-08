@@ -16,6 +16,7 @@ const sentry = require('./sentry');
 const discord = require('./discord-notas');
 const sistema = require('./sistema');
 const agenda = require('./agenda');
+const flamengo = require('./flamengo');
 const dev = require('./dev');
 const vidro = require('./vidro');
 
@@ -297,6 +298,7 @@ function createWindow() {
   sentry.iniciar(deps);
   discord.iniciar(deps);
   agenda.iniciar(deps);
+  flamengo.iniciar(deps);
   dev.iniciar({ log, empurra, getWindow: () => mainWindow });
   vidro.iniciar({ app, log, empurra });
 
@@ -397,6 +399,11 @@ async function tiqueLento() {
   try {
     empurra('pacotes-update', await sistema.pacotes());
   } catch (e) {}
+  // O módulo do jogo tem cadência própria (10 min, 1 min com jogo rolando); o
+  // tique lento só carrega para a tela o que ele já leu.
+  try {
+    empurra('flamengo-update', flamengo.atual());
+  } catch (e) {}
 }
 
 function ligaTiques() {
@@ -429,6 +436,9 @@ ipcMain.handle('get-temps', async () => {
 ipcMain.handle('vidro-get', async () => vidro.atual());
 
 // --- Agenda (Google Calendar por iCal) -------------------------------------
+ipcMain.handle('flamengo-get', async () => flamengo.atual());
+ipcMain.handle('flamengo-refresh', async () => flamengo.forcar());
+
 ipcMain.handle('agenda-get', async () => agenda.atual());
 ipcMain.handle('agenda-refresh', async () => agenda.forcar());
 ipcMain.handle('agenda-url-pista', async () => agenda.pistaUrl());

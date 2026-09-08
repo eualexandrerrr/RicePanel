@@ -7,8 +7,9 @@
 // muda esperando alguém que não está na frente da máquina. O endereço secreto
 // é uma URL só, de leitura, que o Google renova apenas se o Alexandre pedir.
 //
-// A URL é um segredo (quem tiver ela lê a agenda inteira), então mora cifrada
-// com safeStorage no keyring do desktop, nunca no repositório.
+// A URL é um segredo (quem tiver ela lê a agenda inteira), então mora no
+// userData do app — nunca no repositório. Cifrada com safeStorage quando existe
+// keyring; onde não existe, num arquivo 0600 do mesmo diretório (ver `gravaUrl`).
 //
 // O último retrato bom fica em cache no disco: rede caída mostra a agenda de
 // ontem com o aviso de quando foi lida, em vez de célula vazia.
@@ -40,28 +41,50 @@ function arqUrl() {
   return path.join(deps.app.getPath('userData'), 'agenda-url.bin');
 }
 
+// Onde a URL fica quando não há keyring. Mesmo diretório do resto: dentro da
+// /home dele, sem depender de flag de linha de comando para ser lida de volta.
+function arqUrlTexto() {
+  return path.join(deps.app.getPath('userData'), 'agenda-url.txt');
+}
+
 function arqCache() {
   return path.join(deps.app.getPath('userData'), 'agenda-cache.json');
 }
 
 function leUrl() {
   try {
-    if (!deps.safeStorage.isEncryptionAvailable()) return '';
-    return deps.safeStorage.decryptString(fs.readFileSync(arqUrl()));
+    if (deps.safeStorage.isEncryptionAvailable() && fs.existsSync(arqUrl())) {
+      return deps.safeStorage.decryptString(fs.readFileSync(arqUrl()));
+    }
+  } catch (e) {}
+  try {
+    return fs.readFileSync(arqUrlTexto(), 'utf8').trim();
   } catch (e) {
     return '';
   }
 }
 
+// Esta máquina não tem Secret Service no DBus (sem gnome-keyring, sem kwallet),
+// e recusar a gravação deixava a agenda desligada para sempre — que é pior do
+// que guardar o endereço num arquivo só dele. Então: cifra quando dá, e quando
+// não dá, arquivo 0600 no userData. A proteção real vira a permissão do
+// arquivo; quem já lê a /home dele também lê o resto do painel de qualquer
+// jeito. Ligar um keyring depois não quebra nada: a próxima gravação passa a
+// usar o .bin e o .txt é apagado.
 function gravaUrl(url) {
   if (!url) {
     try { fs.unlinkSync(arqUrl()); } catch (e) {}
+    try { fs.unlinkSync(arqUrlTexto()); } catch (e) {}
     return;
   }
-  if (!deps.safeStorage.isEncryptionAvailable()) {
-    throw new Error('keyring do desktop indisponível; a URL não seria cifrada');
+  if (deps.safeStorage.isEncryptionAvailable()) {
+    fs.writeFileSync(arqUrl(), deps.safeStorage.encryptString(url));
+    try { fs.unlinkSync(arqUrlTexto()); } catch (e) {}
+    return;
   }
-  fs.writeFileSync(arqUrl(), deps.safeStorage.encryptString(url));
+  fs.writeFileSync(arqUrlTexto(), url + '\n', { mode: 0o600 });
+  try { fs.chmodSync(arqUrlTexto(), 0o600); } catch (e) {}
+  log('sem keyring no sistema — endereço guardado em arquivo 0600 no userData');
 }
 
 // O Google entrega o endereço secreto em três formatos e o painel aceita todos:

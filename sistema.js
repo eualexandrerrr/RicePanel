@@ -140,27 +140,156 @@ function lerTempHwmon() {
   };
 }
 
+// Modelo do NVMe. O anel da térmica diz o nome da peça — CPU, placa de vídeo —
+// e o disco não tinha por que ser o único a aparecer como categoria.
+function lerNvmeModelo() {
+  const raiz = '/sys/class/nvme';
+  let nomes;
+  try { nomes = fs.readdirSync(raiz); } catch (e) { return ''; }
+  for (const dir of nomes.sort()) {
+    const m = leArquivo(path.join(raiz, dir, 'model')).trim();
+    // "Corsair MP700 ELITE" não cabe no rótulo do anel; a linha do modelo cabe.
+    if (m) return m.replace(/^(Corsair|Samsung|Kingston|WDC?|Western Digital|Seagate|Crucial|ADATA|Sabrent|Intel|Micron|SK ?hynix)\s+/i, '');
+  }
+  return '';
+}
+
 // -------------------------------------------------------------------- GPU
 
-// Uma chamada só devolve tudo da NVIDIA. Máquina sem placa NVIDIA cai no null e
-// o painel esconde a célula inteira.
-async function lerGpu() {
+// A máquina tem mais de uma placa: NVIDIA pelo nvidia-smi, AMD por /sys. Cada
+// fonte devolve uma lista, e o painel desenha um anel por placa encontrada.
+// Sem placa nenhuma as duas listas voltam vazias e a faixa some.
+
+// Nome comercial pelo lspci. O barramento PCI não muda enquanto a máquina está
+// ligada, então basta uma chamada por slot na vida do processo.
+const nomesPci = new Map();
+
+async function nomePci(slot) {
+  if (nomesPci.has(slot)) return nomesPci.get(slot);
+  nomesPci.set(slot, '');                       // evita duas chamadas em paralelo
+  const out = await roda('lspci', ['-mm', '-s', slot], 2000);
+  // 04:00.0 "VGA..." "Advanced Micro Devices, Inc. [AMD/ATI]" "Lexa PRO [Radeon 550]" ...
+  const campos = [...out.matchAll(/"([^"]*)"/g)].map(m => m[1]);
+  const nome = limpaNomeGpu(campos[2] || '');
+  nomesPci.set(slot, nome);
+  return nome;
+}
+
+// O PCI ID da AMD não identifica o modelo, e sim a família inteira: a mesma
+// entrada "Lexa PRO" serve 540, 540X, 550 e 550X. Como o barramento não sabe
+// qual das quatro está no slot, quem sabe é o dono da máquina — daqui sai o
+// nome que ele confirmou.
+const APELIDOS_GPU = [
+  { quando: /lexa/i, nome: 'Radeon RX 550' }
+];
+
+// Tira o que não ajuda a reconhecer a placa de relance: marca repetida, sufixo
+// de marca registrada e a lista de modelos irmãos que a AMD publica no PCI ID
+// ("Lexa PRO [Radeon 540/540X/550/550X / RX 540X/550/550X]").
+function limpaNomeGpu(bruto) {
+  for (const a of APELIDOS_GPU) {
+    if (a.quando.test(String(bruto || ''))) return a.nome;
+  }
+  // A marca fica: "NVIDIA RTX 3090" é como ele chama a placa, e sem ela a linha
+  // ficava só com o modelo enquanto a AMD ao lado dizia "Radeon". Some só o
+  // "GeForce", que não distingue nada aqui.
+  let n = String(bruto || '')
+    .replace(/\((R|TM)\)/gi, '')
+    .replace(/GeForce\s+/i, '')
+    .replace(/Advanced Micro Devices[^\[]*/i, '')
+    .trim();
+  const colchete = n.match(/\[([^\]]+)\]/);
+  if (colchete) {
+    // Fica só a primeira alternativa da lista: "Radeon 540/550" vira "Radeon 540".
+    n = colchete[1].split(' / ')[0].split('/')[0].trim();
+  }
+  return n;
+}
+
+async function lerGpusNvidia() {
   const out = await roda('nvidia-smi', [
-    '--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,fan.speed',
+    '--query-gpu=index,name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,fan.speed',
     '--format=csv,noheader,nounits'
   ], 3000);
-  const linha = out.split('\n')[0];
-  if (!linha || !linha.trim()) return null;
-  const p = linha.split(',').map(s => s.trim());
-  return {
-    nome: (p[0] || '').replace(/^NVIDIA\s+/i, '').replace(/GeForce\s+/i, ''),
-    uso: num(p[1]),
-    temp: num(p[2]),
-    vramUsada: num(p[3]),
-    vramTotal: num(p[4]),
-    watts: num(p[5]),
-    ventoinha: num(p[6])
-  };
+  const saida = [];
+  for (const linha of out.split('\n')) {
+    if (!linha.trim()) continue;
+    const p = linha.split(',').map(s => s.trim());
+    saida.push({
+      chave: 'nvidia' + (p[0] || saida.length),
+      marca: 'NVIDIA',
+      nome: limpaNomeGpu(p[1]),
+      uso: num(p[2]),
+      temp: num(p[3]),
+      vramUsada: num(p[4]),          // MiB, como o nvidia-smi entrega
+      vramTotal: num(p[5]),
+      watts: num(p[6]),
+      ventoinha: num(p[7])
+    });
+  }
+  return saida;
+}
+
+// AMD não tem um `nvidia-smi`: tudo sai de /sys/class/hwmon e da pasta do
+// dispositivo PCI logo acima dele. É leitura de arquivo, custa microssegundos.
+async function lerGpusAmd() {
+  const raiz = '/sys/class/hwmon';
+  let nomes;
+  try { nomes = fs.readdirSync(raiz); } catch (e) { return []; }
+
+  const achadas = [];
+  for (const dir of nomes.sort()) {
+    const base = path.join(raiz, dir);
+    if (leArquivo(path.join(base, 'name')).trim() !== 'amdgpu') continue;
+
+    let dev = '';
+    let slot = '';
+    try {
+      dev = fs.realpathSync(path.join(base, 'device'));
+      slot = path.basename(dev).replace(/^0000:/, '');
+    } catch (e) { continue; }
+
+    // 'edge' é a borda do die — a medida equivalente à que o nvidia-smi dá.
+    // 'junction' é o ponto quente e leria sempre mais alto que a NVIDIA ao lado.
+    let temp = null, pesoTemp = -1;
+    let arquivos;
+    try { arquivos = fs.readdirSync(base); } catch (e) { arquivos = []; }
+    for (const arq of arquivos) {
+      const m = arq.match(/^temp(\d+)_input$/);
+      if (!m) continue;
+      const v = num(leArquivo(path.join(base, arq)));
+      if (v == null) continue;
+      const graus = Math.round(v / 1000);
+      if (graus <= 0 || graus > 130) continue;
+      const rotulo = leArquivo(path.join(base, 'temp' + m[1] + '_label')).trim().toLowerCase();
+      const peso = /edge/.test(rotulo) ? 2 : /junction|mem/.test(rotulo) ? 0 : 1;
+      if (peso > pesoTemp) { temp = graus; pesoTemp = peso; }
+    }
+
+    const vramUsada = num(leArquivo(path.join(dev, 'mem_info_vram_used')));
+    const vramTotal = num(leArquivo(path.join(dev, 'mem_info_vram_total')));
+    const microwatts = num(leArquivo(path.join(base, 'power1_input')));
+    const pwm = num(leArquivo(path.join(base, 'pwm1')));
+
+    achadas.push({
+      chave: 'amd' + slot,
+      marca: 'AMD',
+      nome: await nomePci(slot) || 'Radeon',
+      uso: num(leArquivo(path.join(dev, 'gpu_busy_percent'))),
+      temp,
+      vramUsada: vramUsada == null ? null : Math.round(vramUsada / 1048576),
+      vramTotal: vramTotal == null ? null : Math.round(vramTotal / 1048576),
+      watts: microwatts == null ? null : Math.round(microwatts / 1e6 * 10) / 10,
+      ventoinha: pwm == null ? null : Math.round((pwm / 255) * 100)
+    });
+  }
+  return achadas;
+}
+
+// A NVIDIA vem primeiro por ser a placa de trabalho: é o anel que ele procura.
+async function lerGpus() {
+  const [nv, amd] = await Promise.all([lerGpusNvidia(), lerGpusAmd()]);
+  return nv.concat(amd);
 }
 
 // --------------------------------------------------------------- memória
@@ -263,7 +392,7 @@ function lerDistro() {
 
 // Barato o bastante para rodar a cada 2 s: só GPU sai de processo externo.
 async function retrato() {
-  const [cpuUso, gpu] = [lerCpuUso(), await lerGpu()];
+  const [cpuUso, gpus] = [lerCpuUso(), await lerGpus()];
   const temps = lerTempHwmon();
   return {
     cpu: {
@@ -274,11 +403,15 @@ async function retrato() {
       ghz: lerCpuFreq(),
       temp: temps.cpu
     },
-    gpu,
+    // `gpu` continua sendo a primeira placa: o painel antigo e o `get-temps`
+    // leem esse campo. `gpus` é a lista inteira, que o Mirante desenha.
+    gpu: gpus[0] || null,
+    gpus,
     memoria: lerMemoria(),
     discos: lerDiscos(),
     rede: lerRede(),
     nvme: temps.nvme,
+    nvmeModelo: lerNvmeModelo(),
     uptime: lerUptime(),
     carga: lerCarga(),
     kernel: os.release(),
@@ -290,16 +423,33 @@ async function retrato() {
 
 // ------------------------------------------------- coisas do desktop Arch
 
-// Atualizações pendentes. `checkupdates` (pacman-contrib) usa uma cópia do banco
-// em /tmp e NÃO mexe no pacman do sistema — pode rodar sem sudo e sem risco.
-// Saída vazia com código 2 quer dizer "nada pendente", não erro.
+// Atualizações pendentes, dos dois lados: repositório oficial e AUR.
+//
+// `checkupdates` (pacman-contrib) usa uma cópia do banco em /tmp e NÃO mexe no
+// pacman do sistema; `paru -Qua` só consulta o AUR. Os dois rodam sem sudo e
+// sem alterar nada. Saída vazia com código 2 quer dizer "nada pendente".
+//
+// A conta que aparece na tela é uma só — o que ele quer saber é quanto falta
+// atualizar —, mas a origem vem junto, porque atualizar AUR é recompilar e
+// atualizar repo é baixar: é a diferença entre cinco minutos e cinco segundos.
+function nomesDeLinhas(saida) {
+  return saida.split('\n').map(l => l.trim()).filter(Boolean).map(l => l.split(' ')[0]);
+}
+
 async function pacotes() {
-  const out = await roda('checkupdates', [], 20000);
-  const linhas = out.split('\n').map(s => s.trim()).filter(Boolean);
+  // O AUR é consulta de rede pacote a pacote e pode demorar; o repo é local.
+  const [repoBruto, aurBruto] = await Promise.all([
+    roda('checkupdates', [], 20000),
+    roda('paru', ['-Qua'], 45000)
+  ]);
+  const repo = nomesDeLinhas(repoBruto);
+  const aur = nomesDeLinhas(aurBruto);
   return {
-    total: linhas.length,
+    total: repo.length + aur.length,
+    repo: repo.length,
+    aur: aur.length,
     // Os cinco primeiros dão para reconhecer se é atualização grande.
-    amostra: linhas.slice(0, 5).map(l => l.split(' ')[0])
+    amostra: repo.concat(aur).slice(0, 5)
   };
 }
 
