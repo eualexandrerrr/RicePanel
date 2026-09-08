@@ -7,7 +7,13 @@
     "start": "electron ."
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "electron": "^33.4.11"
   },
-  "productName": "RicePanel"
+  "productName": "RicePanel",
+  "dependencies": {
+    "lottie-web": "^5.13.0"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
 }

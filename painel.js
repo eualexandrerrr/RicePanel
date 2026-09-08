@@ -83,17 +83,48 @@ function fmtRestante(ms) {
 document.getElementById('closeBtn').addEventListener('click', () => window.api.closeApp());
 
 // ---------------------------------------------------------------- barramento
+//
+// Dois níveis. Em cima as duas páginas — Mirante (os widgets, onde o olho pousa
+// o dia todo) e Estação (o trabalho: consoles, dev, monitor). O barramento de
+// baixo só existe dentro da Estação; na página do Mirante ele some, porque
+// seletor de coisa escondida é ruído.
 let modoAtual = 'servidores';
+let paginaAtual = 'mirante';
+
+function trocaPagina(pagina) {
+  paginaAtual = pagina;
+  document.querySelectorAll('.pag-tecla').forEach(t => t.classList.toggle('on', t.dataset.pagina === pagina));
+  document.body.classList.toggle('em-mirante', pagina === 'mirante');
+  try { localStorage.setItem('pagina', pagina); } catch (e) {}
+
+  if (pagina !== 'mirante') { trocaModo(modoAtual); return; }
+
+  document.querySelectorAll('.modo').forEach(s => s.classList.remove('on'));
+  document.getElementById('modoMirante').classList.add('on');
+  garanteModuloEmCasa();
+  posicionaBarra('mirante');
+  window.api.devMostrar(false);
+  // Os widgets param de desenhar quando a página sai da frente: animação em
+  // section com display:none continua custando quadro.
+  if (window.mirante) window.mirante.acorda(true);
+}
 
 function trocaModo(modo) {
   modoAtual = modo;
+  if (paginaAtual === 'mirante') {
+    paginaAtual = 'estacao';
+    document.querySelectorAll('.pag-tecla').forEach(t => t.classList.toggle('on', t.dataset.pagina === 'estacao'));
+    document.body.classList.remove('em-mirante');
+    try { localStorage.setItem('pagina', 'estacao'); } catch (e) {}
+  }
+  if (window.mirante) window.mirante.acorda(false);
   document.querySelectorAll('.tecla').forEach(t => t.classList.toggle('on', t.dataset.modo === modo));
   document.querySelectorAll('.modo').forEach(s => s.classList.remove('on'));
   document.getElementById('modo' + modo.charAt(0).toUpperCase() + modo.slice(1)).classList.add('on');
   try { localStorage.setItem('modo', modo); } catch (e) {}
   garanteModuloEmCasa();
   posicionaBarra(modo);
-  // A janela do emulador é do Windows, não do painel: ela não some sozinha
+  // A janela do emulador é do Hyprland, não do painel: ela não some sozinha
   // quando o barramento muda. Some/reaparece junto com o modo Dev.
   window.api.devMostrar(modo === 'dev');
   if (modo === 'dev') setTimeout(encaixaEmulador, 250);
@@ -117,6 +148,11 @@ function posicionaBarra(modo) {
 document.getElementById('barramento').addEventListener('click', (e) => {
   const t = e.target.closest('.tecla');
   if (t) trocaModo(t.dataset.modo);
+});
+
+document.getElementById('paginas').addEventListener('click', (e) => {
+  const t = e.target.closest('.pag-tecla');
+  if (t) trocaPagina(t.dataset.pagina);
 });
 
 // Clicar num indicador abre a lista numa janela de 60% da tela, por cima do que
@@ -1260,6 +1296,23 @@ document.getElementById('devMatar').addEventListener('click', async (e) => {
   sel.addEventListener('change', () => {
     try { localStorage.setItem('devProjeto', sel.value); } catch (e) {}
   });
+
+  // A lista de AVDs vem do próprio SDK, não do HTML: nome escrito à mão vira
+  // mentira no dia em que ele apagar ou renomear um emulador no Android Studio.
+  const avds = await window.api.devAvds();
+  const selAvd = document.getElementById('devAvd');
+  if (avds && avds.length) {
+    selAvd.innerHTML = avds.map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
+    try {
+      const g = localStorage.getItem('devAvd');
+      if (g && avds.indexOf(g) >= 0) selAvd.value = g;
+    } catch (e) {}
+  } else {
+    selAvd.innerHTML = '<option value="">nenhum AVD criado</option>';
+  }
+  selAvd.addEventListener('change', () => {
+    try { localStorage.setItem('devAvd', selAvd.value); } catch (e) {}
+  });
 })();
 
 // -------------------------------------------- erro nos consoles dos servidores
@@ -2289,7 +2342,7 @@ async function acompanhaManut() {
   }
   if (!comecou && maintTicks > 26) {
     fimManut();
-    mostraManut('Não começou — tarefa agendada ausente ou UAC recusado.', true);
+    mostraManut('Não começou — o manutencao.sh não subiu; veja o mirante.log.', true);
     setTimeout(() => mostraManut('', false), 6000);
   }
 }
@@ -2390,11 +2443,18 @@ document.getElementById('authOk').addEventListener('click', async () => {
 });
 carregaAuth();
 
-// Volta no barramento em que ele estava.
+// Volta na página e no barramento em que ele estava. O padrão é o Mirante: é a
+// página que fica na tela quando ninguém pediu nada.
 try {
-  const guardado = localStorage.getItem('modo');
-  if (guardado && ['servidores', 'dev', 'monitor'].indexOf(guardado) >= 0) trocaModo(guardado);
+  const modoGuardado = localStorage.getItem('modo');
+  if (modoGuardado && ['servidores', 'dev', 'monitor'].indexOf(modoGuardado) >= 0) modoAtual = modoGuardado;
 } catch (e) {}
+try {
+  const pag = localStorage.getItem('pagina');
+  trocaPagina('estacao'); // TESTE
+} catch (e) {
+  trocaPagina('mirante');
+}
 tickRestantes();
 
 // ------------------------------------------------------- trava do teclado

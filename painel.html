@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Mesa</title>
+  <title>Mirante</title>
   <style>
     @font-face {
       font-family: 'Archivo';
@@ -16,21 +16,71 @@
       font-weight: 400 700;
       font-display: swap;
     }
+    @font-face {
+      font-family: 'JetBrains Mono';
+      src: url('fontes/jetbrains-mono-latin.woff2') format('woff2');
+      font-weight: 100 800;
+      font-display: swap;
+    }
 
+    /* Catppuccin Mocha, a paleta oficial. Os nomes ficam em inglês de propósito:
+       são os nomes da paleta, e trocar por tradução quebraria a conferência com
+       o resto do rice (Hyprland, Waybar, terminal) que usa os mesmos. */
     :root {
-      --painel: #14161a;
-      --face: #1a1d23;
-      --face-alta: #20242b;
-      --sulco: #0a0b0e;
-      --aresta: #2d323b;
-      --serigrafia: #949aa6;
-      --serigrafia-fraca: #6b7280;
-      --leitura: #eef1f5;
-      --led-off: #23272f;
-      --verde: #3fd07f;
-      --ambar: #f2b33d;
-      --vermelho: #ff4f4f;
-      --azul: #5aa9e6;
+      --crust:    #11111b;
+      --mantle:   #181825;
+      --base:     #1e1e2e;
+      --surface0: #313244;
+      --surface1: #45475a;
+      --surface2: #585b70;
+      --overlay0: #6c7086;
+      --overlay1: #7f849c;
+      --overlay2: #9399b2;
+      --subtext0: #a6adc8;
+      --subtext1: #bac2de;
+      --text:     #cdd6f4;
+      --mauve:    #cba6f7;
+      --lavender: #b4befe;
+      --blue:     #89b4fa;
+      --sapphire: #74c7ec;
+      --sky:      #89dceb;
+      --teal:     #94e2d5;
+      --green:    #a6e3a1;
+      --yellow:   #f9e2af;
+      --peach:    #fab387;
+      --maroon:   #eba0ac;
+      --red:      #f38ba8;
+      --pink:     #f5c2e7;
+
+      /* Papéis. O painel inteiro fala por estes, nunca pelo hex direto: trocar
+         de flavour (Macchiato, Latte) é reescrever só o bloco de cima. */
+      --painel: var(--crust);        /* chão, atrás das ilhas */
+      --face: var(--base);           /* face da ilha */
+      --face-alta: var(--surface0);  /* face que recebe toque: tecla, botão */
+      --sulco: var(--mantle);        /* poço: trilho, campo, fundo de lista */
+      --aresta: var(--surface1);     /* borda — a elevação é declarada uma vez */
+      --serigrafia: var(--subtext0); /* rótulo */
+      --serigrafia-fraca: var(--overlay1);
+      --leitura: var(--text);        /* número, valor */
+      --led-off: var(--surface1);
+      --acento: var(--mauve);        /* interação: ligado, foco, seleção */
+      --sobre-acento: var(--crust);  /* texto em cima do acento */
+      --verde: var(--green);
+      --ambar: var(--yellow);
+      --vermelho: var(--red);
+      --azul: var(--blue);
+
+      /* Vidro: a face da ilha com o papel de parede aparecendo por trás. Só a
+         página do Mirante usa — a Estação continua chapa opaca, porque console
+         de terminal sobre wallpaper não se lê. */
+      --vidro: rgba(24, 24, 37, 0.94);        /* face de widget solto */
+      --vidro-barra: rgba(17, 17, 27, 0.96);  /* travessa e rodapé */
+      --vidro-poco: rgba(17, 17, 27, 0.85);   /* trilho, célula de calendário */
+      --vidro-aresta: rgba(205, 214, 244, 0.14);
+
+      --raio: 16px;      /* ilha */
+      --raio-peca: 9px;  /* botão, pastilha, campo */
+      --saida: cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -38,6 +88,8 @@
 
     body {
       font-family: 'Archivo', 'Segoe UI', sans-serif;
+      /* A janela nasce transparente; quem decide se o fundo aparece é esta
+         linha. A Estação pinta a chapa, o Mirante deixa passar. */
       background: var(--painel);
       color: var(--leitura);
       overflow: hidden;
@@ -272,6 +324,464 @@
     /* ---------- palco ---------- */
     .modo { display: none; min-height: 0; }
     .modo.on { display: grid; }
+
+    /* ---------- páginas (nível de cima do barramento) ---------- */
+    .paginas {
+      -webkit-app-region: no-drag;
+      display: flex; gap: 3px;
+      background: var(--sulco);
+      border: 1px solid var(--aresta);
+      border-radius: var(--raio-peca); padding: 3px;
+    }
+    .pag-tecla {
+      background: none; border: 1px solid transparent; border-radius: 6px;
+      color: var(--serigrafia-fraca);
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 7px 15px; cursor: pointer;
+      transition: color 160ms var(--saida), background 160ms var(--saida);
+    }
+    .pag-tecla:hover { color: var(--leitura); background: var(--face-alta); }
+    .pag-tecla.on { background: var(--acento); color: var(--sobre-acento); }
+    /* Barramento de baixo só existe dentro da Estação: seletor de coisa
+       escondida é ruído, e na página do Mirante não há modo a escolher. */
+    body.em-mirante #barramento { display: none; }
+
+    /* ======================= Mirante · luz sobre vidro =======================
+       Mundo visual próprio da página 1, separado do "mesa de som" que continua
+       mandando na Estação. Dois materiais, só:
+
+       LUZ  — tipo fino e filete desenhados direto no papel de parede, sem
+              recipiente nenhum. Quem segura a leitura é a sombra, não uma caixa.
+       VIDRO— placa translúcida, raio grande, um fio de luz na aresta de cima e
+              nenhuma sombra projetada. Existe só onde há grade ou lista para
+              agrupar; nunca como moldura de um número solto.
+
+       O que o painel NÃO faz aqui: fileira de cards de mesmo tamanho, cada um
+       com seu rótulo no canto e muito vazio dentro. Era isso que deixava a
+       página com cara de tela de depuração.
+
+       Hierarquia é peso e tamanho, não cor: 200 na hora, 300 nas leituras, 700
+       comprimido e tracado nos rótulos. Cor é estado (verde/âmbar/vermelho) e um
+       acento mauve — todo o resto da cor vem do papel de parede. */
+
+    body.em-mirante { background: transparent; }
+    body.em-mirante { grid-template-rows: auto minmax(0, 1fr) auto; }
+
+    /* A travessa e o rodapé descolam das bordas e viram vidro também. */
+    body.em-mirante .travessa,
+    body.em-mirante .rodape {
+      margin: 12px 16px;
+      background: var(--vidro);
+      border: 1px solid var(--vidro-aresta);
+      border-radius: 18px;
+      box-shadow: inset 0 1px 0 var(--vidro-brilho);
+      overflow: hidden;
+    }
+    body.em-mirante .travessa { margin-bottom: 0; }
+    body.em-mirante .rodape { margin-top: 0; }
+
+    /* --- o tapete: ocupa o monitor de cima a baixo ---
+       A coluna usa a altura inteira do monitor em pé. Quem absorve a sobra é a
+       placa do tempo, porque a agenda é a única peça cujo conteúdo cresce
+       sozinho — e uma agenda comprida é informação, enquanto um chão vazio de
+       um terço da tela é só sobra.
+       O papel de parede continua mandando de outro jeito: nítido nas faixas
+       entre os blocos e nas bordas, e desfocado (mas presente, é a mesma
+       imagem) atrás de cada placa. */
+    body.em-mirante .tapete {
+      display: flex; flex-direction: column;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 22px;
+      padding: 20px 30px 24px;
+      overflow: visible;
+    }
+    .m-tempo { display: flex; flex-direction: column; min-height: 0; }
+
+    /* --- material VIDRO --- */
+    /* Duas camadas empilhadas no mesmo elemento:
+       1) o papel de parede já desfocado, ancorado na viewport por
+          `background-attachment: fixed` — é isso que faz cada placa mostrar o
+          pedaço de wallpaper que está ATRÁS dela, e não uma textura qualquer;
+       2) por cima, um degradê de tinta que dá a cor do vidro e o contraste.
+       O fundo é injetado pelo JS em `--vidro-fundo` (data: URL gerada com
+       ffmpeg). Sem ele a `url()` falha e sobra só a tinta — que é exatamente o
+       comportamento de reserva desejado, e por isso a tinta sozinha já tem de
+       ser legível. */
+    .placa {
+      position: relative;
+      background-image:
+        linear-gradient(180deg, rgba(49, 50, 68, 0.62) 0%, rgba(24, 24, 37, 0.76) 100%),
+        var(--vidro-fundo, none);
+      background-size: cover, 100vw 100vh;
+      background-position: center, center;
+      background-attachment: scroll, fixed;
+      background-repeat: no-repeat, no-repeat;
+      border: 1px solid var(--vidro-aresta);
+      border-radius: 24px;
+      box-shadow: inset 0 1px 0 var(--vidro-brilho);
+    }
+    /* Com o fundo real atrás, a tinta pode ser mais fina: quem segura a leitura
+       passa a ser o desfoque. */
+    body.tem-vidro .placa {
+      background-image:
+        linear-gradient(180deg, rgba(49, 50, 68, 0.44) 0%, rgba(24, 24, 37, 0.58) 100%),
+        var(--vidro-fundo, none);
+    }
+    body.em-mirante .travessa,
+    body.em-mirante .rodape {
+      background-image:
+        linear-gradient(180deg, rgba(49, 50, 68, 0.50) 0%, rgba(24, 24, 37, 0.66) 100%),
+        var(--vidro-fundo, none);
+      background-size: cover, 100vw 100vh;
+      background-position: center, center;
+      background-attachment: scroll, fixed;
+      background-repeat: no-repeat, no-repeat;
+    }
+    .placa > header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 20px 0;
+    }
+    .placa > header .botao { padding: 4px 8px; }
+
+    /* --- material GAZE ---
+       O material LUZ (tipo direto no papel de parede) só se lê sobre um
+       wallpaper calmo. O do Alexandre é ilustração cheia de rosto e cor
+       saturada: sombra sozinha não salva um rótulo de 10px ali.
+       A gaze resolve sem trazer a caixa de volta — é o mesmo fundo desfocado
+       das placas, mas com máscara radial, então ela não tem borda, não tem
+       canto e não tem onde começar. De longe não se vê véu; vê-se que o texto
+       está legível. */
+    .gasa { position: relative; z-index: 0; }
+    .gasa::before {
+      content: '';
+      position: absolute; inset: -20px -14px;
+      background-image:
+        linear-gradient(180deg, rgba(24, 24, 37, 0.55) 0%, rgba(17, 17, 27, 0.62) 100%),
+        var(--vidro-fundo, none);
+      background-size: cover, 100vw 100vh;
+      background-position: center, center;
+      background-attachment: scroll, fixed;
+      background-repeat: no-repeat, no-repeat;
+      -webkit-mask-image: radial-gradient(105% 92% at 50% 50%, #000 42%, transparent 100%);
+      mask-image: radial-gradient(105% 92% at 50% 50%, #000 42%, transparent 100%);
+      z-index: -2;
+      pointer-events: none;
+    }
+
+    /* Rótulo de seção: micro, caixa alta, muito tracado. É o que dá o ar de
+       rice — o rótulo some de longe e o número fica. */
+    .rotulo {
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.28em; text-transform: uppercase;
+      color: var(--overlay1);
+      white-space: nowrap;
+    }
+    .rotulo-vivo { color: var(--acento); }
+
+    /* ---------------------------------------------------------------- hora */
+    /* Sem recipiente: é luz no papel de parede. */
+    .m-hora {
+      position: relative;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 0 4px;
+      text-shadow: 0 2px 26px rgba(17, 17, 27, 0.92), 0 1px 4px rgba(17, 17, 27, 0.85);
+    }
+    /* A aurora é atmosfera, não informação: fica atrás do número, apagada por
+       uma máscara radial para não virar mancha de borda. */
+    .m-hora .aurora {
+      position: absolute; left: 50%; top: 50%;
+      width: 130%; height: 260px;
+      transform: translate(-50%, -54%);
+      opacity: 0.34; filter: blur(3px);
+      z-index: -1;
+      -webkit-mask-image: radial-gradient(60% 60% at 50% 50%, #000 30%, transparent 78%);
+      mask-image: radial-gradient(60% 60% at 50% 50%, #000 30%, transparent 78%);
+      pointer-events: none;
+    }
+    .m-hora .aurora svg { width: 100%; height: 100%; }
+    .m-saudacao {
+      position: relative;
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.34em; text-transform: uppercase;
+      color: var(--lavender);
+      margin-bottom: 6px;
+    }
+    /* Peso 200 em corpo grande é o gesto central da página. Archivo é variável
+       de 100 a 900, então o fino é real, não sintetizado. */
+    .m-relogio {
+      position: relative;
+      font-size: 152px; font-weight: 200; line-height: 0.84;
+      letter-spacing: -0.045em;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .m-relogio .dp {
+      font-weight: 200; color: var(--acento);
+      transition: opacity 500ms ease;
+      padding: 0 0.02em;
+    }
+    .m-relogio .dp.apaga { opacity: 0.22; }
+    .m-data {
+      position: relative;
+      margin-top: 14px;
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 13px; font-weight: 700;
+      letter-spacing: 0.30em; text-transform: uppercase;
+      color: var(--subtext1);
+    }
+    /* Filete: a única régua da página, e ela mora aqui. */
+    .m-meta {
+      position: relative;
+      display: flex; align-items: baseline; justify-content: center;
+      gap: 30px; margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(205, 214, 244, 0.13);
+      width: min(560px, 88%);
+    }
+    .m-meta > span { display: flex; align-items: baseline; gap: 8px; }
+    .m-meta .rotulo, .m-maquina .rotulo { color: var(--subtext0); }
+    .m-meta b {
+      font-size: 18px; font-weight: 400; color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* --------------------------------------------------- mês + agenda */
+    /* Uma placa só para as duas: são a mesma pergunta ("que dia, e o quê"), e
+       duas placas lado a lado eram duas caixas cinzas. */
+    .m-tempo { padding-bottom: 6px; }
+    /* Ninguém estica para preencher a tela. A coluna chega no pé do monitor
+       porque a ESCALA é de painel de parede, não de app de mesa: ele lê isto a
+       dois metros, do outro monitor. Esticar uma placa até caber produzia ou
+       uma agenda vazia de 700px ou um mês com linhas de 160px — as duas coisas
+       são vão, não conteúdo. O que sobra vira respiro entre os blocos
+       (`space-between`), que é a sobra que o olho aceita. */
+    .m-tempo .mes-grade { flex: none; }
+    .mes-grade {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: auto;   /* o cabeçalho não é linha de semana */
+      padding: 12px 14px 4px;
+    }
+    .mes-cab {
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--overlay0); text-align: center; padding-bottom: 12px;
+    }
+    /* Sem fundo por célula: o mês é uma tabela de números, não uma parede de
+       lajotas. Só o hoje ganha corpo. */
+    .mes-dia {
+      position: relative;
+      /* `z-index: 0` abre contexto de empilhamento na própria célula. Sem ele o
+         `::before` do hoje, em `z-index: -1`, ia parar atrás do fundo da placa
+         e o círculo do dia sumia. */
+      z-index: 0;
+      height: 62px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 19px; font-weight: 400;
+      font-variant-numeric: tabular-nums;
+      color: var(--subtext1);
+      background: none; border: none;
+    }
+    .mes-dia.fds { color: var(--overlay1); }
+    .mes-dia.fora { color: rgba(108, 112, 134, 0.55); }
+    .mes-dia.hoje { color: var(--sobre-acento); font-weight: 600; }
+    .mes-dia.hoje::before {
+      content: ''; position: absolute;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--acento);
+      z-index: -1;
+    }
+    .mes-dia .ponto {
+      position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+      width: 3px; height: 3px; border-radius: 50%;
+      background: var(--sapphire);
+    }
+    .mes-dia.hoje .ponto { background: var(--sobre-acento); }
+
+    .m-divisa {
+      height: 1px; margin: 10px 20px 0;
+      background: rgba(205, 214, 244, 0.10);
+    }
+    .agenda-lista {
+      display: flex; flex-direction: column; gap: 1px;
+      padding: 6px 20px 16px;
+      flex: 0 1 auto; min-height: 0; max-height: 38vh; overflow-y: auto;
+    }
+    .agenda-dia {
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase;
+      color: var(--overlay1); padding: 10px 0 4px;
+    }
+    /* Linha de agenda é linha, não cartão: hora à esquerda, filete de estado,
+       texto. Fundo por item traria a lajota de volta. */
+    .agenda-item {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 9px 0 9px 13px;
+      border-left: 2px solid var(--sapphire);
+      background: none;
+    }
+    .agenda-item.agora { border-left-color: var(--green); }
+    .agenda-item.passou { opacity: 0.38; border-left-color: var(--overlay0); }
+    .agenda-hora {
+      flex: 0 0 56px;
+      font-size: 16px; font-weight: 400; font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+    .agenda-texto { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .agenda-titulo {
+      font-size: 16px; font-weight: 400; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .agenda-local {
+      font-size: 13px; color: var(--overlay1);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .agenda-vazio {
+      padding: 18px 0 14px;
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 13px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--overlay0); text-align: center;
+    }
+
+    /* ------------------------------------------------------------ vitais */
+    /* Térmica e carga numa placa só, em duas faixas. */
+    .m-vitais { padding: 4px 0 2px; }
+    .aneis {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      padding: 16px 20px 14px;
+    }
+    .anel { display: flex; flex-direction: column; align-items: center; gap: 11px; }
+    .anel .rotulo { color: var(--subtext0); }
+    .anel svg { width: 124px; height: 124px; display: block; }
+    .anel .trilho { fill: none; stroke: rgba(205, 214, 244, 0.10); stroke-width: 3; }
+    /* Traço fino: anel grosso vira rosquinha de dashboard, que é o oposto do
+       que esta página é. */
+    .anel .arco {
+      fill: none; stroke-width: 3; stroke-linecap: round;
+      transition: stroke-dashoffset 800ms var(--saida), stroke 800ms linear;
+    }
+    .anel .centro {
+      font-family: 'Archivo', sans-serif; font-weight: 300; font-size: 34px;
+      fill: var(--text); font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .anel .grau { font-size: 11px; fill: var(--overlay0); letter-spacing: 0.1em; }
+
+    .m-cinta { height: 1px; margin: 0 20px; background: rgba(205, 214, 244, 0.09); }
+
+    /* Medidor compacto: rótulo e valor na mesma linha, trilho curto logo
+       abaixo. O fio atravessando a placa inteira, com o valor na outra ponta,
+       era o desenho que mais incomodava. */
+    .medidores {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px 30px;
+      padding: 20px 24px 14px;
+    }
+    .med { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .med .topo { display: flex; align-items: baseline; gap: 8px; }
+    .med .valor {
+      margin-left: auto;
+      font-size: 18px; font-weight: 400;
+      font-variant-numeric: tabular-nums; color: var(--text);
+      white-space: nowrap;
+    }
+    .med .trilho {
+      height: 4px; border-radius: 2px;
+      background: rgba(205, 214, 244, 0.10);
+      overflow: hidden;
+    }
+    /* Preenchimento por `transform`, não por `width`: largura animada remede o
+       layout a cada quadro, e isto roda 24 h num painel sem aceleração de GPU. */
+    .med .trilho i {
+      display: block; height: 100%; width: 100%; border-radius: 2px;
+      background: var(--acento);
+      transform: scaleX(0); transform-origin: left center;
+      transition: transform 800ms var(--saida), background 800ms linear;
+    }
+
+    .m-rede {
+      display: flex; align-items: baseline; gap: 8px;
+      padding: 4px 20px 16px;
+    }
+    .m-rede .par { display: flex; align-items: baseline; gap: 7px; }
+    .m-rede .par + .par { margin-left: 20px; }
+    .m-rede b {
+      font-size: 15px; font-weight: 400; color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ----------------------------------------------------------- máquina */
+    /* Sem recipiente de novo: é a linha de rodapé do conteúdo, não um módulo. */
+    .m-maquina {
+      display: flex; flex-direction: column; gap: 10px;
+      padding: 0 8px 20px;
+      text-shadow: 0 1px 12px rgba(17, 17, 27, 0.9);
+    }
+    .m-maquina .linha { display: flex; align-items: center; gap: 8px; }
+    .workspaces { display: flex; gap: 6px; }
+    .ws {
+      min-width: 30px; height: 30px; padding: 0 9px;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      border-radius: 8px;
+      background: rgba(205, 214, 244, 0.07);
+      border: 1px solid var(--vidro-aresta);
+      font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums;
+      color: var(--subtext0);
+    }
+    .ws.ativo {
+      background: var(--acento); border-color: var(--acento); color: var(--sobre-acento);
+      font-weight: 600;
+    }
+    .ws .n { font-size: 8px; opacity: 0.65; }
+    .janela-foco {
+      font-size: 14px; color: var(--overlay1);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .janela-foco:empty { display: none; }
+    .ficha { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+    .ficha-linha { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+    .ficha-linha .v {
+      font-size: 14px; color: var(--subtext0); min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* ------------------------------------------------------------ música */
+    .m-musica {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 20px; overflow: hidden;
+    }
+    .m-musica[hidden] { display: none; }
+    .ondas { flex: 0 0 40px; height: 20px; opacity: 0.9; }
+    .ondas svg { width: 100%; height: 100%; }
+    .musica-corpo { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+    .musica-titulo {
+      font-size: 14px; font-weight: 500; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .musica-artista {
+      font-size: 12px; color: var(--overlay1);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .musica-trilho {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+      background: rgba(205, 214, 244, 0.08);
+    }
+    .musica-trilho i {
+      display: block; height: 100%; width: 100%;
+      background: var(--acento);
+      transform: scaleX(0); transform-origin: left center;
+      transition: transform 1000ms linear;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .m-hora .aurora, .ondas { display: none; }
+      .anel .arco, .med .trilho i, .musica-trilho i, .m-relogio .dp { transition: none; }
+    }
+
 
     /* ---------- servidores ---------- */
     #modoServidores { grid-template-rows: 1fr auto 1fr; gap: 9px; padding: 9px 11px; }
@@ -1320,6 +1830,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
   <div class="travessa">
     <span class="marca">Mesa<span>.</span></span>
+    <span class="paginas" id="paginas">
+      <button class="pag-tecla on" data-pagina="mirante">Mirante</button>
+      <button class="pag-tecla" data-pagina="estacao">Estação</button>
+    </span>
     <span class="barramento" id="barramento">
       <button class="tecla on" data-modo="servidores"><span class="marcador"></span>Servidores</button>
       <button class="tecla" data-modo="dev"><span class="marcador" id="marcadorDev"></span>Dev</button>
@@ -1332,6 +1846,91 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <svg viewBox="0 0 16 16"><use href="#ic-x"/></svg>
     </button>
   </div>
+
+  <!-- ============================ página 1 · Mirante ============================
+       Luz sobre vidro. Dois materiais e nada mais: tipo desenhado direto no
+       papel de parede, e placa de vidro só onde há grade ou lista para agrupar.
+       Quatro blocos, agrupados no alto — o chão que sobra é wallpaper, e é ele
+       que dá cor à página. -->
+  <section class="modo" id="modoMirante">
+    <div class="tapete" id="tapeteMirante">
+
+      <!-- 1 · a hora, sem recipiente -->
+      <div class="m-hora gasa">
+        <div class="aurora" id="auroraHora" aria-hidden="true"></div>
+        <span class="m-saudacao" id="wSaudacao">—</span>
+        <span class="m-relogio num" id="wHora">--:--</span>
+        <span class="m-data" id="wData">—</span>
+        <span class="m-meta">
+          <span><i class="rotulo">Semana</i><b class="num" id="wSemana">—</b></span>
+          <span><i class="rotulo">Dia</i><b class="num" id="wDiaAno">—</b></span>
+          <span><i class="rotulo">De pé há</i><b class="num" id="wUptime">—</b></span>
+        </span>
+      </div>
+
+      <!-- 2 · mês e agenda: a mesma pergunta, uma placa só -->
+      <div class="placa m-tempo">
+        <header>
+          <span class="rotulo" id="wMesNome">—</span>
+          <span class="vao"></span>
+          <button class="botao" id="wMesHoje" title="Voltar para o mês de hoje"><span class="rot">Hoje</span></button>
+          <button class="botao" id="wMesAnt" title="Mês anterior" aria-label="Mês anterior"><span class="rot">‹</span></button>
+          <button class="botao" id="wMesProx" title="Próximo mês" aria-label="Próximo mês"><span class="rot">›</span></button>
+        </header>
+        <div class="mes-grade" id="wMesGrade"></div>
+        <div class="m-divisa"></div>
+        <header>
+          <span class="rotulo">Agenda</span>
+          <span class="rotulo" id="wAgendaQuando"></span>
+          <span class="vao"></span>
+          <button class="botao" id="wAgendaConf" title="Configurar o calendário" aria-label="Configurar o calendário"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
+          <button class="botao" id="wAgendaRefresh" title="Buscar agora" aria-label="Buscar a agenda agora"><svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg></button>
+        </header>
+        <div class="agenda-lista" id="wAgendaLista"></div>
+      </div>
+
+      <!-- 3 · vitais da máquina: térmica em cima, carga embaixo -->
+      <div class="placa m-vitais">
+        <div class="aneis" id="wAneis"></div>
+        <div class="m-cinta"></div>
+        <div class="medidores" id="wMedidores"></div>
+        <div class="m-rede">
+          <span class="par"><i class="rotulo">Baixando</i><b class="num" id="wRedeRx">—</b></span>
+          <span class="par"><i class="rotulo">Subindo</i><b class="num" id="wRedeTx">—</b></span>
+          <span class="vao"></span>
+          <span class="rotulo" id="wRedeIface"></span>
+        </div>
+      </div>
+
+      <!-- 4 · a máquina em si, sem recipiente -->
+      <div class="m-maquina gasa">
+        <div class="linha">
+          <div class="workspaces" id="wWorkspaces"></div>
+          <span class="vao"></span>
+          <span class="rotulo" id="wCargaModelo"></span>
+        </div>
+        <div class="janela-foco" id="wJanela"></div>
+        <div class="linha">
+          <div class="ficha" id="wFicha"></div>
+          <span class="vao"></span>
+          <span class="rotulo" id="wPacotes"></span>
+        </div>
+      </div>
+
+      <!-- Toca só quando há player; some inteiro sem ele. -->
+      <div class="placa m-musica" id="wMusica" hidden>
+        <div class="ondas" id="wOndas" aria-hidden="true"></div>
+        <div class="musica-corpo">
+          <span class="rotulo" id="wMusicaPlayer">—</span>
+          <span class="musica-titulo" id="wMusicaTitulo">—</span>
+          <span class="musica-artista" id="wMusicaArtista">—</span>
+        </div>
+        <div class="musica-trilho"><i id="wMusicaFio"></i></div>
+      </div>
+
+    </div>
+  </section>
+
 
   <section class="modo on" id="modoServidores">
     <div class="tela">
@@ -1468,7 +2067,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <button class="opcao" id="chaveMax" data-mode="max">Max</button>
           <button class="opcao" id="chaveApi" data-mode="api">API</button>
         </span>
-        <button class="botao" data-maint id="maintBtn" title="Limpar cache do Windows">
+        <button class="botao" data-maint id="maintBtn" title="Limpar caches do usuário (yay, npm, Gradle, miniaturas, lixeira)">
           <svg viewBox="0 0 16 16"><use href="#ic-vassoura"/></svg><span class="rot">Cache</span>
         </button>
       </div>
@@ -1549,7 +2148,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="celula cel-acao">
         <span class="serigrafia cap">Sistema</span>
         <span class="banco">
-          <button class="chapa" data-maint id="maintBarra" title="Limpar caches do Windows e liberar a RAM parada na standby list">
+          <button class="chapa" data-maint id="maintBarra" title="Limpar caches do usuário: yay, paru, npm, pnpm, Yarn, pip, Electron, Gradle, miniaturas, shader, lixeira e journal">
             <svg viewBox="0 0 16 16"><use href="#ic-vassoura"/></svg><span class="rot">Cache</span>
           </button>
           <button class="chapa" id="tecladoBtn" title="Travar o teclado por 2 minutos para limpar">
@@ -1616,12 +2215,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
   <div id="maintModal" class="cortina">
     <div class="caixa">
-      <h2>Limpar cache do Windows</h2>
+      <h2>Limpar cache</h2>
       <p>
-        Vai limpar Temp, Prefetch, miniaturas, INetCache, Windows Update e DNS,
-        e no fim <b>liberar a RAM</b> parada na standby list.<br><br>
-        <b>Recentes</b> e <b>Acesso rápido</b> do Explorer <b>não</b> serão apagados.<br>
-        <span class="miudo" id="maintElev">Roda elevado pela tarefa agendada, sem UAC.</span>
+        Vai limpar os caches de <b>yay</b>, <b>paru</b>, <b>npm</b>, <b>pnpm</b>, <b>Yarn</b>,
+        <b>pip</b>, <b>Electron</b> e <b>Gradle</b>, mais miniaturas, cache de shader com mais de
+        14 dias, a <b>lixeira</b> e o journal do usuário acima de 7 dias.<br><br>
+        Tudo é reconstruído sozinho no próximo uso.<br>
+        <span class="miudo" id="maintElev">Roda como você, sem sudo: só toca no que mora dentro
+        de <b>$HOME</b>. O cache do pacman em /var/cache fica de fora — ele exige root.</span>
       </p>
       <div class="acoes-caixa">
         <button id="maintCancel" class="btn btn-fantasma">Cancelar</button>
@@ -1709,6 +2310,30 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </div>
   </div>
 
+  <div id="agendaModal" class="cortina">
+    <div class="caixa">
+      <h2>Calendário</h2>
+      <p>
+        No Google Calendar: <b>Configurações do calendário → Integrar calendário →
+        Endereço secreto em formato iCal</b>. Cole aqui.<br><br>
+        <span class="miudo">É um endereço só de leitura, mas <b>quem tiver ele lê a agenda
+        inteira</b> — o painel guarda cifrado no keyring do desktop e nunca mostra de volta.
+        Se vazar, o próprio Google tem o botão de gerar outro.</span>
+      </p>
+      <div class="campo">
+        <label for="agendaUrl">Endereço iCal</label>
+        <input id="agendaUrl" type="password" spellcheck="false" placeholder="https://calendar.google.com/calendar/ical/…/private-…/basic.ics">
+      </div>
+      <p class="miudo" id="agendaNota"></p>
+      <div class="acoes-caixa">
+        <button id="agendaCancel" class="btn btn-fantasma">Cancelar</button>
+        <button id="agendaOk" class="btn btn-firme">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+<script src="vendor/lottie.min.js"></script>
+<script src="mirante.js"></script>
 <script src="painel.js"></script>
 </body>
 </html>

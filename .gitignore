@@ -1,3 +1,5 @@
 node_modules/
 *.log
 pos.json
+maintenance.status.json
+mirante-stop.flag
