@@ -803,8 +803,12 @@ ipcMain.on('diag', (e, texto) => log('painel: ' + String(texto).slice(0, 200)));
 
 // --- Servidores configuráveis ---------------------------------------------
 const SERV_FILE = () => path.join(app.getPath('userData'), 'servidores.json');
+// Sem endereço de verdade no código: quem clona o projeto não tem nada a ver
+// com o servidor de ninguém, e endereço de painel administrativo publicado é
+// convite. Os dois hosts reais moram em `servidores.json` no userData, que o
+// próprio painel escreve pela tela de ajuste.
 const SERV_PADRAO = [
-  { nome: 'Servidor remoto', host: '192.0.2.10', porta: 40120 },
+  { nome: 'Servidor remoto', host: 'localhost', porta: 40120 },
   { nome: 'Servidor local', host: 'localhost', porta: 40120 }
 ];
 

@@ -42,7 +42,7 @@ usa é a mesma pessoa em todos eles.
 ## Capabilities and Constraints
 
 **Prioridade confirmada de leitura (do mais para o menos importante):**
-1. O que os servidores estão cuspindo (console remoto `192.0.2.10:40120` e local `localhost:40120`)
+1. O que os servidores estão cuspindo (console remoto `IP-DO-SERVIDOR:40120` e local `localhost:40120`)
 2. Quanto sobrou da cota do Claude Code (sessão 5h, semana 7d, por modelo)
 3. Se tem erro novo no Sentry
 4. Anotações pendentes do Discord (não entrou no que ele checa primeiro)

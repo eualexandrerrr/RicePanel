@@ -12,14 +12,27 @@ const fs = require('fs');
 const path = require('path');
 
 const API = 'https://discord.com/api/v10';
-const GUILD = '000000000000000000';
-const CANAL = '000000000000000001';
 const POLL_MS = 60000;
 const POLL_ERRO_MS = 240000;
 const RECHECA_POR_VEZ = 25;   // quantas pendencias reconferir por varredura
-const TX_CONFIG = path.join(
-  'C:', 'Users', 'Alexandre', 'Downloads', 'MichiganRoleplay', 'txData', 'default', 'config.json'
-);
+
+// Guild, canal e caminho do txAdmin sao de quem roda o painel, nao do projeto:
+// ficam em `discord-notas.json` no userData. Sem esse arquivo o modulo nao
+// liga, e o painel sobe igual, so sem a coluna de anotacoes.
+let GUILD = '';
+let CANAL = '';
+let TX_CONFIG = '';
+
+function leConfig() {
+  try {
+    const c = JSON.parse(fs.readFileSync(
+      path.join(dep.app.getPath('userData'), 'discord-notas.json'), 'utf8'));
+    GUILD = String(c.guild || '');
+    CANAL = String(c.canal || '');
+    TX_CONFIG = String(c.txConfig || '');
+  } catch (e) {}
+  return !!(GUILD && CANAL);
+}
 
 let dep = null;               // { app, safeStorage, Notification, shell, log, getWindow }
 let timer = null;
@@ -522,6 +535,10 @@ async function criarTopico(id, nome, resposta) {
 
 function iniciar(deps) {
   dep = deps;
+  if (!leConfig()) {
+    log('sem discord-notas.json no userData — coluna de anotacoes desligada');
+    return;
+  }
   carregaEstado();
   agenda(8000);
   log('poller ligado (canal ' + CANAL + ', a cada ' + (POLL_MS / 1000) + ' s)');

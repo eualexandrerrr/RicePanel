@@ -4,3 +4,5 @@ pos.json
 maintenance.status.json
 mirante-stop.flag
 .playwright-mcp/
+*.log.old
+segredo-*.txt
