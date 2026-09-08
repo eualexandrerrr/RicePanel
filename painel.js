@@ -2429,7 +2429,7 @@ try {
   const guardado = localStorage.getItem('modo');
   if (guardado && ['mirante', 'servidores', 'dev', 'monitor'].indexOf(guardado) >= 0) modoInicial = guardado;
 } catch (e) {}
-trocaModo(modoInicial);
+trocaModo('mirante');
 tickRestantes();
 
 // ------------------------------------------------------- trava do teclado

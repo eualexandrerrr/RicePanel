@@ -88,9 +88,10 @@
 
     body {
       font-family: 'Archivo', 'Segoe UI', sans-serif;
-      /* A janela nasce transparente; quem decide se o fundo aparece é esta
-         linha. A Estação pinta a chapa, o Mirante deixa passar. */
-      background: var(--painel);
+      /* Transparente em toda página, não só no Mirante. A Estação também é
+         ilha flutuante: divisa entre os consoles é papel de parede, e chapa
+         opaca de ponta a ponta escondia o monitor inteiro. */
+      background: transparent;
       color: var(--leitura);
       overflow: hidden;
       user-select: none;
@@ -99,12 +100,16 @@
          mais largo que a tela (a travessa com uma cota a mais) esticava a
          coluna inteira e empurrava todo o palco para fora da borda direita. */
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: 56px minmax(0, 1fr) auto;
+      /* `auto` na primeira linha, sempre. Com 56px fixos aqui e `auto` só no
+         Mirante, a travessa pulava de lugar ao trocar de página. O conteúdo
+         dela é o mesmo nas quatro páginas, então `auto` dá a mesma altura em
+         todas e a barra fica FIXA. */
+      grid-template-rows: auto minmax(0, 1fr) auto;
       -webkit-font-smoothing: antialiased;
     }
     /* Com a barra entre os terminais, a linha de baixo do app some: a mesma
        informação em dois lugares da mesma tela é ruído, não redundância. */
-    body.faixa-no-meio { grid-template-rows: 56px minmax(0, 1fr); }
+    body.faixa-no-meio { grid-template-rows: auto minmax(0, 1fr); }
 
     ::selection { background: var(--ambar); color: #12140f; }
     ::-webkit-scrollbar { width: 10px; }
@@ -127,13 +132,21 @@
     .vao { flex: 1; }
 
     /* ---------- travessa ---------- */
+    /* A travessa é faixa, não chapa: fundo nenhum, borda nenhuma. Quem tem
+       fundo são as pílulas dentro dela — é assim que a waybar se desenha
+       (`window#waybar { background: transparent }`), e é o que deixa o papel de
+       parede aparecer atrás da barra.
+       Geometria fixa e igual em toda página: mesma margem, mesma altura mínima.
+       Nada aqui muda com o modo, então a barra não sai do lugar. */
     .travessa {
       -webkit-app-region: drag;
-      display: flex; align-items: center; gap: 16px; min-width: 0;
-      padding: 0 14px;
-      background: linear-gradient(var(--face-alta), var(--face));
-      border-bottom: 1px solid var(--sulco);
-      box-shadow: inset 0 1px 0 var(--aresta);
+      display: flex; align-items: center; gap: 14px; min-width: 0;
+      min-height: 46px;
+      margin: 8px 12px 0;
+      padding: 0 2px;
+      background: none;
+      border: none;
+      box-shadow: none;
     }
     .marca {
       font-family: 'Archivo Narrow', sans-serif;
@@ -375,21 +388,15 @@
        comprimido e tracado nos rótulos. Cor é estado (verde/âmbar/vermelho) e um
        acento mauve — todo o resto da cor vem do papel de parede. */
 
-    body.em-mirante { background: transparent; }
-    body.em-mirante { grid-template-rows: auto minmax(0, 1fr) auto; }
-
-    /* A travessa e o rodapé descolam das bordas e viram vidro também. */
-    body.em-mirante .travessa,
-    body.em-mirante .rodape {
-      margin: 12px 16px;
+    /* O rodapé é ilha em toda página; a travessa nunca é (ver `.travessa`). */
+    .rodape {
+      margin: 0 12px 10px;
       background: var(--vidro);
       border: 1px solid var(--vidro-aresta);
       border-radius: 14px;
       box-shadow: inset 0 1px 0 var(--vidro-brilho);
       overflow: hidden;
     }
-    body.em-mirante .travessa { margin-bottom: 0; }
-    body.em-mirante .rodape { margin-top: 0; }
 
     /* No Mirante o rodapé perde o que os widgets já dizem melhor (relógio e
        térmica) e o que não é assunto desta página: a cota de token da IA. Esta
@@ -410,11 +417,13 @@
     body.em-mirante .tapete {
       display: flex; flex-direction: column;
       align-items: stretch;
-      justify-content: space-between;
-      gap: 22px;
-      padding: 20px 30px 24px;
+      gap: 12px;
+      padding: 10px 12px 12px;
       overflow: visible;
     }
+    /* A hora empurra o resto para cima e fica no pé. O vão que sobra entre a
+       máquina e ela é papel de parede, e é o único respiro grande da página. */
+    .m-hora { margin-top: auto; }
     .m-tempo { display: flex; flex-direction: column; min-height: 0; }
 
     /* --- material VIDRO --- */
@@ -437,7 +446,7 @@
       background-attachment: scroll, fixed;
       background-repeat: no-repeat, no-repeat;
       border: 1px solid var(--vidro-aresta);
-      border-radius: 24px;
+      border-radius: 14px;
       box-shadow: inset 0 1px 0 var(--vidro-brilho);
     }
     /* Com o fundo real atrás, a tinta pode ser mais fina: quem segura a leitura
@@ -447,8 +456,7 @@
         linear-gradient(180deg, rgba(49, 50, 68, 0.44) 0%, rgba(24, 24, 37, 0.58) 100%),
         var(--vidro-fundo, none);
     }
-    body.em-mirante .travessa,
-    body.em-mirante .rodape {
+    .rodape, .tela, #faixaMeio .rodape, .baia-emu, .painel-log, .modulo, .ponte {
       background-image:
         linear-gradient(180deg, rgba(49, 50, 68, 0.50) 0%, rgba(24, 24, 37, 0.66) 100%),
         var(--vidro-fundo, none);
@@ -458,8 +466,8 @@
       background-repeat: no-repeat, no-repeat;
     }
     .placa > header {
-      display: flex; align-items: center; gap: 10px;
-      padding: 16px 20px 0;
+      display: flex; align-items: center; gap: 9px;
+      padding: 11px 14px 0;
     }
     .placa > header .botao { padding: 4px 8px; }
 
@@ -474,7 +482,7 @@
     .gasa { position: relative; z-index: 0; }
     .gasa::before {
       content: '';
-      position: absolute; inset: -20px -14px;
+      position: absolute; inset: -14px -12px;
       background-image:
         linear-gradient(180deg, rgba(24, 24, 37, 0.55) 0%, rgba(17, 17, 27, 0.62) 100%),
         var(--vidro-fundo, none);
@@ -492,8 +500,8 @@
        rice — o rótulo some de longe e o número fica. */
     .rotulo {
       font-family: 'Archivo Narrow', sans-serif;
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 0.28em; text-transform: uppercase;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.22em; text-transform: uppercase;
       color: var(--overlay1);
       white-space: nowrap;
     }
@@ -504,14 +512,14 @@
     .m-hora {
       position: relative;
       display: flex; flex-direction: column; align-items: center;
-      padding: 10px 0 4px;
+      padding: 4px 0 2px;
       text-shadow: 0 2px 26px rgba(17, 17, 27, 0.92), 0 1px 4px rgba(17, 17, 27, 0.85);
     }
     /* A aurora é atmosfera, não informação: fica atrás do número, apagada por
        uma máscara radial para não virar mancha de borda. */
     .m-hora .aurora {
       position: absolute; left: 50%; top: 50%;
-      width: 130%; height: 260px;
+      width: 120%; height: 190px;
       transform: translate(-50%, -54%);
       opacity: 0.34; filter: blur(3px);
       z-index: -1;
@@ -523,16 +531,16 @@
     .m-saudacao {
       position: relative;
       font-family: 'Archivo Narrow', sans-serif;
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 0.34em; text-transform: uppercase;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.30em; text-transform: uppercase;
       color: var(--lavender);
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     /* Peso 200 em corpo grande é o gesto central da página. Archivo é variável
        de 100 a 900, então o fino é real, não sintetizado. */
     .m-relogio {
       position: relative;
-      font-size: 152px; font-weight: 200; line-height: 0.84;
+      font-size: 96px; font-weight: 200; line-height: 0.9;
       letter-spacing: -0.045em;
       color: var(--text);
       font-variant-numeric: tabular-nums;
@@ -545,25 +553,25 @@
     .m-relogio .dp.apaga { opacity: 0.22; }
     .m-data {
       position: relative;
-      margin-top: 14px;
+      margin-top: 9px;
       font-family: 'Archivo Narrow', sans-serif;
-      font-size: 13px; font-weight: 700;
-      letter-spacing: 0.30em; text-transform: uppercase;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.26em; text-transform: uppercase;
       color: var(--subtext1);
     }
     /* Filete: a única régua da página, e ela mora aqui. */
     .m-meta {
       position: relative;
       display: flex; align-items: baseline; justify-content: center;
-      gap: 30px; margin-top: 16px;
-      padding-top: 14px;
+      gap: 24px; margin-top: 11px;
+      padding-top: 10px;
       border-top: 1px solid rgba(205, 214, 244, 0.13);
-      width: min(560px, 88%);
+      width: min(520px, 86%);
     }
     .m-meta > span { display: flex; align-items: baseline; gap: 8px; }
     .m-meta .rotulo, .m-maquina .rotulo { color: var(--subtext0); }
     .m-meta b {
-      font-size: 18px; font-weight: 400; color: var(--text);
+      font-size: 14px; font-weight: 400; color: var(--text);
       font-variant-numeric: tabular-nums;
     }
 
@@ -581,13 +589,13 @@
     .mes-grade {
       display: grid; grid-template-columns: repeat(7, 1fr);
       grid-template-rows: auto;   /* o cabeçalho não é linha de semana */
-      padding: 12px 14px 4px;
+      padding: 8px 12px 4px;
     }
     .mes-cab {
       font-family: 'Archivo Narrow', sans-serif;
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 0.18em; text-transform: uppercase;
-      color: var(--overlay0); text-align: center; padding-bottom: 12px;
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--overlay0); text-align: center; padding-bottom: 7px;
     }
     /* Sem fundo por célula: o mês é uma tabela de números, não uma parede de
        lajotas. Só o hoje ganha corpo. */
@@ -597,9 +605,9 @@
          `::before` do hoje, em `z-index: -1`, ia parar atrás do fundo da placa
          e o círculo do dia sumia. */
       z-index: 0;
-      height: 62px;
+      height: 38px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 19px; font-weight: 400;
+      font-size: 14px; font-weight: 400;
       font-variant-numeric: tabular-nums;
       color: var(--subtext1);
       background: none; border: none;
@@ -609,7 +617,7 @@
     .mes-dia.hoje { color: var(--sobre-acento); font-weight: 600; }
     .mes-dia.hoje::before {
       content: ''; position: absolute;
-      width: 44px; height: 44px; border-radius: 50%;
+      width: 30px; height: 30px; border-radius: 50%;
       background: var(--acento);
       z-index: -1;
     }
@@ -621,13 +629,13 @@
     .mes-dia.hoje .ponto { background: var(--sobre-acento); }
 
     .m-divisa {
-      height: 1px; margin: 10px 20px 0;
+      height: 1px; margin: 6px 14px 0;
       background: rgba(205, 214, 244, 0.10);
     }
     .agenda-lista {
       display: flex; flex-direction: column; gap: 1px;
-      padding: 6px 20px 16px;
-      flex: 0 1 auto; min-height: 0; max-height: 38vh; overflow-y: auto;
+      padding: 4px 14px 12px;
+      flex: 0 1 auto; min-height: 0; max-height: 30vh; overflow-y: auto;
     }
     .agenda-dia {
       font-family: 'Archivo Narrow', sans-serif;
@@ -638,43 +646,43 @@
        texto. Fundo por item traria a lajota de volta. */
     .agenda-item {
       display: flex; align-items: baseline; gap: 12px;
-      padding: 9px 0 9px 13px;
+      padding: 6px 0 6px 11px;
       border-left: 2px solid var(--sapphire);
       background: none;
     }
     .agenda-item.agora { border-left-color: var(--green); }
     .agenda-item.passou { opacity: 0.38; border-left-color: var(--overlay0); }
     .agenda-hora {
-      flex: 0 0 56px;
-      font-size: 16px; font-weight: 400; font-variant-numeric: tabular-nums;
+      flex: 0 0 46px;
+      font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums;
       color: var(--text);
     }
     .agenda-texto { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .agenda-titulo {
-      font-size: 16px; font-weight: 400; color: var(--text);
+      font-size: 14px; font-weight: 400; color: var(--text);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .agenda-local {
-      font-size: 13px; color: var(--overlay1);
+      font-size: 11px; color: var(--overlay1);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .agenda-vazio {
-      padding: 18px 0 14px;
+      padding: 14px 0 10px;
       font-family: 'Archivo Narrow', sans-serif;
-      font-size: 13px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
       color: var(--overlay0); text-align: center;
     }
 
     /* ------------------------------------------------------------ vitais */
     /* Térmica e carga numa placa só, em duas faixas. */
-    .m-vitais { padding: 4px 0 2px; }
+    .m-vitais { padding: 2px 0 0; }
     .aneis {
       display: grid; grid-template-columns: repeat(3, 1fr);
-      padding: 16px 20px 14px;
+      padding: 12px 16px 10px;
     }
-    .anel { display: flex; flex-direction: column; align-items: center; gap: 11px; }
+    .anel { display: flex; flex-direction: column; align-items: center; gap: 8px; }
     .anel .rotulo { color: var(--subtext0); }
-    .anel svg { width: 124px; height: 124px; display: block; }
+    .anel svg { width: 84px; height: 84px; display: block; }
     .anel .trilho { fill: none; stroke: rgba(205, 214, 244, 0.10); stroke-width: 3; }
     /* Traço fino: anel grosso vira rosquinha de dashboard, que é o oposto do
        que esta página é. */
@@ -683,7 +691,7 @@
       transition: stroke-dashoffset 800ms var(--saida), stroke 800ms linear;
     }
     .anel .centro {
-      font-family: 'Archivo', sans-serif; font-weight: 300; font-size: 34px;
+      font-family: 'Archivo', sans-serif; font-weight: 300; font-size: 27px;
       fill: var(--text); font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
     }
@@ -696,14 +704,14 @@
        era o desenho que mais incomodava. */
     .medidores {
       display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 20px 30px;
-      padding: 20px 24px 14px;
+      gap: 12px 24px;
+      padding: 12px 16px 8px;
     }
     .med { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
     .med .topo { display: flex; align-items: baseline; gap: 8px; }
     .med .valor {
       margin-left: auto;
-      font-size: 18px; font-weight: 400;
+      font-size: 14px; font-weight: 400;
       font-variant-numeric: tabular-nums; color: var(--text);
       white-space: nowrap;
     }
@@ -723,31 +731,31 @@
 
     .m-rede {
       display: flex; align-items: baseline; gap: 8px;
-      padding: 4px 20px 16px;
+      padding: 2px 16px 11px;
     }
     .m-rede .par { display: flex; align-items: baseline; gap: 7px; }
     .m-rede .par + .par { margin-left: 20px; }
     .m-rede b {
-      font-size: 15px; font-weight: 400; color: var(--text);
+      font-size: 13px; font-weight: 400; color: var(--text);
       font-variant-numeric: tabular-nums;
     }
 
     /* ----------------------------------------------------------- máquina */
     /* Sem recipiente de novo: é a linha de rodapé do conteúdo, não um módulo. */
     .m-maquina {
-      display: flex; flex-direction: column; gap: 10px;
-      padding: 0 8px 20px;
+      display: flex; flex-direction: column; gap: 7px;
+      padding: 2px 8px 4px;
       text-shadow: 0 1px 12px rgba(17, 17, 27, 0.9);
     }
     .m-maquina .linha { display: flex; align-items: center; gap: 8px; }
     .workspaces { display: flex; gap: 6px; }
     .ws {
-      min-width: 30px; height: 30px; padding: 0 9px;
+      min-width: 24px; height: 24px; padding: 0 7px;
       display: flex; align-items: center; justify-content: center; gap: 4px;
       border-radius: 8px;
       background: rgba(205, 214, 244, 0.07);
       border: 1px solid var(--vidro-aresta);
-      font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums;
+      font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums;
       color: var(--subtext0);
     }
     .ws.ativo {
@@ -756,14 +764,14 @@
     }
     .ws .n { font-size: 8px; opacity: 0.65; }
     .janela-foco {
-      font-size: 14px; color: var(--overlay1);
+      font-size: 12px; color: var(--overlay1);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .janela-foco:empty { display: none; }
-    .ficha { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+    .ficha { display: flex; flex-wrap: wrap; gap: 3px 18px; }
     .ficha-linha { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
     .ficha-linha .v {
-      font-size: 14px; color: var(--subtext0); min-width: 0;
+      font-size: 12px; color: var(--subtext0); min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
 
@@ -802,22 +810,26 @@
 
 
     /* ---------- servidores ---------- */
-    #modoServidores { grid-template-rows: 1fr auto 1fr; gap: 9px; padding: 9px 11px; }
+    #modoServidores { grid-template-rows: 1fr auto 1fr; gap: 14px; padding: 10px 12px 12px; }
     #modoServidores > * { min-width: 0; }
     #faixaMeio:empty { display: none; }
+    /* Ilha de vidro, igual às placas do Mirante. O conteúdo de dentro é do
+       txAdmin e é opaco -- o papel de parede aparece na divisa entre as duas
+       telas, na borda e atrás do cabeçalho, não através do console. */
     .tela {
       display: flex; flex-direction: column; min-height: 0;
-      background: var(--sulco);
-      border: 1px solid var(--aresta);
-      border-radius: 4px;
+      background: var(--vidro);
+      border: 1px solid var(--vidro-aresta);
+      border-radius: 14px;
+      box-shadow: inset 0 1px 0 var(--vidro-brilho);
       overflow: hidden;
     }
     .tela > header, .baia-emu > header, .painel-log > header {
       display: flex; align-items: center; gap: 9px; flex-wrap: nowrap; min-width: 0;
-      padding: 7px 9px;
-      background: linear-gradient(var(--face-alta), var(--face));
-      border-bottom: 1px solid var(--sulco);
-      box-shadow: inset 0 1px 0 var(--aresta);
+      padding: 8px 11px;
+      background: none;
+      border-bottom: 1px solid var(--vidro-aresta);
+      box-shadow: none;
     }
     /* Selo de origem: é o que evita mandar comando no servidor errado. */
     .selo {
@@ -933,7 +945,13 @@
     .sem-sinal {
       position: absolute; left: 0; right: 0; bottom: 0; top: 0; z-index: 1;
       display: flex; align-items: center; justify-content: center;
-      background: repeating-linear-gradient(135deg, #101216 0 12px, #0d0f12 12px 24px);
+      /* Console fora do ar deixa o papel de parede aparecer: a hachura vira um
+         véu por cima do vidro, em vez de um bloco preto ocupando meia tela. */
+      background-image:
+        repeating-linear-gradient(135deg, rgba(17, 17, 27, 0.55) 0 12px, rgba(24, 24, 37, 0.55) 12px 24px),
+        var(--vidro-fundo, none);
+      background-size: auto, 100vw 100vh;
+      background-attachment: scroll, fixed;
     }
     .sem-sinal[hidden] { display: none; }
     .sem-sinal .cartao {
@@ -960,12 +978,13 @@
     .sem-sinal .botao { margin-top: 3px; }
 
     /* ---------- dev ---------- */
-    #modoDev { grid-template-columns: 470px 1fr; gap: 9px; padding: 9px 11px; }
+    #modoDev { grid-template-columns: 470px 1fr; gap: 14px; padding: 10px 12px 12px; }
     .baia-emu, .painel-log {
       display: flex; flex-direction: column; min-height: 0;
-      background: var(--sulco);
-      border: 1px solid var(--aresta);
-      border-radius: 4px;
+      background: var(--vidro);
+      border: 1px solid var(--vidro-aresta);
+      border-radius: 14px;
+      box-shadow: inset 0 1px 0 var(--vidro-brilho);
       overflow: hidden;
     }
     /* A hachura marca que ali é buraco reservado, não área do painel. */
@@ -1001,7 +1020,7 @@
     .escolha:focus { outline: none; border-color: var(--ambar); }
 
     /* ---------- monitor ---------- */
-    #modoMonitor { grid-template-rows: auto 1fr; gap: 9px; padding: 9px 11px; }
+    #modoMonitor { grid-template-rows: auto 1fr; gap: 14px; padding: 10px 12px 12px; }
     .ponte {
       display: flex; align-items: stretch; gap: 16px;
       padding: 10px 14px;
@@ -1035,11 +1054,11 @@
     }
     .canto-sistema { display: flex; align-items: center; gap: 8px; align-self: center; }
 
-    .baia { display: grid; grid-template-columns: 1.14fr 1fr; gap: 9px; min-height: 0; }
+    .baia { display: grid; grid-template-columns: 1.14fr 1fr; gap: 14px; min-height: 0; }
     .modulo {
       display: flex; flex-direction: column; min-height: 0;
-      background: var(--face); border: 1px solid var(--aresta); border-radius: 4px;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      background: var(--vidro); border: 1px solid var(--vidro-aresta); border-radius: 14px;
+      box-shadow: inset 0 1px 0 var(--vidro-brilho);
     }
     .modulo.batendo { border-color: var(--vermelho); }
     .modulo > header {
@@ -1100,8 +1119,8 @@
     .banca {
       display: flex; align-items: center; gap: 18px;
       min-height: 46px; padding: 7px 14px;
-      background: linear-gradient(var(--face), #131519);
-      border-top: 1px solid var(--aresta);
+      background: none;
+      border-top: none;
     }
     .celula, .grupo { display: flex; align-items: center; gap: 14px; }
     .cap, .prateleira { display: none; }
@@ -1201,15 +1220,16 @@
        rótulo gravado e sulco fresado entre elas; e PRATELEIRA embaixo, canal
        rebaixado na chapa para o que é dele, não do trabalho. */
     #faixaMeio .rodape {
-      border: 1px solid var(--aresta);
-      border-radius: 5px;
+      margin: 0;
+      border: 1px solid var(--vidro-aresta);
+      border-radius: 14px;
       overflow: hidden;
-      box-shadow: inset 0 1px 0 #363c47;
+      box-shadow: inset 0 1px 0 var(--vidro-brilho);
     }
     #faixaMeio .banca {
       align-items: stretch; gap: 0;
       min-height: 104px; padding: 0;
-      background: linear-gradient(#1c2027, #15181d);
+      background: none;
       border-top: none;
     }
     #faixaMeio .celula {
@@ -1869,19 +1889,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <section class="modo" id="modoMirante">
     <div class="tapete" id="tapeteMirante">
 
-      <!-- 1 · a hora, sem recipiente -->
-      <div class="m-hora gasa">
-        <div class="aurora" id="auroraHora" aria-hidden="true"></div>
-        <span class="m-saudacao" id="wSaudacao">—</span>
-        <span class="m-relogio num" id="wHora">--:--</span>
-        <span class="m-data" id="wData">—</span>
-        <span class="m-meta">
-          <span><i class="rotulo">Semana</i><b class="num" id="wSemana">—</b></span>
-          <span><i class="rotulo">Dia</i><b class="num" id="wDiaAno">—</b></span>
-          <span><i class="rotulo">De pé há</i><b class="num" id="wUptime">—</b></span>
-        </span>
-      </div>
-
       <!-- 2 · mês e agenda: a mesma pergunta, uma placa só -->
       <div class="placa m-tempo">
         <header>
@@ -1940,6 +1947,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <span class="musica-artista" id="wMusicaArtista">—</span>
         </div>
         <div class="musica-trilho"><i id="wMusicaFio"></i></div>
+      </div>
+
+      <!-- A hora fecha a coluna, colada no pé. É a leitura de mais longe, e
+           embaixo ela cai na altura em que o olho pousa ao virar a cabeça. -->
+      <div class="m-hora gasa">
+        <div class="aurora" id="auroraHora" aria-hidden="true"></div>
+        <span class="m-saudacao" id="wSaudacao">—</span>
+        <span class="m-relogio num" id="wHora">--:--</span>
+        <span class="m-data" id="wData">—</span>
+        <span class="m-meta">
+          <span><i class="rotulo">Semana</i><b class="num" id="wSemana">—</b></span>
+          <span><i class="rotulo">Dia</i><b class="num" id="wDiaAno">—</b></span>
+          <span><i class="rotulo">De pé há</i><b class="num" id="wUptime">—</b></span>
+        </span>
       </div>
 
     </div>
