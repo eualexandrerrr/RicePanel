@@ -8,7 +8,7 @@
 // tarefa agendada, LibreHardwareMonitor e variável de ambiente do registro virou
 // leitura de /proc, hyprctl, script sh e systemd de usuário.
 
-const { app, BrowserWindow, ipcMain, screen, safeStorage, Notification, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, safeStorage, Notification, shell, desktopCapturer, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -21,25 +21,38 @@ const video = require('./video');
 const dev = require('./dev');
 const vidro = require('./vidro');
 
-// A aceleração de GPU voltou (08/09/2026). Ela tinha sido desligada quando o
-// painel era só chapa e texto — sem nada animando, o Chromium acordava a placa
-// à toa. Só que agora o Mirante toca VÍDEO: sem GPU o Chromium cai no
-// SwiftShader e decodifica 1080p no processador, que é exatamente o
-// engasgo que ele viu. Vídeo travando é pior que placa acordada.
+// Aceleração de GPU: DESLIGADA por padrão, e isso é medido, não crença.
 //
-// VAAPI ligada junto: a máquina tem `libva-nvidia-driver` e a Radeon com mesa,
-// então o decode sai do processador de vez.
-app.commandLine.appendSwitch('enable-features',
-  'VaapiVideoDecodeLinuxGL,VaapiVideoDecoder,AcceleratedVideoDecodeLinuxGL,CanvasOopRasterization');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-zero-copy');
-// Sem dizer o backend, o Electron cai no ANGLE/SwiftShader (GL por software) —
-// foi assim que o vídeo engasgou. `angle` + `gl` usa o driver de verdade.
+// Ela foi ligada em 08/09/2026 para o vídeo do navegador parar de engasgar —
+// sem GPU o Chromium decodifica 1080p no processador. Só que nesta máquina
+// (duas placas, Wayland, janela transparente) toda combinação acelerada
+// terminou em janela que não pinta nada: com `use-angle=vulkan` o gpu-process
+// morre em laço e leva o compositor junto; com `use-angle=gl`, com ou sem
+// `render-node-override` na Radeon, o `eglCreateImage` falha com EGL_BAD_MATCH,
+// o filho de GPU é morto e o painel vira um retângulo invisível sobre o papel
+// de parede — o app segue vivo, com log e tudo, e a tela fica vazia.
 //
-// `vulkan` aqui NÃO: nesta RX 550 (Polaris) ele derruba o gpu-process em loop, joga o
-// Chromium inteiro em software e leva o Hyprland junto — SIGABRT em CHyprOpenGLImpl::begin
-// depois de eglDupNativeFenceFDANDROID falhar. Medido nos dois apps, em 08/09/2026.
-app.commandLine.appendSwitch('use-angle', 'gl');
+// Então: software por padrão, que é o único estado em que a página aparece. O
+// engasgo do vídeo se resolve pelo outro lado, limitando a qualidade do player
+// a 720p (ver `mirante.js`), que decodifica liso na CPU.
+//
+// `RICEPANEL_COM_GPU=1` liga a versão acelerada para quem quiser tentar de
+// novo — em outra máquina, ou no dia em que o driver mudar.
+if (process.env.RICEPANEL_COM_GPU === '1') {
+  app.commandLine.appendSwitch('enable-features',
+    'VaapiVideoDecodeLinuxGL,VaapiVideoDecoder,AcceleratedVideoDecodeLinuxGL,CanvasOopRasterization');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-zero-copy');
+  app.commandLine.appendSwitch('use-angle', 'gl');
+  try {
+    const NO_RADEON = '/dev/dri/renderD129';
+    if (require('fs').existsSync(NO_RADEON)) {
+      app.commandLine.appendSwitch('render-node-override', NO_RADEON);
+    }
+  } catch (e) {}
+} else {
+  app.disableHardwareAcceleration();
+}
 app.setAppUserModelId('com.alexandre.mirante');
 
 // O app_id que o Hyprland vê. Sem isto o Electron anuncia o `productName`
@@ -313,6 +326,26 @@ function createWindow() {
     }
   });
   mainWindow = win;
+
+  // Espelho da janela do navegador. Serviço com DRM (Globoplay, Netflix) não
+  // toca dentro do Electron por falta de Widevine, e o embed do YouTube esbarra
+  // em anúncio porque a webview do painel não é a sessão logada dele. Espelhar a
+  // janela resolve os dois de uma vez: quem decodifica continua sendo o Chrome
+  // dele, com Widevine e com Premium; o painel só mostra o quadro.
+  //
+  // No Wayland quem escolhe a janela é o portal do compositor, não o app — daí
+  // a fonte aqui ser a primeira da lista: a escolha de verdade acontece no
+  // diálogo do xdg-desktop-portal.
+  session.defaultSession.setDisplayMediaRequestHandler((pedido, responde) => {
+    desktopCapturer.getSources({ types: ['window', 'screen'] }).then((fontes) => {
+      if (!fontes.length) { responde({}); return; }
+      log('espelho: fonte "' + fontes[0].name + '"');
+      responde({ video: fontes[0] });
+    }).catch((e) => {
+      log('espelho: falhou ao listar fontes — ' + e.message);
+      responde({});
+    });
+  }, { useSystemPicker: true });
 
   const deps = { app, safeStorage, Notification, shell, log, getWindow: () => mainWindow };
   sentry.iniciar(deps);

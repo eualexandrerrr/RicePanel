@@ -749,6 +749,11 @@
         '  e.textContent=' + JSON.stringify(SO_O_VIDEO) + ';' +
         '  var v=document.querySelector("video");' +
         '  if(v){ v.muted=false; v.play().catch(function(){}); }' +
+        // 720p de propósito: o painel desenha por software (ver main.js), e
+        // 1080p decodificado no processador é exatamente o engasgo que ele viu.
+        // Numa placa de 620px de largura, 720p e 1080p têm a mesma cara.
+        '  var p=document.getElementById("movie_player");' +
+        '  if(p&&p.setPlaybackQualityRange){ try{p.setPlaybackQualityRange("hd720","hd720");}catch(e){} }' +
         '  return true;})()';
       try { quadro.executeJavaScript(script); } catch (e) {}
     };
@@ -767,20 +772,71 @@
     quadro.src = src;
   }
 
+  // ---- espelho da janela ----
+  // Globoplay e Netflix não tocam dentro do Electron: falta o Widevine. Em vez
+  // de fingir, o painel espelha a janela do navegador — quem decodifica
+  // continua sendo o Chrome dele, com DRM e com o Premium que ele paga. O
+  // preço é o diálogo do portal do Hyprland, uma vez por sessão.
+  let espelho = null;              // MediaStream de pé
+
+  function paraEspelho() {
+    if (!espelho) return;
+    try { espelho.getTracks().forEach(t => t.stop()); } catch (e) {}
+    espelho = null;
+  }
+
+  async function ligaEspelho() {
+    try {
+      espelho = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: false
+      });
+    } catch (e) {
+      const aviso = document.getElementById('wEspelhoAviso');
+      if (aviso) aviso.textContent = 'Não deu para espelhar: ' + (e.message || e.name);
+      return;
+    }
+    const quadro = document.getElementById('wEspelhoQuadro');
+    if (!quadro) { paraEspelho(); return; }
+    quadro.srcObject = espelho;
+    quadro.play().catch(() => {});
+    document.getElementById('wEspelhoCapa').hidden = true;
+    // O compositor pode encerrar a partilha por fora; quando isso acontece a
+    // placa volta ao convite em vez de ficar com um quadro congelado.
+    espelho.getVideoTracks().forEach(t => t.addEventListener('ended', () => {
+      paraEspelho();
+      const capa = document.getElementById('wEspelhoCapa');
+      if (capa) capa.hidden = false;
+    }));
+  }
+
   function montaDrm(v) {
+    paraEspelho();
     elVideo.innerHTML =
-      '<span class="video-drm">' +
-        '<span class="rotulo">Tocando no navegador</span>' +
-        '<span class="video-titulo">' + esc(v.titulo || '—') + '</span>' +
-        '<span class="rotulo">O serviço usa DRM e não roda dentro do painel</span>' +
+      '<span class="video-quadro">' +
+        '<video id="wEspelhoQuadro" autoplay muted playsinline></video>' +
+        '<span class="video-drm" id="wEspelhoCapa">' +
+          '<span class="rotulo">Tocando no navegador</span>' +
+          '<span class="video-titulo">' + esc(v.titulo || '—') + '</span>' +
+          '<span class="rotulo">O serviço usa DRM e não roda dentro do painel</span>' +
+          '<button class="botao-espelho" id="wEspelhoBotao">Espelhar a janela aqui</button>' +
+          '<span class="rotulo" id="wEspelhoAviso"></span>' +
+        '</span>' +
+      '</span>' +
+      '<span class="video-pe">' +
+        '<span class="video-titulo">' + esc(v.titulo || 'Vídeo') + '</span>' +
+        '<span class="rotulo video-onde">Espelho</span>' +
       '</span>';
     elVideo.hidden = false;
+    const botao = document.getElementById('wEspelhoBotao');
+    if (botao) botao.addEventListener('click', ligaEspelho);
   }
 
   function pintaVideo(v) {
     if (!v || !v.site || v.janelaVisivel) {
       // Ele voltou para a janela: o painel devolve o vídeo e sai da frente.
       if (videoMontado && /^youtube/.test(videoMontado)) window.api.videoTocaNavegador().catch(() => {});
+      paraEspelho();
       desmontaVideo();
       return;
     }

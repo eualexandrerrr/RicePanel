@@ -1490,6 +1490,22 @@
       padding: 16px 20px; text-align: center;
     }
     .video-drm .video-titulo { white-space: normal; max-width: 460px; }
+    /* A capa do espelho fica POR CIMA do quadro: enquanto ninguém aceitou o
+       diálogo do portal, o vídeo está preto e o convite é o que se lê. */
+    .video-quadro .video-drm {
+      position: absolute; inset: 0; z-index: 1;
+      justify-content: center; background: rgba(17, 17, 27, 0.86);
+    }
+    .video-quadro video { position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: contain; background: #000; }
+    .botao-espelho {
+      margin-top: 4px; padding: 8px 16px;
+      border: 1px solid var(--vidro-aresta); border-radius: 999px;
+      background: rgba(205, 214, 244, 0.10); color: var(--text);
+      font-family: inherit; font-size: 13px; cursor: pointer;
+      transition: background 160ms linear, color 160ms linear;
+    }
+    .botao-espelho:hover { background: var(--acento); color: var(--sobre-acento); }
 
     /* ---------- próximo jogo ----------
        Mora ao lado da prateleira do GTA porque é do mesmo tipo de conteúdo:

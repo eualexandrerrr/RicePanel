@@ -230,7 +230,28 @@ function limpa() {
     tocando: false, janelaVisivel: true, player: '' };
 }
 
+// Atalho de desenvolvimento: `RICEPANEL_VIDEO_FAKE=drm` (ou `youtube:<id>`)
+// finge um vídeo tocando fora da vista, para conferir a placa sem depender de
+// haver algo rolando no navegador na hora.
+function fingido() {
+  const f = process.env.RICEPANEL_VIDEO_FAKE;
+  if (!f) return null;
+  const [tipo, id] = String(f).split(':');
+  return {
+    site: tipo === 'youtube' ? 'youtube' : 'drm',
+    id: tipo === 'youtube' ? (id || 'dQw4w9WgXcQ') : '',
+    titulo: 'Teste de placa de vídeo',
+    posicao: 0,
+    duracao: null,
+    tocando: true,
+    janelaVisivel: false,
+    player: ''
+  };
+}
+
 async function olha() {
+  const falso = fingido();
+  if (falso) { estado = falso; return estado; }
   try {
     const players = await lePlayers();
     for (const p of players) {
