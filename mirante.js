@@ -573,7 +573,9 @@
   }
 
   function dadosDaGpu(g) {
-    const uso = g.uso == null ? '—' : g.uso + '%';
+    // A placa do passthrough continua na faixa com a VM desligada: o número não
+    // existe porque quem lê os sensores dela é o Windows, não porque sumiu.
+    const uso = g.uso == null ? (g.naVm ? 'no vfio' : '—') : g.uso + '%';
     const vram = (g.vramUsada != null && g.vramTotal != null)
       ? fmtVram(g.vramUsada) + '/' + fmtVram(g.vramTotal) + ' GB'
       : '';

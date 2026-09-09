@@ -206,13 +206,16 @@ function limpaNomeGpu(bruto) {
   return n;
 }
 
-async function lerGpusNvidia() {
-  const out = await roda('nvidia-smi', [
-    '--query-gpu=index,name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,fan.speed',
-    '--format=csv,noheader,nounits'
-  ], 3000);
+// A mesma consulta serve para o `nvidia-smi` do host e para o que roda dentro
+// da VM, então a leitura do CSV mora aqui e os dois chamadores só põem a chave.
+const CONSULTA_NVIDIA = [
+  '--query-gpu=index,name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,fan.speed',
+  '--format=csv,noheader,nounits'
+];
+
+function analisaNvidiaSmi(out) {
   const saida = [];
-  for (const linha of out.split('\n')) {
+  for (const linha of String(out || '').split('\n')) {
     if (!linha.trim()) continue;
     const p = linha.split(',').map(s => s.trim());
     // Sem driver carregado o `nvidia-smi` escreve a reclamação na SAÍDA PADRÃO
@@ -221,8 +224,7 @@ async function lerGpusNvidia() {
     // índice e traz os oito campos pedidos.
     if (p.length < 8 || !/^\d+$/.test(p[0])) continue;
     saida.push({
-      chave: 'nvidia' + (p[0] || saida.length),
-      marca: 'NVIDIA',
+      indice: p[0],
       nome: limpaNomeGpu(p[1]),
       uso: num(p[2]),
       temp: num(p[3]),
@@ -233,6 +235,11 @@ async function lerGpusNvidia() {
     });
   }
   return saida;
+}
+
+async function lerGpusNvidia() {
+  const lidas = analisaNvidiaSmi(await roda('nvidia-smi', CONSULTA_NVIDIA, 3000));
+  return lidas.map((g, i) => Object.assign({ chave: 'nvidia' + (g.indice || i), marca: 'NVIDIA' }, g));
 }
 
 // AMD não tem um `nvidia-smi`: tudo sai de /sys/class/hwmon e da pasta do
@@ -291,10 +298,123 @@ async function lerGpusAmd() {
   return achadas;
 }
 
+// ------------------------------------------------- GPU presa no vfio (a VM)
+
+// Desde que o passthrough entrou, a 3090 não pertence mais ao host: o vfio a
+// prende antes do driver da NVIDIA, então não existe `nvidia-smi` aqui e o
+// /sys não publica sensor nenhum dela. Quem enxerga a placa é o Windows de
+// dentro da VM, e o caminho até ele é o qemu-guest-agent.
+//
+// A placa aparece no painel dos dois jeitos: com a VM ligada, com os números
+// que o Windows lê; com a VM desligada, só o nome e o aviso de que ela está
+// reservada. Sumir da faixa seria pior — ela continua no gabinete.
+
+const VM_DOMINIO = 'w11';
+const VM_INTERVALO = 5000;
+
+let vmCache = { quando: 0, linhas: [], buscando: false };
+
+// Placas de vídeo que estão no vfio-pci. Classe 0x0300 é "VGA compatible
+// controller"; o link `driver` some quando nenhum módulo assumiu o slot.
+function slotsNoVfio() {
+  const raiz = '/sys/bus/pci/devices';
+  let itens;
+  try { itens = fs.readdirSync(raiz); } catch (e) { return []; }
+
+  const achados = [];
+  for (const id of itens) {
+    if (!leArquivo(path.join(raiz, id, 'class')).trim().startsWith('0x0300')) continue;
+    let driver = '';
+    try { driver = path.basename(fs.realpathSync(path.join(raiz, id, 'driver'))); } catch (e) { continue; }
+    if (driver !== 'vfio-pci') continue;
+    achados.push(id.replace(/^0000:/, ''));
+  }
+  return achados;
+}
+
+// `virsh domstate` responde no idioma da sessão, então "running" não serve de
+// comparação. `list --name --state-running` devolve só nomes.
+async function vmLigada() {
+  const out = await roda('virsh', ['-c', 'qemu:///system', 'list', '--name', '--state-running'], 2000);
+  return out.split('\n').map(l => l.trim()).includes(VM_DOMINIO);
+}
+
+function qga(json, ms) {
+  return roda('virsh', ['-c', 'qemu:///system', 'qemu-agent-command', VM_DOMINIO, JSON.stringify(json)], ms || 3000);
+}
+
+// O guest-exec devolve um pid e sai; a saída só existe depois, no guest-exec-status.
+async function nvidiaSmiNaVm() {
+  const abriu = await qga({
+    execute: 'guest-exec',
+    arguments: {
+      path: 'nvidia-smi',
+      arg: CONSULTA_NVIDIA,
+      'capture-output': true
+    }
+  });
+
+  let pid;
+  try { pid = JSON.parse(abriu).return.pid; } catch (e) { return ''; }
+
+  for (let i = 0; i < 10; i++) {
+    await new Promise(r => setTimeout(r, 300));
+    let r;
+    try { r = JSON.parse(await qga({ execute: 'guest-exec-status', arguments: { pid } })).return; } catch (e) { continue; }
+    if (!r.exited) continue;
+    if (!r['out-data']) return '';
+    return Buffer.from(r['out-data'], 'base64').toString('utf8');
+  }
+  return '';
+}
+
+async function atualizaVm() {
+  if (vmCache.buscando) return;
+  vmCache.buscando = true;
+  try {
+    vmCache.linhas = (await vmLigada()) ? analisaNvidiaSmi(await nvidiaSmiNaVm()) : [];
+  } catch (e) {
+    vmCache.linhas = [];
+  }
+  vmCache.quando = Date.now();
+  vmCache.buscando = false;
+}
+
+// Uma volta no agente custa dois comandos e uma espera: cara demais para o
+// tique de 2 s. O retrato usa o que está em cache e dispara a próxima leitura
+// por fora, sem segurar a resposta.
+async function lerGpusVfio() {
+  const slots = slotsNoVfio();
+  if (!slots.length) return [];
+
+  if (Date.now() - vmCache.quando > VM_INTERVALO) atualizaVm();
+
+  const saida = [];
+  for (let i = 0; i < slots.length; i++) {
+    const slot = slots[i];
+    const daVm = vmCache.linhas[i] || null;
+    // O nome sai do lspci mesmo quando a VM responde: trocar de rótulo no meio
+    // remontaria o anel e mataria a animação dele a cada vez que a VM liga.
+    saida.push({
+      chave: 'vfio' + slot,
+      marca: 'NVIDIA',
+      nome: (await nomePci(slot)) || (daVm && daVm.nome) || 'GPU',
+      naVm: true,
+      uso: daVm ? daVm.uso : null,
+      temp: daVm ? daVm.temp : null,
+      vramUsada: daVm ? daVm.vramUsada : null,
+      vramTotal: daVm ? daVm.vramTotal : null,
+      watts: daVm ? daVm.watts : null,
+      ventoinha: daVm ? daVm.ventoinha : null
+    });
+  }
+  return saida;
+}
+
 // A NVIDIA vem primeiro por ser a placa de trabalho: é o anel que ele procura.
 async function lerGpus() {
-  const [nv, amd] = await Promise.all([lerGpusNvidia(), lerGpusAmd()]);
-  return nv.concat(amd);
+  const [nv, amd, vfio] = await Promise.all([lerGpusNvidia(), lerGpusAmd(), lerGpusVfio()]);
+  return nv.concat(vfio).concat(amd);
 }
 
 // --------------------------------------------------------------- memória
@@ -408,9 +528,11 @@ async function retrato() {
       ghz: lerCpuFreq(),
       temp: temps.cpu
     },
-    // `gpu` continua sendo a primeira placa: o painel antigo e o `get-temps`
-    // leem esse campo. `gpus` é a lista inteira, que o Mirante desenha.
-    gpu: gpus[0] || null,
+    // `gpu` é a primeira placa que tem sensor de verdade: o painel antigo e o
+    // `get-temps` leem esse campo e ficariam em branco toda vez que a VM
+    // estivesse desligada, porque a 3090 no vfio não publica temperatura no
+    // host. `gpus` é a lista inteira, que o Mirante desenha.
+    gpu: gpus.find(g => g && g.temp != null) || gpus[0] || null,
     gpus,
     memoria: lerMemoria(),
     discos: lerDiscos(),
