@@ -474,6 +474,43 @@ const ROTEIRO_RELIGA =
     'return { ok: true, dialogo: true };' +
   '})()';
 
+// Ligar: o botao aparece no MESMO menu, no lugar do desligar, quando o txAdmin
+// ve o servidor parado. O icone e o `play` do lucide, que muda de grafia entre
+// versoes — por isso tres marcas e, como ultima rede, o texto do botao.
+const ROTEIRO_LIGA =
+  '(async () => {' +
+    'const espera = (ms) => new Promise(r => setTimeout(r, ms));' +
+    'const aside = document.querySelector("aside.tx-sidebar");' +
+    'if (!aside) return { ok: false, motivo: "menu do txAdmin não encontrado" };' +
+    'const botoes = Array.from(aside.querySelectorAll("button"));' +
+    'const marcas = ["m5 3 14 9", "M5 3l14 9", "M6 3l14 9", "polygon"];' +
+    'let alvo = botoes.find(b => Array.from(b.querySelectorAll("svg path, svg polygon")).some(e => {' +
+      'const d = String(e.getAttribute("d") || e.getAttribute("points") || "");' +
+      'return marcas.some(m => d.toLowerCase().indexOf(m.toLowerCase()) === 0);' +
+    '}));' +
+    'if (!alvo) alvo = botoes.find(b => {' +
+      'const t = ((b.getAttribute("aria-label") || "") + " " + (b.getAttribute("title") || "") + " " + (b.textContent || "")).toLowerCase();' +
+      'return t.indexOf("start") >= 0 || t.indexOf("ligar") >= 0 || t.indexOf("iniciar") >= 0;' +
+    '});' +
+    'if (!alvo) return { ok: false, motivo: "botão de ligar não encontrado" };' +
+    'alvo.click();' +
+    'await espera(900);' +
+    'const cx = document.querySelector("[role=alertdialog], [role=dialog]");' +
+    'if (!cx) return { ok: true, dialogo: false };' +
+    'const bts = Array.from(cx.querySelectorAll("button"));' +
+    'const rotulo = (b) => (b.textContent || "").trim().toLowerCase();' +
+    'const cancela = (b) => {' +
+      'const t = rotulo(b);' +
+      'return t.indexOf("cancel") >= 0 || t.indexOf("voltar") >= 0 || t.indexOf("fechar") >= 0;' +
+    '};' +
+    'const palavras = ["continue", "continuar", "start", "iniciar", "ligar", "confirm", "proceed", "sim", "yes"];' +
+    'let sim = bts.find(b => !cancela(b) && palavras.some(pl => rotulo(b).indexOf(pl) >= 0));' +
+    'if (!sim) { const sobra = bts.filter(b => !cancela(b) && rotulo(b)); sim = sobra[sobra.length - 1]; }' +
+    'if (!sim) return { ok: false, motivo: "não achei o confirmar do txAdmin" };' +
+    'sim.click();' +
+    'return { ok: true, dialogo: true };' +
+  '})()';
+
 // Desligar e mais grave que reiniciar: o servidor NAO volta sozinho. Por isso
 // aqui o dialogo do txAdmin nao e so conferido — ele e exigido. Sem dialogo, o
 // painel devolve erro em vez de dizer que deu certo.
@@ -520,6 +557,43 @@ const ROTEIRO_DESLIGA =
     'return { ok: true, dialogo: true };' +
   '})()';
 
+// O que o txAdmin diz de cada servidor: true no ar, false parado, null quando
+// nem ele respondeu. Os botões quentes obedecem a isto.
+const estadoLigado = [null, null];
+const ultimoBotoes = ['', ''];
+
+// Servidor parado não tem o que desligar nem reiniciar; servidor no ar não tem
+// o que ligar. Antes os três botões ficavam sempre acesos, e desligar um
+// servidor já parado devolvia erro do txAdmin como se o painel tivesse falhado.
+function aplicaBotoesQuentes(i) {
+  const vivo = caiuEm[i] === null;          // o txAdmin respondeu?
+  const ligado = estadoLigado[i];
+  const acha = (attr) => document.querySelector('[data-' + attr + '="' + i + '"]');
+
+  const liga = acha('liga');
+  const desliga = acha('desliga');
+  const religa = acha('religa');
+
+  // Sem resposta do txAdmin nenhum botão promete nada: quem não sabe o estado
+  // não manda comando.
+  const podeDesligar = vivo && ligado === true;
+  const podeLigar = vivo && ligado === false;
+
+  if (desliga) { desliga.disabled = !podeDesligar; desliga.hidden = podeLigar; }
+  if (religa) religa.disabled = !podeDesligar;
+  if (liga) { liga.hidden = !podeLigar; liga.disabled = !podeLigar; }
+
+  // Uma linha no log a cada mudança: é como se confere de fora que o botão
+  // seguiu o estado do servidor, sem precisar abrir a página.
+  const marca = (vivo ? 'tx-ok' : 'tx-fora') + '/' +
+    (ligado === true ? 'no-ar' : ligado === false ? 'parado' : 'sem-leitura');
+  if (ultimoBotoes[i] !== marca) {
+    ultimoBotoes[i] = marca;
+    window.api.diag('botões ' + (i === 0 ? 'remoto' : 'local') + ': ' + marca +
+      ' → ligar=' + (podeLigar ? 'on' : 'off') + ' desligar=' + (podeDesligar ? 'on' : 'off'));
+  }
+}
+
 async function leEstadoServidor(wv, i) {
   // Terminal caido segura a pagina antiga inteira: ler dali repintaria "No ar"
   // e a contagem de jogadores de minutos atras. A chapa manda enquanto durar.
@@ -529,7 +603,15 @@ async function leEstadoServidor(wv, i) {
   const sv = document.getElementById('sv' + i);
   const caixa = document.getElementById('jogCaixa' + i);
   const jog = document.getElementById('jog' + i);
-  if (!r) { sv.textContent = ''; caixa.style.display = 'none'; return; }
+  if (!r) {
+    sv.textContent = '';
+    caixa.style.display = 'none';
+    estadoLigado[i] = null;
+    aplicaBotoesQuentes(i);
+    return;
+  }
+  estadoLigado[i] = r.ligado;
+  aplicaBotoesQuentes(i);
   sv.textContent = r.ligado === null ? '' : (r.ligado ? 'No ar' : 'Fora');
   sv.className = 'pastilha' + (r.ligado ? ' no-ar' : r.ligado === false ? ' fora' : '');
   caixa.style.display = r.jogadores == null ? 'none' : 'flex';
@@ -980,6 +1062,25 @@ document.getElementById('religaOk').addEventListener('click', async () => {
   setTimeout(() => { est.textContent = ''; }, 10000);
 });
 
+// Ligar não tem rito: subir servidor parado não derruba ninguém. Clique direto.
+document.querySelectorAll('[data-liga]').forEach(b => {
+  b.addEventListener('click', async () => {
+    const i = Number(b.dataset.liga);
+    const est = document.getElementById('est' + i);
+    est.textContent = 'pedindo para ligar';
+    est.classList.remove('ruim');
+    let r = null;
+    try { r = await document.getElementById('wv' + i).executeJavaScript(ROTEIRO_LIGA, false); } catch (e) {}
+    if (!r || !r.ok) {
+      est.textContent = (r && r.motivo) || 'não deu para ligar';
+      est.classList.add('ruim');
+      return;
+    }
+    est.textContent = 'ligando';
+    setTimeout(() => { est.textContent = ''; }, 10000);
+  });
+});
+
 // Desligar tem o mesmo rito do reiniciar, com o aviso a mais de que ninguem
 // sobe o servidor de volta sozinho.
 const desligaModal = document.getElementById('desligaModal');
@@ -1080,6 +1181,9 @@ function marcaCaido(i, motivo) {
   sv.textContent = '';
   sv.className = 'pastilha';
   document.getElementById('jogCaixa' + i).style.display = 'none';
+  // Com o txAdmin fora do ar, nenhum botão quente tem a quem falar.
+  estadoLigado[i] = null;
+  aplicaBotoesQuentes(i);
 }
 
 function marcaDePe(i) {
@@ -1093,6 +1197,7 @@ function marcaDePe(i) {
   if (est.textContent === 'sem resposta') { est.textContent = ''; est.classList.remove('ruim'); }
   // A página que ficou pendurada no servidor morto não reconecta sozinha.
   document.getElementById('wv' + i).reload();
+  aplicaBotoesQuentes(i);
 }
 
 async function bateNoTx(i) {

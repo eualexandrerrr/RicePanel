@@ -295,6 +295,15 @@
     .grupo-quente .botao[data-desliga]:hover { background: rgba(255, 79, 79, 0.14); color: #ffd0d0; }
     .grupo-quente .botao[data-desliga]:active { background: rgba(255, 79, 79, 0.22); }
     /* Reiniciar: âmbar, o do "derruba mas volta". */
+    .grupo-quente .botao[data-liga] { color: #93d69b; }
+    .grupo-quente .botao[data-liga]:hover { background: rgba(120, 220, 140, 0.14); color: #c8f5cf; }
+    /* Botão quente desligado não pode parecer clicável: servidor fora do ar não
+       tem o que desligar nem reiniciar, e botão que aceita clique sem efeito é
+       o que o fazia duvidar do painel. */
+    .grupo-quente .botao[disabled] {
+      opacity: 0.32; cursor: not-allowed; color: var(--overlay1) !important;
+      background: transparent !important;
+    }
     .grupo-quente .botao[data-religa] { color: #e0b264; }
     .grupo-quente .botao[data-religa]:hover { background: rgba(242, 179, 61, 0.14); color: #ffdda1; }
     .grupo-quente .botao[data-religa]:active { background: rgba(242, 179, 61, 0.22); }
@@ -2311,10 +2320,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           </span>
         </span>
         <span class="grupo-quente">
-          <button class="botao acao-quente" data-desliga="0" title="DESLIGAR o servidor (derruba jogador e nao volta sozinho)" aria-label="Desligar o servidor de cima">
+          <button class="botao acao-quente" data-liga="0" title="LIGAR o servidor" aria-label="Ligar o servidor" hidden>
+            <svg viewBox="0 0 16 16"><use href="#ic-power"/></svg><span class="rot">Ligar</span>
+          </button>
+          <button class="botao acao-quente" data-desliga="0" disabled title="DESLIGAR o servidor (derruba jogador e nao volta sozinho)" aria-label="Desligar o servidor de cima">
             <svg viewBox="0 0 16 16"><use href="#ic-power"/></svg><span class="rot">Desligar</span>
           </button>
-          <button class="botao acao-quente" data-religa="0" title="Reiniciar o SERVIDOR (derruba jogador)" aria-label="Reiniciar o servidor de cima">
+          <button class="botao acao-quente" data-religa="0" disabled title="Reiniciar o SERVIDOR (derruba jogador)" aria-label="Reiniciar o servidor de cima">
             <svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg><span class="rot">Reiniciar</span>
           </button>
         </span>
@@ -2355,10 +2367,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           </span>
         </span>
         <span class="grupo-quente">
-          <button class="botao acao-quente" data-desliga="1" title="DESLIGAR o servidor (derruba jogador e nao volta sozinho)" aria-label="Desligar o servidor de baixo">
+          <button class="botao acao-quente" data-liga="1" title="LIGAR o servidor" aria-label="Ligar o servidor" hidden>
+            <svg viewBox="0 0 16 16"><use href="#ic-power"/></svg><span class="rot">Ligar</span>
+          </button>
+          <button class="botao acao-quente" data-desliga="1" disabled title="DESLIGAR o servidor (derruba jogador e nao volta sozinho)" aria-label="Desligar o servidor de baixo">
             <svg viewBox="0 0 16 16"><use href="#ic-power"/></svg><span class="rot">Desligar</span>
           </button>
-          <button class="botao acao-quente" data-religa="1" title="Reiniciar o SERVIDOR (derruba jogador)" aria-label="Reiniciar o servidor de baixo">
+          <button class="botao acao-quente" data-religa="1" disabled title="Reiniciar o SERVIDOR (derruba jogador)" aria-label="Reiniciar o servidor de baixo">
             <svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg><span class="rot">Reiniciar</span>
           </button>
         </span>
