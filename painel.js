@@ -561,6 +561,22 @@ const ROTEIRO_DESLIGA =
 // nem ele respondeu. Os botões quentes obedecem a isto.
 const estadoLigado = [null, null];
 const ultimoBotoes = ['', ''];
+// Só existe receita para subir o servidor DESTA máquina; produção não sobe pelo
+// painel. Se o arquivo não existir no userData, o botão nem aparece com o
+// txAdmin fora.
+let temReceitaLocal = false;
+window.api.servLocalTemReceita().then(v => {
+  temReceitaLocal = !!v;
+  // A resposta chega depois da primeira pintura: sem repintar, o botão de subir
+  // o local só apareceria na próxima mudança de estado.
+  aplicaBotoesQuentes(0);
+  aplicaBotoesQuentes(1);
+}).catch(() => {});
+
+function ehLocal(i) {
+  const s = servidores[i] || {};
+  return /^(localhost|127\.0\.0\.1|::1)$/i.test(String(s.host || ''));
+}
 
 // Servidor parado não tem o que desligar nem reiniciar; servidor no ar não tem
 // o que ligar. Antes os três botões ficavam sempre acesos, e desligar um
@@ -577,11 +593,22 @@ function aplicaBotoesQuentes(i) {
   // Sem resposta do txAdmin nenhum botão promete nada: quem não sabe o estado
   // não manda comando.
   const podeDesligar = vivo && ligado === true;
+  // Duas maneiras de ligar: pela página do txAdmin, quando ele está de pé e o
+  // servidor parado; ou subindo o processo aqui na máquina, quando nem o
+  // txAdmin responde. A segunda só vale para o servidor local.
   const podeLigar = vivo && ligado === false;
+  const podeSubirLocal = !vivo && temReceitaLocal && ehLocal(i);
 
-  if (desliga) { desliga.disabled = !podeDesligar; desliga.hidden = podeLigar; }
+  if (desliga) { desliga.disabled = !podeDesligar; desliga.hidden = podeLigar || podeSubirLocal; }
   if (religa) religa.disabled = !podeDesligar;
-  if (liga) { liga.hidden = !podeLigar; liga.disabled = !podeLigar; }
+  if (liga) {
+    liga.hidden = !(podeLigar || podeSubirLocal);
+    liga.disabled = !(podeLigar || podeSubirLocal);
+    liga.dataset.modo = podeSubirLocal ? 'processo' : 'txadmin';
+    liga.title = podeSubirLocal
+      ? 'Subir o servidor local nesta máquina (txAdmin está fora do ar)'
+      : 'LIGAR o servidor pelo txAdmin';
+  }
 
   // Uma linha no log a cada mudança: é como se confere de fora que o botão
   // seguiu o estado do servidor, sem precisar abrir a página.
@@ -590,7 +617,8 @@ function aplicaBotoesQuentes(i) {
   if (ultimoBotoes[i] !== marca) {
     ultimoBotoes[i] = marca;
     window.api.diag('botões ' + (i === 0 ? 'remoto' : 'local') + ': ' + marca +
-      ' → ligar=' + (podeLigar ? 'on' : 'off') + ' desligar=' + (podeDesligar ? 'on' : 'off'));
+      ' → ligar=' + (podeLigar ? 'txadmin' : podeSubirLocal ? 'processo' : 'off') +
+      ' desligar=' + (podeDesligar ? 'on' : 'off'));
   }
 }
 
@@ -1070,6 +1098,19 @@ document.querySelectorAll('[data-liga]').forEach(b => {
     est.textContent = 'pedindo para ligar';
     est.classList.remove('ruim');
     let r = null;
+    if (b.dataset.modo === 'processo') {
+      // txAdmin fora: sobe o processo aqui e deixa a página reconectar sozinha
+      // no próximo pulso.
+      try { r = await window.api.servLocalSobe(); } catch (e) {}
+      if (r && r.ok) {
+        est.textContent = 'subindo o servidor local';
+        setTimeout(() => { est.textContent = ''; }, 20000);
+        return;
+      }
+      est.textContent = (r && r.error) || 'não deu para subir o servidor';
+      est.classList.add('ruim');
+      return;
+    }
     try { r = await document.getElementById('wv' + i).executeJavaScript(ROTEIRO_LIGA, false); } catch (e) {}
     if (!r || !r.ok) {
       est.textContent = (r && r.motivo) || 'não deu para ligar';

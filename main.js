@@ -862,6 +862,48 @@ ipcMain.on('alerta-console', (e, dados) => {
 
 ipcMain.on('diag', (e, texto) => log('painel: ' + String(texto).slice(0, 200)));
 
+// --- Subir o servidor local -------------------------------------------------
+// Quando o txAdmin local está fora do ar não existe página para clicar: quem
+// precisa subir é o processo do servidor. O comando não mora no repositório —
+// ele descreve a máquina de quem roda, não o projeto — e sim em
+// `servidor-local.json` no userData. Sem o arquivo, o botão nem aparece.
+//
+// Só o LOCAL sobe por aqui. Produção não tem botão de ligar no painel: aquilo
+// é outra máquina, com gente dentro.
+const SERV_LOCAL_FILE = () => path.join(app.getPath('userData'), 'servidor-local.json');
+
+function receitaDoLocal() {
+  try {
+    const r = JSON.parse(fs.readFileSync(SERV_LOCAL_FILE(), 'utf8'));
+    if (!r || !r.cwd || !r.comando) return null;
+    if (!fs.existsSync(r.cwd)) return null;
+    return { cwd: r.cwd, comando: r.comando, args: Array.isArray(r.args) ? r.args : [] };
+  } catch (e) {
+    return null;
+  }
+}
+
+ipcMain.handle('serv-local-tem-receita', async () => !!receitaDoLocal());
+
+ipcMain.handle('serv-local-sobe', async () => {
+  const r = receitaDoLocal();
+  if (!r) return { ok: false, error: 'sem servidor-local.json no userData' };
+  try {
+    const { spawn } = require('child_process');
+    const filho = spawn(r.comando, r.args, {
+      cwd: r.cwd,
+      detached: true,
+      stdio: 'ignore'
+    });
+    filho.unref();
+    log('servidor local: subindo com ' + r.comando + ' (' + r.cwd + ')');
+    return { ok: true };
+  } catch (e) {
+    log('servidor local: falhou ao subir — ' + e.message);
+    return { ok: false, error: e.message };
+  }
+});
+
 // --- Servidores configuráveis ---------------------------------------------
 const SERV_FILE = () => path.join(app.getPath('userData'), 'servidores.json');
 // Sem endereço de verdade no código: quem clona o projeto não tem nada a ver

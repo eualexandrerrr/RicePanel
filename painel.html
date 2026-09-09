@@ -300,6 +300,10 @@
     /* Botão quente desligado não pode parecer clicável: servidor fora do ar não
        tem o que desligar nem reiniciar, e botão que aceita clique sem efeito é
        o que o fazia duvidar do painel. */
+    /* `hidden` num filho de flex não some sozinho: o `display:flex` do próprio
+       botão ganha da regra do atributo. Sem isto o Ligar aparecia apagado ao
+       lado do Desligar em vez de trocar de lugar com ele. */
+    .grupo-quente .botao[hidden] { display: none !important; }
     .grupo-quente .botao[disabled] {
       opacity: 0.32; cursor: not-allowed; color: var(--overlay1) !important;
       background: transparent !important;

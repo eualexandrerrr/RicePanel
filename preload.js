@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('api', {
   // agenda (Google Calendar por iCal)
   musicaComando: (verbo, player) => ipcRenderer.invoke('musica-comando', verbo, player),
 
+  servLocalTemReceita: () => ipcRenderer.invoke('serv-local-tem-receita'),
+  servLocalSobe: () => ipcRenderer.invoke('serv-local-sobe'),
+
   videoGet: () => ipcRenderer.invoke('video-get'),
   videoPausaNavegador: () => ipcRenderer.invoke('video-pausa-navegador'),
   videoTocaNavegador: () => ipcRenderer.invoke('video-toca-navegador'),
