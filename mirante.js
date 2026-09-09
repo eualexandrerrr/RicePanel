@@ -605,7 +605,10 @@
   $('wMusicaAlterna').addEventListener('click', () => mandaMusica('alterna'));
 
   function pintaMusica(m) {
-    if (!m || !m.titulo) { elMusica.hidden = true; if (musicaAnim) musicaAnim.pause(); return; }
+    // Enquanto o painel toca o vídeo daquele navegador, a placa da música cala:
+    // o som que ela anunciaria é o mesmo que já está tocando ali em cima.
+    const ehOVideo = playerDoVideo && m && m.player === playerDoVideo;
+    if (!m || !m.titulo || ehOVideo) { elMusica.hidden = true; if (musicaAnim) musicaAnim.pause(); return; }
     elMusica.hidden = false;
     playerAtual = m.player || '';
 
@@ -685,8 +688,10 @@
   // resultado possível.
   const elVideo = $('wVideo');
   let videoMontado = '';          // id + site do que está na placa agora
+  let volumeAplicado = null;      // último volume mandado para o player
 
   function desmontaVideo() {
+    document.body.classList.remove('com-video');
     if (!videoMontado) return;
     videoMontado = '';
     elVideo.innerHTML = '';
@@ -707,14 +712,28 @@
       '</span>' +
       '<span class="video-pe">' +
         '<span class="video-titulo">' + esc(v.titulo || 'Vídeo') + '</span>' +
+        // A webview tem partição própria: cookie do Chrome dele não vale aqui,
+        // então o YouTube entra deslogado e com anúncio. O botão abre a tela de
+        // login DENTRO desta partição; feito uma vez, o Premium vale e o painel
+        // volta a tocar o vídeo sozinho.
+        '<button class="botao-espelho" id="wVideoLogin">Entrar</button>' +
         '<span class="rotulo video-onde">YouTube</span>' +
       '</span>';
     elVideo.hidden = false;
+    document.body.classList.add('com-video');
 
     // O embed do YouTube recusa página sem origem (erro 153): de `file://` não
     // vai `Referer` nenhum e ele acha que está sendo embutido de lugar
     // proibido. `loadURL` com `httpReferrer` resolve — é o mesmo cabeçalho que
     // o navegador mandaria a partir de uma página do próprio YouTube.
+    const botaoLogin = $('wVideoLogin');
+    if (botaoLogin) {
+      botaoLogin.addEventListener('click', () => {
+        const q = $('wVideoQuadro');
+        if (q) q.src = 'https://accounts.google.com/ServiceLogin?service=youtube';
+      });
+    }
+
     const quadro = $('wVideoQuadro');
     if (!quadro) return;
 
@@ -736,25 +755,32 @@
       '  left: 0 !important; top: 0 !important; object-fit: contain !important; }'
     ].join('\n');
 
-    // `insertCSS` sozinho não segura: o YouTube é uma página que se redesenha
-    // inteira depois do `dom-ready` e leva a folha junto. Um `<style>` cravado
-    // no documento, reposto a cada carga, fica.
+    // `insertCSS` sozinho não segura, e uma injeção só também não: o YouTube
+    // troca a página inteira depois do `dom-ready` (SPA), e o anúncio que roda
+    // antes do vídeo monta outro DOM em cima. Então o que entra na página é um
+    // vigia: repõe o `<style>` e o volume enquanto o vídeo não estabiliza, e se
+    // desliga sozinho depois de um minuto para não ficar rodando à toa.
+    const script =
+      '(function(){' +
+      '  var css=' + JSON.stringify(SO_O_VIDEO) + ';' +
+      '  var vol=' + (v.volume != null ? v.volume.toFixed(3) : 'null') + ';' +
+      '  function poe(){' +
+      '    var e=document.getElementById("ricepanel-so-o-video");' +
+      '    if(!e){ e=document.createElement("style"); e.id="ricepanel-so-o-video";' +
+      '            (document.head||document.documentElement).appendChild(e); }' +
+      '    if(e.textContent!==css) e.textContent=css;' +
+      '    var v=document.querySelector("video");' +
+      '    if(v){ v.muted=false; if(vol!==null) v.volume=vol; if(v.paused) v.play().catch(function(){}); }' +
+      '    var p=document.getElementById("movie_player");' +
+      '    if(p&&p.setPlaybackQualityRange){ try{p.setPlaybackQualityRange("hd720","hd720");}catch(err){} }' +
+      '  }' +
+      '  poe();' +
+      '  if(window.__ricepanelVigia) clearInterval(window.__ricepanelVigia);' +
+      '  window.__ricepanelVigia=setInterval(poe,1000);' +
+      '  setTimeout(function(){ clearInterval(window.__ricepanelVigia); }, 60000);' +
+      '  return true;})()';
+
     const injeta = () => {
-      const script =
-        '(function(){' +
-        '  var id="ricepanel-so-o-video";' +
-        '  var e=document.getElementById(id);' +
-        '  if(!e){ e=document.createElement("style"); e.id=id;' +
-        '          document.documentElement.appendChild(e); }' +
-        '  e.textContent=' + JSON.stringify(SO_O_VIDEO) + ';' +
-        '  var v=document.querySelector("video");' +
-        '  if(v){ v.muted=false; v.play().catch(function(){}); }' +
-        // 720p de propósito: o painel desenha por software (ver main.js), e
-        // 1080p decodificado no processador é exatamente o engasgo que ele viu.
-        // Numa placa de 620px de largura, 720p e 1080p têm a mesma cara.
-        '  var p=document.getElementById("movie_player");' +
-        '  if(p&&p.setPlaybackQualityRange){ try{p.setPlaybackQualityRange("hd720","hd720");}catch(e){} }' +
-        '  return true;})()';
       try { quadro.executeJavaScript(script); } catch (e) {}
     };
 
@@ -763,11 +789,6 @@
       injeta();
     }, { once: true });
     quadro.addEventListener('did-finish-load', injeta);
-    // O player só assume a página inteira depois que o YouTube termina de
-    // montar; três repescagens curtas cobrem isso sem ficar rodando para sempre.
-    quadro.addEventListener('dom-ready', () => {
-      [800, 2500, 6000].forEach(ms => setTimeout(injeta, ms));
-    }, { once: true });
 
     quadro.src = src;
   }
@@ -778,6 +799,10 @@
   // continua sendo o Chrome dele, com DRM e com o Premium que ele paga. O
   // preço é o diálogo do portal do Hyprland, uma vez por sessão.
   let espelho = null;              // MediaStream de pé
+  // Quem toca o vídeo que a placa assumiu. A placa da música lê o mesmo MPRIS e
+  // mostraria o vídeo do navegador como se fosse faixa — duas placas contando a
+  // mesma coisa, uma delas errada.
+  let playerDoVideo = '';
 
   function paraEspelho() {
     if (!espelho) return;
@@ -828,11 +853,26 @@
         '<span class="rotulo video-onde">Espelho</span>' +
       '</span>';
     elVideo.hidden = false;
+    document.body.classList.add('com-video');
     const botao = document.getElementById('wEspelhoBotao');
     if (botao) botao.addEventListener('click', ligaEspelho);
   }
 
+  // O volume vem do fluxo do navegador (PipeWire): o painel toca o mesmo vídeo,
+  // então toca no mesmo volume que ele deixou na aba.
+  function aplicaVolume(v) {
+    const quadro = $('wVideoQuadro');
+    if (!quadro || !v || v.volume == null) return;
+    if (volumeAplicado != null && Math.abs(volumeAplicado - v.volume) < 0.02) return;
+    volumeAplicado = v.volume;
+    try {
+      quadro.executeJavaScript(
+        'var a=document.querySelector("video"); if(a){a.volume=' + v.volume.toFixed(3) + ';} true;');
+    } catch (e) {}
+  }
+
   function pintaVideo(v) {
+    playerDoVideo = (v && v.site && !v.janelaVisivel) ? (v.player || '') : '';
     if (!v || !v.site || v.janelaVisivel) {
       // Ele voltou para a janela: o painel devolve o vídeo e sai da frente.
       if (videoMontado && /^youtube/.test(videoMontado)) window.api.videoTocaNavegador().catch(() => {});
@@ -842,7 +882,8 @@
     }
 
     const assinatura = v.site + ':' + v.id;
-    if (assinatura === videoMontado) return;
+    if (assinatura === videoMontado) { aplicaVolume(v); return; }
+    volumeAplicado = null;
 
     if (v.site === 'youtube') {
       montaYoutube(v);

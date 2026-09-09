@@ -463,8 +463,23 @@
       padding: 10px 12px 12px;
       overflow: visible;
     }
-    body.em-mirante .tapete > * { width: min(100%, 620px); }
-    .m-tempo { display: flex; flex-direction: column; min-height: 0; }
+    /* 760 e não 620 (09/09/2026): a coluna cresceu de conteúdo — térmica com
+       quatro peças, agenda, jogo, vídeo — e o monitor tem 1080 de largura
+       sobrando dos dois lados. Mais largura aqui é menos altura lá embaixo, que
+       é o que estava estourando a tela. */
+    body.em-mirante .tapete > * { width: min(100%, 760px); }
+    /* Mês e agenda lado a lado: empilhados, os dois somavam mais de 500px de
+       altura para usar metade da largura da placa. A pergunta é a mesma ("que
+       dia, e o quê"), e agora a resposta cabe numa linha do olho. */
+    .m-tempo {
+      display: grid; grid-template-columns: minmax(0, 320px) 1px minmax(0, 1fr);
+      align-items: start; min-height: 0;
+    }
+    .t-lado { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .m-tempo .m-divisa-vertical {
+      width: 1px; align-self: stretch; margin: 10px 0;
+      background: rgba(205, 214, 244, 0.10);
+    }
 
     /* --- bruma: o ambiente da página ---
        Centralizar a coluna criou duas faixas grandes de papel de parede, uma em
@@ -829,9 +844,11 @@
     /* Medidor compacto: rótulo e valor na mesma linha, trilho curto logo
        abaixo. O fio atravessando a placa inteira, com o valor na outra ponta,
        era o desenho que mais incomodava. */
+    /* Três colunas desde que a coluna passou para 760px: CPU, RAM, Root, Home e
+       o swap quando aparece cabem em duas linhas em vez de três. */
     .medidores {
-      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 9px 20px;
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px 18px;
       padding: 10px 14px 6px;
     }
     .med { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -1467,10 +1484,17 @@
        por dentro: o quadro do vídeo JÁ é um retângulo, e vidro em volta de
        vidro só some com o conteúdo. */
     .m-video { padding: 0; overflow: hidden; }
+    /* Teto de altura: em 16/9 numa coluna de 760px o quadro pediria 427px, e
+       com a coluna já cheia isso empurrava o rodapé para fora da tela. O vídeo
+       cede antes do resto — ele é o convidado. */
     .video-quadro {
       position: relative; width: 100%; aspect-ratio: 16 / 9;
+      max-height: 28vh; margin: 0 auto;
       background: #000; display: block;
     }
+    /* Com vídeo na tela, o que é lembrete some: a contagem do GTA e a ficha da
+       máquina voltam quando o vídeo sai. */
+    body.com-video .m-lancamento, body.com-video .m-maquina { display: none; }
     .video-quadro webview, .video-quadro iframe {
       position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
     }
@@ -1478,6 +1502,7 @@
       display: flex; align-items: center; gap: 10px;
       padding: 9px 14px 11px;
     }
+    .video-pe .botao-espelho { margin: 0; padding: 5px 12px; font-size: 12px; }
     .video-titulo {
       font-size: 13.5px; color: var(--text); min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -2163,25 +2188,29 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
       <!-- 2 · mês e agenda: a mesma pergunta, uma placa só -->
       <div class="placa m-tempo">
-        <header>
-          <span class="rotulo" id="wMesNome">—</span>
-          <span class="acoes">
-            <button class="botao" id="wMesHoje" title="Voltar para o mês de hoje"><span class="rot">Hoje</span></button>
-            <button class="botao" id="wMesAnt" title="Mês anterior" aria-label="Mês anterior"><span class="rot">‹</span></button>
-            <button class="botao" id="wMesProx" title="Próximo mês" aria-label="Próximo mês"><span class="rot">›</span></button>
-          </span>
-        </header>
-        <div class="mes-grade" id="wMesGrade"></div>
-        <div class="m-divisa"></div>
-        <header>
-          <span class="rotulo">Agenda</span>
-          <span class="rotulo" id="wAgendaQuando"></span>
-          <span class="acoes">
-            <button class="botao" id="wAgendaConf" title="Configurar o calendário" aria-label="Configurar o calendário"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
-            <button class="botao" id="wAgendaRefresh" title="Buscar agora" aria-label="Buscar a agenda agora"><svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg></button>
-          </span>
-        </header>
-        <div class="agenda-lista" id="wAgendaLista"></div>
+        <div class="t-lado">
+          <header>
+            <span class="rotulo" id="wMesNome">—</span>
+            <span class="acoes">
+              <button class="botao" id="wMesHoje" title="Voltar para o mês de hoje"><span class="rot">Hoje</span></button>
+              <button class="botao" id="wMesAnt" title="Mês anterior" aria-label="Mês anterior"><span class="rot">‹</span></button>
+              <button class="botao" id="wMesProx" title="Próximo mês" aria-label="Próximo mês"><span class="rot">›</span></button>
+            </span>
+          </header>
+          <div class="mes-grade" id="wMesGrade"></div>
+        </div>
+        <div class="m-divisa-vertical"></div>
+        <div class="t-lado">
+          <header>
+            <span class="rotulo">Agenda</span>
+            <span class="rotulo" id="wAgendaQuando"></span>
+            <span class="acoes">
+              <button class="botao" id="wAgendaConf" title="Configurar o calendário" aria-label="Configurar o calendário"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
+              <button class="botao" id="wAgendaRefresh" title="Buscar agora" aria-label="Buscar a agenda agora"><svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg></button>
+            </span>
+          </header>
+          <div class="agenda-lista" id="wAgendaLista"></div>
+        </div>
       </div>
 
       <!-- 3 · vitais da máquina: térmica em cima, carga embaixo -->

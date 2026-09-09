@@ -215,6 +215,11 @@ async function lerGpusNvidia() {
   for (const linha of out.split('\n')) {
     if (!linha.trim()) continue;
     const p = linha.split(',').map(s => s.trim());
+    // Sem driver carregado o `nvidia-smi` escreve a reclamação na SAÍDA PADRÃO
+    // e sai com código 9 — a linha de erro chegava aqui e virava uma placa de
+    // vídeo sem nome, com um anel vazio no painel. Linha boa começa com o
+    // índice e traz os oito campos pedidos.
+    if (p.length < 8 || !/^\d+$/.test(p[0])) continue;
     saida.push({
       chave: 'nvidia' + (p[0] || saida.length),
       marca: 'NVIDIA',

@@ -38,8 +38,13 @@ let estado = {
   duracao: null,
   tocando: false,
   janelaVisivel: true,           // a aba está à vista dele agora?
-  player: ''
+  player: '',
+  volume: null                   // 0..1, copiado do fluxo do navegador
 };
+// O último volume visto vale enquanto o navegador está mudo: ao pausar a aba o
+// fluxo some do PipeWire e a leitura viraria `null` bem na hora em que o painel
+// precisa dela.
+let ultimoVolume = null;
 let timer = null;
 
 function log(msg) {
@@ -196,6 +201,27 @@ function idDaUrlYoutube(url) {
   return m ? m[1] : '';
 }
 
+// ------------------------------------------------------ volume do navegador
+
+// O painel toca o mesmo vídeo que estava no Chrome, então tem de tocar no
+// mesmo volume: se ele deixou a aba em 30%, ouvir 100% na parede é susto. O
+// PipeWire guarda o volume por fluxo, e `pactl list sink-inputs` é onde ele
+// aparece. Sem áudio tocando não existe fluxo — nesse caso não há o que copiar
+// e o player fica com o volume que já tinha.
+async function volumeDoNavegador() {
+  const bruto = await roda('pactl', ['list', 'sink-inputs'], 2500);
+  if (!bruto) return null;
+  for (const bloco of bruto.split(/Sink Input #/).slice(1)) {
+    if (!/chrome|chromium|brave|vivaldi|firefox/i.test(bloco)) continue;
+    const m = bloco.match(/Volume:[^\n]*?(\d+)%/);
+    if (!m) continue;
+    const pct = Number(m[1]);
+    if (!Number.isFinite(pct)) continue;
+    return Math.max(0, Math.min(1, pct / 100));
+  }
+  return null;
+}
+
 // ------------------------------------------------- a aba está à vista dele?
 
 // Só faz sentido puxar o vídeo para a parede quando a janela do navegador não
@@ -227,7 +253,7 @@ async function janelaVisivel(titulo) {
 
 function limpa() {
   estado = { site: '', id: '', titulo: '', posicao: null, duracao: null,
-    tocando: false, janelaVisivel: true, player: '' };
+    tocando: false, janelaVisivel: true, player: '', volume: ultimoVolume };
 }
 
 // Atalho de desenvolvimento: `RICEPANEL_VIDEO_FAKE=drm` (ou `youtube:<id>`)
@@ -264,6 +290,9 @@ async function olha() {
       const drm = !id && !!(await urlDoTitulo(m.titulo, '%globoplay%'));
       if (!id && !drm) continue;
 
+      const vol = await volumeDoNavegador();
+      if (vol != null) ultimoVolume = vol;
+
       const antes = estado.id || estado.titulo;
       estado = {
         site: id ? 'youtube' : 'drm',
@@ -273,7 +302,8 @@ async function olha() {
         duracao: m.duracao,
         tocando: m.tocando,
         janelaVisivel: await janelaVisivel(m.titulo),
-        player: p
+        player: p,
+        volume: ultimoVolume
       };
       if (antes !== (id || m.titulo)) {
         log('achou ' + estado.site + ': ' + m.titulo + (id ? ' (' + id + ')' : ''));
@@ -304,6 +334,7 @@ async function tocaNavegador() {
 
 function iniciar(d) {
   deps = d;
+  log('vigiando o navegador a cada ' + (INTERVALO_MS / 1000) + ' s');
   const passo = async () => {
     await olha();
     timer = setTimeout(passo, INTERVALO_MS);
