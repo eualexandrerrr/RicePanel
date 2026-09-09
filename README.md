@@ -1,90 +1,111 @@
+[Português](README.pt-BR.md)
+
 # RicePanel
 
-Um painel de parede para o segundo monitor — o vertical, aquele que fica ligado
-o dia todo e que ninguém usa para trabalhar. Ele responde de longe às perguntas
-que a gente faz de relance: que horas são, o que tem hoje, a máquina está quente,
-o servidor caiu, o que está tocando, quando é o próximo jogo.
+A wall panel for the second monitor — the vertical one, the one that stays on
+all day and that nobody uses for work. It answers from across the room the
+questions you ask at a glance: what time is it, what is on today, is the machine
+hot, is the server down, what is playing, when is the next match.
 
-Electron sobre Arch Linux e Hyprland. Sem framework de interface, sem build
-step: é HTML, CSS e JavaScript lidos direto do disco.
+Electron on Arch Linux and Hyprland. No interface framework, no build step: it
+is HTML, CSS and JavaScript read straight from disk.
 
-## As duas páginas
+## The two pages
 
-**Mirante** — a página que fica aberta. Relógio grande, calendário do mês com os
-dias marcados, agenda do Google, térmica da máquina (um anel por peça, com foto
-real da peça), medidores de CPU, RAM e discos, rede, o que está tocando no
-Spotify com controles, o próximo jogo do Flamengo e a contagem para o GTA VI.
+**Mirante** — the page that stays open. Big clock, month calendar with the days
+marked, Google Calendar agenda, machine thermals (one ring per part, with a real
+photo of the part), CPU, RAM and disk gauges, network, what is playing on
+Spotify with controls, the next Flamengo match and the countdown to GTA VI.
 
-**Estação** — a página de trabalho. Dois consoles do txAdmin lado a lado
-(remoto e local), com detector de erro que avisa por notificação; uma coluna de
-projetos Expo com emulador Android; e um monitor de cotas, Sentry e anotações
-do Discord.
+**Estação** — the work page. Two txAdmin consoles side by side (remote and
+local), with an error detector that warns by notification; a column of Expo
+projects with the Android emulator; and a monitor for quota, Sentry and Discord
+notes.
 
-## Como as leituras são feitas
+## How the readings are taken
 
-Tudo local, sem serviço extra rodando:
+Everything local, with no extra service running:
 
-| Leitura | De onde vem |
+| Reading | Where it comes from |
 |---|---|
-| CPU, memória, discos, rede, uptime | `/proc`, `/sys`, `statfs` do próprio Node |
-| Temperatura de CPU e SSD | `/sys/class/hwmon` (k10temp, coretemp, nvme) |
-| Placa de vídeo NVIDIA | `nvidia-smi --query-gpu` |
-| Placa de vídeo AMD | `/sys/class/hwmon` do `amdgpu` + a pasta PCI do dispositivo |
-| Workspaces e janela em foco | `hyprctl -j` |
-| O que está tocando | `playerctl` (MPRIS) |
-| Atualizações pendentes | `checkupdates` (repo) e `paru -Qua` (AUR) |
-| Agenda | endereço secreto do Google Calendar em formato iCal |
-| Próximo jogo | API pública de placar do ESPN |
+| CPU, memory, disks, network, uptime | `/proc`, `/sys`, Node's own `statfs` |
+| CPU and SSD temperature | `/sys/class/hwmon` (k10temp, coretemp, nvme) |
+| NVIDIA graphics card | `nvidia-smi --query-gpu` |
+| AMD graphics card | `/sys/class/hwmon` of `amdgpu` + the device's PCI directory |
+| Workspaces and focused window | `hyprctl -j` |
+| What is playing | `playerctl` (MPRIS) |
+| Pending updates | `checkupdates` (repo) and `paru -Qua` (AUR) |
+| Agenda | Google Calendar secret address in iCal format |
+| Next match | ESPN public scoreboard API |
 
-Nada disso pede sudo, e nada consulta um serviço que precise ficar de pé.
+None of it asks for sudo, and none of it queries a service that has to stay up.
 
-## Decisões que valem explicação
+## Decisions worth explaining
 
-**O blur não é do CSS.** As placas parecem vidro fosco sobre o papel de parede,
-mas `backdrop-filter` não enxerga o compositor do Wayland: por baixo da janela
-não existe nada para desfocar. Então o `vidro.js` gera com ffmpeg uma cópia
-borrada do wallpaper e serve como `background-attachment: fixed` — o recorte
-acompanha a placa e o efeito fecha.
+**The blur is not CSS.** The cards look like frosted glass over the wallpaper,
+but `backdrop-filter` cannot see the Wayland compositor: underneath the window
+there is nothing to blur. So `vidro.js` uses ffmpeg to generate a blurred copy
+of the wallpaper and serves it as `background-attachment: fixed` — the crop
+follows the card and the effect closes.
 
-**A agenda é iCal, não OAuth.** O painel fica sozinho num monitor. Um refresh
-token que expira quando a senha muda deixaria a agenda muda esperando alguém
-que não está na frente da máquina. O endereço secreto é uma URL de leitura que
-só o dono revoga.
+**The agenda is iCal, not OAuth.** The panel sits alone on a monitor. A refresh
+token that expires when the password changes would leave the agenda mute,
+waiting for somebody who is not in front of the machine. The secret address is
+a read-only URL that only the owner can revoke.
 
-**A escala é de parede, não de mesa.** O piso do texto é 11,5px em `subtext0` —
-não 10px em cinza médio. Ele lê isso a dois metros de distância, do outro
-monitor, sobre um papel de parede de ilustração saturada. Rótulo que some leva
-junto o número que ele nomeia.
+**The scale is wall scale, not desk scale.** The text floor is 11.5px in
+`subtext0` — not 10px in mid grey. He reads this from two metres away, from the
+other monitor, over a saturated illustrated wallpaper. A label that disappears
+takes with it the number it names.
 
-**Um anel por peça, montado a partir do retrato.** Quantas placas de vídeo a
-máquina tem é dela, não do HTML. A foto real ao lado do anel é o que se
-reconhece de longe — de dois metros ninguém lê "RTX 3090", mas todo mundo
-reconhece um cooler de três hélices.
+**One ring per part, built from the portrait.** How many graphics cards the
+machine has is the machine's business, not the HTML's. The real photo next to
+the ring is what you recognise from a distance — from two metres nobody reads
+"RTX 3090", but everybody recognises a three-fan cooler.
 
-## Rodando
+**GPU acceleration is off by default, and that is measured, not belief.** On
+this machine (two cards, Wayland, transparent window) every accelerated
+combination ended in a window that paints nothing: with `use-angle=vulkan` the
+gpu-process dies in a loop and takes the compositor with it; with
+`use-angle=gl`, with or without `render-node-override` on the Radeon,
+`eglCreateImage` fails with `EGL_BAD_MATCH`, the GPU child is killed and the
+panel becomes an invisible rectangle over the wallpaper — the app stays alive,
+log and all, and the screen is empty. So: software rendering by default, which
+is the only state in which the page shows up, and the video stutter is solved
+from the other side, by capping the player quality at 720p. `RICEPANEL_COM_GPU=1`
+turns the accelerated version back on for anyone who wants to try again.
+
+**The app_id given to Hyprland is lowercase.** Electron would announce the
+`productName` ("RicePanel"), and the window rule in `hypr/.config/hypr/regras.lua`
+matches `class = "ricepanel"` — the match is case sensitive. So the app yields:
+`--class=ricepanel`, and the compositor stays the owner of the placement, which
+in Wayland is where that decision belongs.
+
+## Running
 
 ```bash
 npm install
-npm start          # ou ./reiniciar.sh, que derruba o que estiver de pé
+npm start          # or ./reiniciar.sh, which kills whatever is already up
 ```
 
-Precisa de: Electron 33, `playerctl`, `hyprctl` (opcional), `nvidia-smi` ou
-`amdgpu` (opcional), `checkupdates` do `pacman-contrib`, `paru` (opcional) e
-`ffmpeg` para o vidro.
+Needs: Electron 33, `playerctl`, `hyprctl` (optional), `nvidia-smi` or `amdgpu`
+(optional), `checkupdates` from `pacman-contrib`, `paru` (optional), `ffmpeg`
+for the glass and `awww` (the wallpaper daemon it queries for the current
+wallpaper).
 
-Nada de configuração fica no repositório. O que é seu mora em
+No configuration lives in the repository. What is yours lives in
 `~/.config/RicePanel/`:
 
-| Arquivo | O quê |
+| File | What |
 |---|---|
-| `servidores.json` | host e porta dos dois consoles do txAdmin |
-| `discord-notas.json` | guild, canal e caminho do `config.json` do txAdmin |
-| `agenda-url.txt` ou `agenda-url.bin` | endereço secreto do iCal, cifrado quando há keyring |
+| `servidores.json` | host and port of the two txAdmin consoles |
+| `discord-notas.json` | guild, channel and path to txAdmin's `config.json` |
+| `agenda-url.txt` or `agenda-url.bin` | the iCal secret address, encrypted when there is a keyring |
 
-Sem esses arquivos o painel sobe igual, com os módulos correspondentes
-desligados — nenhum deles é obrigatório.
+Without those files the panel comes up all the same, with the matching modules
+turned off — none of them is mandatory.
 
-## Licença
+## License
 
-Código sob MIT. As fotos em `fotos/` e as fontes em `fontes/` têm licença
-própria, creditada em `fotos/CREDITOS.md` e no `LICENSE`.
+Code under MIT. The photos in `fotos/` and the fonts in `fontes/` have their own
+licences, credited in `fotos/CREDITOS.md` and in `LICENSE`.
