@@ -41,6 +41,37 @@ function arqCache() {
   return path.join(deps.app.getPath('userData'), 'flamengo-cache.json');
 }
 
+// Os escudos vinham direto do servidor do ESPN a cada pintura. No boot da
+// máquina o painel sobe antes da rede: as duas imagens falhavam, o Chromium
+// marcava como quebradas e ninguém pedia de novo — ficavam os dois quadradinhos
+// rasgados até alguém reiniciar o app. Agora a imagem é baixada uma vez e vive
+// no disco, junto do cache do jogo. Sem rede, o escudo de ontem serve.
+function pastaEscudos() {
+  const p = path.join(deps.app.getPath('userData'), 'escudos');
+  try { fs.mkdirSync(p, { recursive: true }); } catch (e) {}
+  return p;
+}
+
+async function guardaEscudo(url, idTime) {
+  if (!url || !idTime) return '';
+  const ext = (String(url).match(/\.(png|jpg|jpeg|webp|svg)(\?|$)/i) || [])[1] || 'png';
+  const destino = path.join(pastaEscudos(), String(idTime) + '.' + ext.toLowerCase());
+  try {
+    // Um escudo não muda: se já está no disco, acabou.
+    if (fs.statSync(destino).size > 0) return destino;
+  } catch (e) {}
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(PRAZO_MS) : undefined });
+    if (!r.ok) return '';
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length) return '';
+    fs.writeFileSync(destino, buf);
+    return destino;
+  } catch (e) {
+    return '';
+  }
+}
+
 function leCache() {
   try {
     const c = JSON.parse(fs.readFileSync(arqCache(), 'utf8'));
@@ -147,6 +178,12 @@ async function busca() {
       return;
     }
     const escolhido = escolhe(jogos);
+    if (escolhido) {
+      for (const lado of ['casa', 'fora']) {
+        const t = escolhido[lado];
+        t.escudoLocal = await guardaEscudo(t.escudo, t.id);
+      }
+    }
     estado = { jogo: escolhido, erro: null, atualizadoEm: new Date().toISOString() };
     gravaCache();
     log(escolhido

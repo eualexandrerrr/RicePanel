@@ -21,9 +21,25 @@ const video = require('./video');
 const dev = require('./dev');
 const vidro = require('./vidro');
 
-// Sem aceleração de GPU: o painel é chapa e texto, e o Chromium com GPU no
-// Wayland acorda a placa à toa em janela que nunca anima em tela cheia.
-app.disableHardwareAcceleration();
+// A aceleração de GPU voltou (08/09/2026). Ela tinha sido desligada quando o
+// painel era só chapa e texto — sem nada animando, o Chromium acordava a placa
+// à toa. Só que agora o Mirante toca VÍDEO: sem GPU o Chromium cai no
+// SwiftShader e decodifica 1080p no processador, que é exatamente o
+// engasgo que ele viu. Vídeo travando é pior que placa acordada.
+//
+// VAAPI ligada junto: a máquina tem `libva-nvidia-driver` e a Radeon com mesa,
+// então o decode sai do processador de vez.
+app.commandLine.appendSwitch('enable-features',
+  'VaapiVideoDecodeLinuxGL,VaapiVideoDecoder,AcceleratedVideoDecodeLinuxGL,CanvasOopRasterization');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-zero-copy');
+// Sem dizer o backend, o Electron cai no ANGLE/SwiftShader (GL por software) —
+// foi assim que o vídeo engasgou. `angle` + `gl` usa o driver de verdade.
+//
+// `vulkan` aqui NÃO: nesta RX 550 (Polaris) ele derruba o gpu-process em loop, joga o
+// Chromium inteiro em software e leva o Hyprland junto — SIGABRT em CHyprOpenGLImpl::begin
+// depois de eglDupNativeFenceFDANDROID falhar. Medido nos dois apps, em 08/09/2026.
+app.commandLine.appendSwitch('use-angle', 'gl');
 app.setAppUserModelId('com.alexandre.mirante');
 
 // O app_id que o Hyprland vê. Sem isto o Electron anuncia o `productName`

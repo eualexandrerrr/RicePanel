@@ -824,9 +824,17 @@
     return fmtDiaJogo.format(d) + ', ' + hora;
   }
 
+  // O arquivo local vem primeiro: no boot da máquina o painel sobe antes da
+  // rede, e a imagem remota falharia sem nunca ser pedida de novo. O endereço
+  // do ESPN fica de reserva, para o dia em que o disco não tiver o escudo.
   function escudo(t) {
-    if (!t.escudo) return '<span class="jogo-versus">' + esc(t.sigla || '?') + '</span>';
-    return '<img src="' + esc(t.escudo) + '" alt="" aria-hidden="true">';
+    const local = t.escudoLocal ? 'file://' + t.escudoLocal : '';
+    const fonte = local || t.escudo;
+    if (!fonte) return '<span class="jogo-versus">' + esc(t.sigla || '?') + '</span>';
+    const reserva = local && t.escudo
+      ? ' onerror="this.onerror=null;this.src=\'' + esc(t.escudo) + '\'"'
+      : '';
+    return '<img src="' + esc(fonte) + '" alt="" aria-hidden="true"' + reserva + '>';
   }
 
   function pintaJogo(d) {
