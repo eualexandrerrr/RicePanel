@@ -1089,14 +1089,55 @@ ipcMain.on('close-app', () => {
 
 app.on('before-quit', () => log('before-quit: app encerrando'));
 app.on('will-quit', () => log('will-quit: app vai sair'));
-app.on('quit', (e, code) => log(`quit: codigo ${code}`));
+app.on('quit', (e, code) => {
+  log(`quit: codigo ${code}`);
+  setTimeout(() => process.exit(code || 0), 500).unref();
+});
 app.on('child-process-gone', (e, d) => log(`child-process-gone: type=${d.type} reason=${d.reason}`));
 
 for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
-  try { process.on(sig, () => { log(`sinal ${sig} recebido: terminacao externa`); app.quit(); }); } catch (e) {}
+  try {
+    process.on(sig, () => {
+      log(`sinal ${sig} recebido: terminacao externa`);
+      try { app.quit(); } catch (e) {}
+      setTimeout(() => { try { app.exit(0); } catch (e) {} process.exit(0); }, 1500).unref();
+    });
+  } catch (e) {}
 }
 process.on('uncaughtException', (err) => log(`uncaughtException: ${err && err.stack || err}`));
 process.on('unhandledRejection', (r) => log(`unhandledRejection: ${r}`));
+
+// --- Copiar e colar dentro da janela ---------------------------------------
+//
+// Janela sem moldura no Linux não ganha barra de menu, e é a barra de menu que
+// registra os aceleradores de edição do Electron. Sem ela, Ctrl+C, Ctrl+V,
+// Ctrl+X e Ctrl+A morrem em toda a janela — inclusive dentro dos <webview> dos
+// consoles, onde o campo de comando do txAdmin fica.
+//
+// Repor pelo menu não resolve: sem moldura a barra não existe para desenhar.
+// Então o atalho é atendido aqui, antes de a página ver a tecla. O
+// preventDefault evita colar duas vezes se um dia o Chromium passar a tratar
+// isso sozinho.
+const EDICAO = {
+  c: (wc) => wc.copy(),
+  v: (wc) => wc.paste(),
+  x: (wc) => wc.cut(),
+  a: (wc) => wc.selectAll()
+};
+
+function ligaEdicao(wc) {
+  wc.on('before-input-event', (evento, entrada) => {
+    if (entrada.type !== 'keyDown') return;
+    if (!entrada.control || entrada.alt || entrada.meta || entrada.shift) return;
+    const acao = EDICAO[String(entrada.key || '').toLowerCase()];
+    if (!acao) return;
+    evento.preventDefault();
+    try { acao(wc); } catch (e) {}
+  });
+}
+
+// Vale para a janela e para cada <webview> que nascer dentro dela.
+app.on('web-contents-created', (e, wc) => ligaEdicao(wc));
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
