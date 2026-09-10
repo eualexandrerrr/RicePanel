@@ -91,7 +91,33 @@
   // nunca um dado.
   const animacoes = [];
 
-  function poeLottie(elId, arquivo, opcoes) {
+  // O lottie-web avança por requestAnimationFrame, então sem freio ele reamostra
+  // e reescreve o SVG na taxa do MONITOR (144 Hz no vertical), não nos 30 fps do
+  // JSON. Em cima disso a bruma e a aurora ainda carregam um `filter: blur` de
+  // CSS, que o Chromium recalcula a cada troca de conteúdo -- é essa combinação
+  // que media 33% de GPU sozinha, medido em 10/09/2026. `goToAndStop` desenha um
+  // quadro só quando mandado, então tocar a animação por um intervalo próprio
+  // troca RAF por um relógio de taxa fixa, do mesmo jeito que o lote de 32 ms
+  // do terminal do RCode trocou escrita por chunk por escrita agendada.
+  function comTaxaLimitada(anim, fpsAlvo) {
+    const passoMs = 1000 / fpsAlvo;
+    let relogio = null;
+    let quadro = 0;
+    function avanca() {
+      const total = anim.totalFrames;
+      const taxaOriginal = anim.frameRate;
+      if (!total || !taxaOriginal) return; // JSON ainda carregando
+      quadro = (quadro + taxaOriginal / fpsAlvo) % total;
+      try { anim.goToAndStop(quadro, true); } catch (e) {}
+    }
+    return {
+      play() { if (!relogio) relogio = setInterval(avanca, passoMs); },
+      pause() { clearInterval(relogio); relogio = null; },
+      destroy() { clearInterval(relogio); relogio = null; try { anim.destroy(); } catch (e) {} }
+    };
+  }
+
+  function poeLottie(elId, arquivo, opcoes, fpsAlvo) {
     const el = $(elId);
     if (!el || typeof window.lottie === 'undefined') return null;
     try {
@@ -102,8 +128,9 @@
         autoplay: false,
         path: 'lottie/' + arquivo
       }, opcoes || {}));
-      animacoes.push(a);
-      return a;
+      const controlada = fpsAlvo ? comTaxaLimitada(a, fpsAlvo) : a;
+      animacoes.push(controlada);
+      return controlada;
     } catch (e) {
       return null;
     }
@@ -1067,9 +1094,13 @@
   // Primeira pintura sem esperar tique nenhum.
   pintaRelogio(true);
   pintaMes();
-  poeLottie('brumaMirante', 'bruma.json', { rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } });
-  poeLottie('auroraHora', 'aurora.json', { rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } });
-  musicaAnim = poeLottie('wOndas', 'ondas.json');
+  // 12 fps: a deriva das massas de cor num loop de 30-60s não perde nada visível
+  // amostrada mais devagar, e é a reamostragem, não o desenho, que custava GPU.
+  poeLottie('brumaMirante', 'bruma.json', { rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } }, 12);
+  poeLottie('auroraHora', 'aurora.json', { rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } }, 12);
+  // O equalizador é rápido e pequeno (120x60, sem blur): fica em 20 fps, mais
+  // perto do "musical" que a bruma e a aurora precisam.
+  musicaAnim = poeLottie('wOndas', 'ondas.json', {}, 20);
   buscaAgenda(false);
   window.api.getSistema().then((d) => {
     if (!d) return;
