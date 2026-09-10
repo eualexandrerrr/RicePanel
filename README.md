@@ -13,7 +13,7 @@ is HTML, CSS and JavaScript read straight from disk.
 ## The two pages
 
 **Mirante** — the page that stays open. Big clock, month calendar with the days
-marked, Google Calendar agenda, machine thermals (one ring per part, with a real
+marked, Google Calendar events, machine thermals (one ring per part, with a real
 photo of the part), CPU, RAM and disk gauges, network, what is playing on
 Spotify with controls, the next Flamengo match and the countdown to GTA VI.
 
@@ -35,7 +35,7 @@ Everything local, with no extra service running:
 | Workspaces and focused window | `hyprctl -j` |
 | What is playing | `playerctl` (MPRIS) |
 | Pending updates | `checkupdates` (repo) and `paru -Qua` (AUR) |
-| Agenda | Google Calendar secret address in iCal format |
+| Calendar | Google Calendar secret address in iCal format |
 | Next match | ESPN public scoreboard API |
 
 None of it asks for sudo, and none of it queries a service that has to stay up.
@@ -48,8 +48,8 @@ there is nothing to blur. So `vidro.js` uses ffmpeg to generate a blurred copy
 of the wallpaper and serves it as `background-attachment: fixed` — the crop
 follows the card and the effect closes.
 
-**The agenda is iCal, not OAuth.** The panel sits alone on a monitor. A refresh
-token that expires when the password changes would leave the agenda mute,
+**The calendar is iCal, not OAuth.** The panel sits alone on a monitor. A refresh
+token that expires when the password changes would leave the calendar mute,
 waiting for somebody who is not in front of the machine. The secret address is
 a read-only URL that only the owner can revoke.
 
