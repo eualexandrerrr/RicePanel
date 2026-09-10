@@ -573,11 +573,6 @@ window.api.servLocalTemReceita().then(v => {
   aplicaBotoesQuentes(1);
 }).catch(() => {});
 
-function ehLocal(i) {
-  const s = servidores[i] || {};
-  return /^(localhost|127\.0\.0\.1|::1)$/i.test(String(s.host || ''));
-}
-
 // Servidor parado não tem o que desligar nem reiniciar; servidor no ar não tem
 // o que ligar. Antes os três botões ficavam sempre acesos, e desligar um
 // servidor já parado devolvia erro do txAdmin como se o painel tivesse falhado.
@@ -597,7 +592,7 @@ function aplicaBotoesQuentes(i) {
   // servidor parado; ou subindo o processo aqui na máquina, quando nem o
   // txAdmin responde. A segunda só vale para o servidor local.
   const podeLigar = vivo && ligado === false;
-  const podeSubirLocal = !vivo && temReceitaLocal && ehLocal(i);
+  const podeSubirLocal = !vivo && temReceitaLocal && ehLocal(servidores[i] || {});
 
   if (desliga) { desliga.disabled = !podeDesligar; desliga.hidden = podeLigar || podeSubirLocal; }
   if (religa) religa.disabled = !podeDesligar;
@@ -1048,6 +1043,27 @@ document.querySelectorAll('[data-abre]').forEach(b => {
   b.addEventListener('click', () => window.api.abrirUrl(urlDe(servidores[Number(b.dataset.abre)])));
 });
 
+// Recarregar a tela na mão. O reload sozinho repete a rota em que o webview
+// ficou preso; voltar para o /server/console tira a tela de qualquer página
+// interna do txAdmin, inclusive a de login.
+document.querySelectorAll('[data-recarrega]').forEach(b => {
+  b.addEventListener('click', () => {
+    const i = Number(b.dataset.recarrega);
+    const wv = document.getElementById('wv' + i);
+    const alvo = urlDe(servidores[i]);
+    if (wv.getAttribute('src') !== alvo) wv.setAttribute('src', alvo);
+    else wv.reload();
+    b.classList.add('girando');
+    const para = () => {
+      b.classList.remove('girando');
+      wv.removeEventListener('dom-ready', para);
+    };
+    wv.addEventListener('dom-ready', para);
+    // Tela morta nunca dispara dom-ready: sem o teto, o ícone gira para sempre.
+    setTimeout(para, 8000);
+  });
+});
+
 // Reiniciar derruba jogador de verdade: modal antes, e o painel ainda confere o
 // diálogo que o txAdmin abrir. Se o diálogo não falar em reiniciar, cancela.
 const religaModal = document.getElementById('religaModal');
@@ -1466,6 +1482,24 @@ const MARCAS_ERRO = [
 // Moldura de tabela do txAdmin. Linha com isso e relatorio, nunca erro.
 const RISCOS_DE_TABELA = '│├└┌┬┴┼─╭╮╰╯';
 
+// Ruído conhecido: casa com MARCAS_ERRO mas não é problema do servidor, e
+// repete sozinho. Conferido antes das marcas, então cala a linha inteira.
+//
+// "server list query returned an error" é o Cfx.re sondando o endereço público
+// do servidor de fora. Timeout ali fala da rota até a internet, não do servidor
+// que está rodando na frente do painel — e volta a cada poucos minutos.
+//
+// A linha chega picada: o txAdmin manda o log em pedaços, e um pedaço pode vir
+// só com "server request failed for endpoint ..." — que casa com "failed" e
+// escapa se a lista tiver apenas a frase de abertura. Por isso cada trecho da
+// mensagem tem sua própria entrada.
+const MARCAS_MUDAS = [
+  'server list query returned an error',
+  'server request failed',
+  'context deadline exceeded',
+  'client.timeout exceeded'
+];
+
 // Injetado uma vez por carregamento. Sem regex e sem barra invertida: o ESC do
 // ANSI vem de String.fromCharCode(27), e o separador do engine.io de charCode 30.
 const ESPIAO_XHR = `
@@ -1473,6 +1507,7 @@ const ESPIAO_XHR = `
   if (window.__mesaVigia) return "ja estava";
 
   const MARCAS = ${JSON.stringify(MARCAS_ERRO)};
+  const MUDAS = ${JSON.stringify(MARCAS_MUDAS)};
   const RISCOS = ${JSON.stringify(RISCOS_DE_TABELA)};
   const ESC = String.fromCharCode(27);
   const SEPARADOR = String.fromCharCode(30);
@@ -1514,6 +1549,9 @@ const ESPIAO_XHR = `
       if (limpa.indexOf(RISCOS.charAt(i)) >= 0) return false;
     }
     const t = limpa.toLowerCase();
+    // Ruído conhecido cala antes das marcas: a linha casa com "error" e
+    // "failed", e sem esta poda o painel alarma sozinho a cada rodada.
+    for (let i = 0; i < MUDAS.length; i++) if (t.indexOf(MUDAS[i]) >= 0) return false;
     for (let i = 0; i < MARCAS.length; i++) if (t.indexOf(MARCAS[i]) >= 0) return true;
     return false;
   }
