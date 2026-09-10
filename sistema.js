@@ -237,7 +237,21 @@ function analisaNvidiaSmi(out) {
   return saida;
 }
 
+function temNvidiaNoHost() {
+  const raiz = '/sys/bus/pci/devices';
+  let itens;
+  try { itens = fs.readdirSync(raiz); } catch (e) { return false; }
+  for (const id of itens) {
+    if (!leArquivo(path.join(raiz, id, 'class')).trim().startsWith('0x0300')) continue;
+    let driver = '';
+    try { driver = path.basename(fs.realpathSync(path.join(raiz, id, 'driver'))); } catch (e) { continue; }
+    if (driver === 'nvidia') return true;
+  }
+  return false;
+}
+
 async function lerGpusNvidia() {
+  if (!temNvidiaNoHost()) return [];
   const lidas = analisaNvidiaSmi(await roda('nvidia-smi', CONSULTA_NVIDIA, 3000));
   return lidas.map((g, i) => Object.assign({ chave: 'nvidia' + (g.indice || i), marca: 'NVIDIA' }, g));
 }
