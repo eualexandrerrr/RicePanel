@@ -504,13 +504,13 @@
     .bruma {
       position: absolute; inset: 0;
       z-index: 0;
-      opacity: 0.30; filter: blur(46px);
+      opacity: 0.30;
+      background-size: 100% 100%; background-repeat: no-repeat;
       -webkit-mask-image: radial-gradient(78% 62% at 50% 50%, #000 8%, transparent 92%);
       mask-image: radial-gradient(78% 62% at 50% 50%, #000 8%, transparent 92%);
       pointer-events: none;
       overflow: hidden;
     }
-    .bruma svg { width: 100%; height: 100%; }
     /* A coluna sobe para cima da bruma. Sem isto as placas ficariam no mesmo
        plano dela e o véu passaria por cima do vidro. */
     #modoMirante { position: relative; }
@@ -638,13 +638,13 @@
       position: absolute; left: 50%; top: 50%;
       width: 120%; height: 190px;
       transform: translate(-50%, -54%);
-      opacity: 0.34; filter: blur(3px);
+      opacity: 0.34;
+      background-size: 100% 100%; background-repeat: no-repeat;
       z-index: -1;
       -webkit-mask-image: radial-gradient(60% 60% at 50% 50%, #000 30%, transparent 78%);
       mask-image: radial-gradient(60% 60% at 50% 50%, #000 30%, transparent 78%);
       pointer-events: none;
     }
-    .m-hora .aurora svg { width: 100%; height: 100%; }
     .m-saudacao {
       position: relative;
       font-family: 'Archivo Narrow', sans-serif;

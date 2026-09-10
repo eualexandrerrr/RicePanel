@@ -91,14 +91,8 @@
   // nunca um dado.
   const animacoes = [];
 
-  // O lottie-web avança por requestAnimationFrame, então sem freio ele reamostra
-  // e reescreve o SVG na taxa do MONITOR (144 Hz no vertical), não nos 30 fps do
-  // JSON. Em cima disso a bruma e a aurora ainda carregam um `filter: blur` de
-  // CSS, que o Chromium recalcula a cada troca de conteúdo -- é essa combinação
-  // que media 33% de GPU sozinha, medido em 10/09/2026. `goToAndStop` desenha um
-  // quadro só quando mandado, então tocar a animação por um intervalo próprio
-  // troca RAF por um relógio de taxa fixa, do mesmo jeito que o lote de 32 ms
-  // do terminal do RCode trocou escrita por chunk por escrita agendada.
+  // Reamostra o lottie por relógio próprio: sem isso ele atualiza no RAF, na
+  // taxa do monitor (144 Hz), não nos 30 fps do JSON.
   function comTaxaLimitada(anim, fpsAlvo) {
     const passoMs = 1000 / fpsAlvo;
     let relogio = null;
@@ -134,6 +128,66 @@
     } catch (e) {
       return null;
     }
+  }
+
+  // O custo de bruma/aurora não era a taxa de atualização, era a camada em si
+  // (mask+filter+SVG vivo) -- confirmado em 10/09/2026, nenhum ajuste isolado
+  // de CSS resolveu. Aqui o lottie roda num container nunca anexado ao
+  // document; a cada intervalo a gente serializa o SVG, rasteriza com o blur
+  // já embutido no canvas, e troca o background-image do elemento visível.
+  function criarFundoBakeado(elId, arquivo, { w, h, blurPx = 0, intervaloMs = 2500, rendererSettings } = {}) {
+    const el = $(elId);
+    if (!el || typeof window.lottie === 'undefined') return null;
+    const offscreen = document.createElement('div');
+    offscreen.style.width = w + 'px';
+    offscreen.style.height = h + 'px';
+    let anim;
+    try {
+      anim = window.lottie.loadAnimation({
+        container: offscreen, renderer: 'svg', loop: true, autoplay: false,
+        path: 'lottie/' + arquivo, rendererSettings
+      });
+    } catch (e) {
+      return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    let quadro = 0;
+    let relogio = null;
+
+    function pinta() {
+      const svg = offscreen.querySelector('svg');
+      if (!svg) return;
+      const marcado = new XMLSerializer().serializeToString(svg);
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, w, h);
+        ctx.filter = blurPx ? `blur(${blurPx}px)` : 'none';
+        ctx.drawImage(img, 0, 0, w, h);
+        el.style.backgroundImage = `url(${canvas.toDataURL('image/png')})`;
+      };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(marcado);
+    }
+
+    function avanca() {
+      const total = anim.totalFrames;
+      const taxa = anim.frameRate;
+      if (!total || !taxa) return;
+      quadro = (quadro + taxa * intervaloMs / 1000) % total;
+      try { anim.goToAndStop(quadro, true); } catch (e) {}
+      pinta();
+    }
+
+    const controlada = {
+      play() { if (!relogio) { avanca(); relogio = setInterval(avanca, intervaloMs); } },
+      pause() { clearInterval(relogio); relogio = null; },
+      destroy() { clearInterval(relogio); relogio = null; try { anim.destroy(); } catch (e) {} }
+    };
+    animacoes.push(controlada);
+    return controlada;
   }
 
   function tocaAnimacoes(ligado) {
@@ -1094,12 +1148,9 @@
   // Primeira pintura sem esperar tique nenhum.
   pintaRelogio(true);
   pintaMes();
-  // 12 fps: a deriva das massas de cor num loop de 30-60s não perde nada visível
-  // amostrada mais devagar, e é a reamostragem, não o desenho, que custava GPU.
-  poeLottie('brumaMirante', 'bruma.json', { rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } }, 12);
-  poeLottie('auroraHora', 'aurora.json', { rendererSettings: { preserveAspectRatio: 'xMidYMid slice' } }, 12);
-  // O equalizador é rápido e pequeno (120x60, sem blur): fica em 20 fps, mais
-  // perto do "musical" que a bruma e a aurora precisam.
+  criarFundoBakeado('brumaMirante', 'bruma.json', { w: 900, h: 1600, blurPx: 46, intervaloMs: 3000 });
+  criarFundoBakeado('auroraHora', 'aurora.json', { w: 600, h: 320, blurPx: 3, intervaloMs: 2500 });
+  // Pequeno e sem blur: fica no lottie normal, 20 fps já é barato.
   musicaAnim = poeLottie('wOndas', 'ondas.json', {}, 20);
   buscaAgenda(false);
   window.api.getSistema().then((d) => {
