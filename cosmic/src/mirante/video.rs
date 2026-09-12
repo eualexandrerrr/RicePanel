@@ -71,10 +71,13 @@ pub fn view<'a>(m: &'a Mirante) -> Option<Element<'a, Message>> {
             .height(Length::Fixed(altura))
             .content_fit(ContentFit::Contain)
             .into(),
+        // `center(Fill)` trocaria a altura fixa por Fill e a placa virava uma faixa
+        // fina enquanto o vídeo carrega: centra sem mexer no tamanho.
         (Site::Youtube(_), None) => container(ui::rotulo("carregando o vídeo"))
             .width(Length::Fill)
             .height(Length::Fixed(altura))
-            .center(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fixed(altura))
             .into(),
         (Site::Drm, _) | (Site::Nenhum, _) => container(
             Column::new()

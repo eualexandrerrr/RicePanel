@@ -379,6 +379,7 @@ pub async fn olhar(ligado: bool, escolhida: Option<i64>, montada: Option<i64>) -
 pub async fn pausa_navegador(player: String, aba: Option<i64>) {
     if let Some(a) = aba {
         crate::ponte::comando("pausar", a);
+        crate::ponte::marca_pausada(Some(a));
         return;
     }
     if !player.is_empty() {
@@ -389,6 +390,7 @@ pub async fn pausa_navegador(player: String, aba: Option<i64>) {
 pub async fn toca_navegador(player: String, aba: Option<i64>) {
     if let Some(a) = aba {
         crate::ponte::comando("retomar", a);
+        crate::ponte::marca_pausada(None);
         return;
     }
     if !player.is_empty() {

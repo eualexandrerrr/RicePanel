@@ -132,6 +132,7 @@ const ESTACAO = PARAMS.get('estacao') === '1';
 // nativa: um segundo clique de quem achou que a janela não abriu fechava a
 // Estação 1 s depois de nascer (12/09/2026). Nos primeiros 2,5 s ela não fecha.
 const ESTACAO_NASCEU = Date.now();
+if (ESTACAO) document.body.classList.add('estacao');
 
 document.getElementById('barramento').addEventListener('click', (e) => {
   const t = e.target.closest('.tecla');

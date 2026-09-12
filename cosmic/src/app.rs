@@ -461,7 +461,10 @@ impl cosmic::Application for App {
             Message::Video(e) => self.trata_video(e),
             Message::VideoUrls(id, resultado) => {
                 self.video_buscando = false;
-                if self.video_montado != format!("youtube:{id}") {
+                // A assinatura leva a aba junto (`youtube:<id>@<aba>`): compara pelo começo,
+                // senão toda URL vinda pela extensão era descartada calada.
+                if !self.video_montado.starts_with(&format!("youtube:{id}")) {
+                    tracing::info!("video: URL de {id} chegou depois de trocar de vídeo, descartada");
                     return Task::none();
                 }
                 match resultado {

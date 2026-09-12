@@ -148,6 +148,17 @@
       border: none;
       box-shadow: none;
     }
+    /* Na Estação a janela nasce por cima do painel nativo, que tem a própria
+       travessa no mesmo lugar e 1 px fora de alinhamento: com a faixa
+       transparente as duas apareciam sobrepostas (12/09/2026). Aqui a faixa
+       ganha fundo opaco de ponta a ponta, cobrindo a margem também. */
+    body.estacao .travessa { position: relative; isolation: isolate; }
+    body.estacao .travessa::before {
+      content: ''; position: absolute; z-index: -1;
+      inset: -8px -12px -4px;
+      background: #11111b;
+      border-radius: 0 0 var(--raio) var(--raio);
+    }
     .marca {
       font-family: 'Archivo Narrow', sans-serif;
       font-weight: 700; font-size: 17px;

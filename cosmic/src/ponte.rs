@@ -59,6 +59,35 @@ pub fn abas() -> Option<Vec<Aba>> {
     serde_json::from_str::<Relato>(&texto).ok().map(|r| r.abas)
 }
 
+// Aba que o painel pausou para tocar na parede. Se o painel cai ou reinicia
+// tocando, ninguém devolve o play e a aba fica muda no Chrome: o arquivo
+// sobrevive ao processo, e a próxima subida devolve.
+fn arquivo_pausada() -> PathBuf {
+    pasta().join("pausada-pelo-painel")
+}
+
+pub fn marca_pausada(aba: Option<i64>) {
+    let _ = std::fs::create_dir_all(pasta());
+    match aba {
+        Some(a) => {
+            let _ = std::fs::write(arquivo_pausada(), a.to_string());
+        }
+        None => {
+            let _ = std::fs::remove_file(arquivo_pausada());
+        }
+    }
+}
+
+/// Na subida: devolve o play à aba que ficou pausada por um painel anterior.
+pub fn devolve_pausada_orfa() {
+    let Some(aba) = std::fs::read_to_string(arquivo_pausada()).ok().and_then(|s| s.trim().parse::<i64>().ok()) else {
+        return;
+    };
+    tracing::info!("video: aba {aba} ficou pausada por um painel anterior, devolvendo o play");
+    comando("retomar", aba);
+    marca_pausada(None);
+}
+
 pub fn comando(tipo: &str, aba: i64) {
     let _ = std::fs::create_dir_all(pasta());
     let linha = format!("{{\"tipo\":\"{tipo}\",\"aba\":{aba}}}\n");

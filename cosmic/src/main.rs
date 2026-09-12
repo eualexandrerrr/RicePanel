@@ -31,6 +31,7 @@ fn main() -> cosmic::iced::Result {
     init_log();
     tracing::info!("ricepanel {}", env!("CARGO_PKG_VERSION"));
     tema::instalar_fontes();
+    ponte::devolve_pausada_orfa();
     janelas::iniciar();
     app::run()
 }
