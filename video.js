@@ -16,6 +16,15 @@
 // publica. O painel copia o banco (o original fica travado com o Chrome de pé)
 // e procura a visita mais recente cujo título casa.
 //
+// A conta é a dele: a webview do painel tem partição própria, então o YouTube
+// entrava deslogado — anúncio, sem Premium, e às vezes a tela de "faça login".
+// Entrar pelo painel não resolve, o Google recusa login vindo de Electron. Os
+// cookies de youtube.com são copiados do Chrome (SQLite ao lado do histórico,
+// cifrados com a chave fixa do Chrome no Linux sem keyring) a cada vídeo novo.
+//
+// Tudo isto é opcional e nasce DESLIGADO: puxar o vídeo pausa a aba dele, e
+// isso só é bem-vindo quando ele pediu. A chave fica na travessa.
+//
 // Serviço com DRM (Globoplay, Netflix) não toca dentro do Electron: falta o
 // Widevine, que a build oficial não traz. Para esses o painel mostra o que está
 // passando e diz que o vídeo fica no navegador — melhor que uma tela preta
@@ -29,7 +38,10 @@ const path = require('path');
 const INTERVALO_MS = 2000;
 const PRAZO_MS = 1500;
 
-let deps = null;                 // { log }
+let deps = null;                 // { log, app, session }
+const PARTICAO = 'persist:video-mirante';   // a mesma do <webview> em mirante.js
+let ligado = false;
+let pausadoPeloPainel = false;
 let estado = {
   site: '',                      // youtube | drm | ''
   id: '',
@@ -61,6 +73,30 @@ function roda(cmd, args, ms) {
       filho.on('error', () => fim(''));
     } catch (e) { fim(''); }
   });
+}
+
+// ---------------------------------------------------------------- chave
+
+function arquivoChave() {
+  return path.join(deps.app.getPath('userData'), 'video.json');
+}
+
+function leChave() {
+  try { ligado = !!JSON.parse(fs.readFileSync(arquivoChave(), 'utf8')).ligado; }
+  catch (e) { ligado = false; }
+}
+
+async function liga(valor) {
+  ligado = !!valor;
+  try { fs.writeFileSync(arquivoChave(), JSON.stringify({ ligado })); } catch (e) {}
+  // Desligar com a aba pausada pelo painel devolve o som ao navegador: senão
+  // ele desliga a chave e o vídeo fica mudo nos dois lugares.
+  if (!ligado) {
+    if (pausadoPeloPainel) await tocaNavegador();
+    limpa();
+  }
+  log(ligado ? 'ligado' : 'desligado');
+  return ligado;
 }
 
 // --------------------------------------------------------- quem está tocando
@@ -222,6 +258,123 @@ async function volumeDoNavegador() {
   return null;
 }
 
+// ------------------------------------------------------- a conta dele
+
+// O Chrome guarda os cookies num SQLite igual ao do histórico, com o valor
+// cifrado. No Linux sem keyring a chave é fixa e conhecida ("peanuts", prefixo
+// `v10`); com keyring o prefixo é `v11` e a senha não está ao alcance daqui —
+// nesse caso o cookie é pulado e o YouTube toca deslogado, como antes.
+// Só youtube.com entra, e entra de novo a cada vídeo: o Google gira alguns
+// cookies de sessão de minuto em minuto e cópia velha vira sessão inválida.
+const PERFIS_COOKIES = PERFIS.map(p => p.replace(/History$/, 'Cookies'));
+const EPOCA_CHROME_S = 11644473600;      // 1601 → 1970, em segundos
+const SAMESITE = { '-1': 'unspecified', '0': 'no_restriction', '1': 'lax', '2': 'strict' };
+let chaveV10 = null;
+
+function decifraV10(cifrado, host) {
+  const crypto = require('crypto');
+  if (!chaveV10) chaveV10 = crypto.pbkdf2Sync('peanuts', 'saltysalt', 1, 16, 'sha1');
+  const d = crypto.createDecipheriv('aes-128-cbc', chaveV10, Buffer.alloc(16, 0x20));
+  let claro = Buffer.concat([d.update(cifrado.subarray(3)), d.final()]);
+  // Chrome 130+ prefixa o valor com o SHA-256 do host, amarrando cookie a domínio.
+  const hash = crypto.createHash('sha256').update(host).digest();
+  if (claro.length >= 32 && claro.subarray(0, 32).equals(hash)) claro = claro.subarray(32);
+  return claro.toString('utf8');
+}
+
+// Devolve linhas como arrays de texto, pelo `node:sqlite` ou pelo binário; o
+// blob cifrado vai em hex nos dois para o caminho ser um só.
+// O Chrome guarda também cópias particionadas por site de origem (CHIPS): o
+// VISITOR_INFO1_LIVE que o youtube.com criou embutido no github.com, por
+// exemplo. Só a partição do próprio YouTube interessa; sem a coluna (Chrome
+// antigo) a consulta cai para a lista inteira.
+const SQL_COOKIES = "select host_key, name, value, hex(encrypted_value), path, expires_utc, " +
+  "is_secure, is_httponly, samesite from cookies where host_key like '%youtube.com'";
+const SQL_SO_PRIMEIRA = " and (top_frame_site_key = '' or top_frame_site_key like 'https://youtube.com%')";
+
+async function consultaCookies(copia) {
+  for (const sql of [SQL_COOKIES + SQL_SO_PRIMEIRA, SQL_COOKIES]) {
+    if (sqlite && sqlite.DatabaseSync) {
+      try {
+        const db = new sqlite.DatabaseSync(copia, { readOnly: true });
+        const linhas = db.prepare(sql).all().map(l => Object.values(l).map(v => String(v ?? '')));
+        db.close();
+        return linhas;
+      } catch (e) {}
+    }
+    const bruto = await roda('sqlite3', ['-separator', SEP, copia, sql], 3000);
+    const linhas = bruto.split('\n').filter(Boolean).map(l => l.split(SEP));
+    if (linhas.length) return linhas;
+  }
+  return [];
+}
+
+async function cookiesDoNavegador() {
+  const copia = path.join(os.tmpdir(), 'ricepanel-cookies.db');
+  let copiou = false;
+  for (const rel of PERFIS_COOKIES) {
+    const origem = path.join(os.homedir(), rel);
+    try {
+      if (!fs.existsSync(origem)) continue;
+      fs.copyFileSync(origem, copia);
+      fs.chmodSync(copia, 0o600);
+      copiou = true;
+      break;
+    } catch (e) {}
+  }
+  if (!copiou) return [];
+  let linhas = [];
+  try { linhas = await consultaCookies(copia); } catch (e) { log('cookies: ' + e.message); }
+  // Cookie de sessão não fica largado no /tmp.
+  try { fs.unlinkSync(copia); } catch (e) {}
+
+  const saida = [];
+  for (const [host, nome, claro, hex, caminho, expira, seguro, soHttp, mesmoSite] of linhas) {
+    let valor = claro || '';
+    if (!valor && hex) {
+      const cifrado = Buffer.from(hex, 'hex');
+      if (cifrado.length <= 3 || cifrado.subarray(0, 3).toString() !== 'v10') continue;
+      try { valor = decifraV10(cifrado, host); } catch (e) { continue; }
+    }
+    if (!valor) continue;
+    const exp = Number(expira);
+    saida.push({
+      url: 'https://' + host.replace(/^\./, ''),
+      domain: host.startsWith('.') ? host : undefined,
+      name: nome,
+      value: valor,
+      path: caminho || '/',
+      secure: seguro === '1',
+      httpOnly: soHttp === '1',
+      sameSite: SAMESITE[mesmoSite] || 'unspecified',
+      expirationDate: exp > 0 ? Math.floor(exp / 1e6 - EPOCA_CHROME_S) : undefined
+    });
+  }
+  return saida;
+}
+
+// Põe a sessão do Chrome na partição da webview. Os cookies antigos de
+// youtube.com saem antes: se ele trocou de conta ou saiu no Chrome, o painel
+// acompanha em vez de continuar logado num fantasma.
+async function entraComAContaDele() {
+  if (!deps.session) return { ok: false, total: 0 };
+  const ses = deps.session.fromPartition(PARTICAO);
+  const cookies = await cookiesDoNavegador();
+  try {
+    const velhos = await ses.cookies.get({ domain: 'youtube.com' });
+    for (const c of velhos) {
+      await ses.cookies.remove('https://' + c.domain.replace(/^\./, '') + c.path, c.name).catch(() => {});
+    }
+  } catch (e) {}
+  let total = 0;
+  for (const c of cookies) {
+    try { await ses.cookies.set(c); total++; }
+    catch (e) { log('cookie ' + c.name + ' recusado: ' + e.message); }
+  }
+  log('conta: ' + total + ' cookies do navegador na partição');
+  return { ok: total > 0, total };
+}
+
 // ------------------------------------------------- a aba está à vista dele?
 
 // Só faz sentido puxar o vídeo para a parede quando a janela do navegador não
@@ -276,6 +429,7 @@ function fingido() {
 }
 
 async function olha() {
+  if (!ligado) { limpa(); return estado; }
   const falso = fingido();
   if (falso) { estado = falso; return estado; }
   try {
@@ -323,18 +477,21 @@ async function pausaNavegador() {
   if (!estado.player) return { ok: false };
   await roda('playerctl', ['-p', estado.player, 'pause']);
   estado.tocando = false;
+  pausadoPeloPainel = true;
   return { ok: true };
 }
 
 async function tocaNavegador() {
   if (!estado.player) return { ok: false };
   await roda('playerctl', ['-p', estado.player, 'play']);
+  pausadoPeloPainel = false;
   return { ok: true };
 }
 
 function iniciar(d) {
   deps = d;
-  log('vigiando o navegador a cada ' + (INTERVALO_MS / 1000) + ' s');
+  leChave();
+  log((ligado ? 'ligado' : 'desligado') + '; vigiando o navegador a cada ' + (INTERVALO_MS / 1000) + ' s');
   const passo = async () => {
     await olha();
     timer = setTimeout(passo, INTERVALO_MS);
@@ -343,4 +500,13 @@ function iniciar(d) {
   passo();
 }
 
-module.exports = { iniciar, atual: () => estado, pausaNavegador, tocaNavegador };
+module.exports = {
+  iniciar,
+  atual: () => Object.assign({ ligado }, estado),
+  ligado: () => ligado,
+  liga,
+  entraComAContaDele,
+  cookiesDoNavegador,
+  pausaNavegador,
+  tocaNavegador
+};

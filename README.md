@@ -22,6 +22,12 @@ local), with an error detector that warns by notification; a column of Expo
 projects with the Android emulator; and a monitor for quota, Sentry and Discord
 notes.
 
+Since September 2026 the **Mirante runs natively on COSMIC**: a Rust and
+libcosmic app in [`cosmic/`](cosmic/README.md), drawn on a layer surface below
+the windows. It idles at about 2% of one core and 170 MB, against roughly half a
+core and 1.2 GB for the Electron page. The Estação stays in Electron and opens on
+demand from the native top bar, with `--estacao --modo=servidores|dev|monitor`.
+
 ## How the readings are taken
 
 Everything local, with no extra service running:

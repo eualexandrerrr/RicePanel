@@ -21,6 +21,16 @@ const video = require('./video');
 const dev = require('./dev');
 const vidro = require('./vidro');
 
+// Modo Estação (12/09/2026): o Mirante virou app nativo do COSMIC (`cosmic/`).
+// O Electron ficou só com a Estação — consoles do txAdmin, Dev e Monitor — e
+// sobe sob demanda, pela travessa do painel nativo, com `--estacao --modo=X`.
+const ESTACAO = process.argv.includes('--estacao');
+function modoDoArgv(argv) {
+  const a = (argv || []).find(x => String(x).startsWith('--modo='));
+  const m = a ? String(a).slice(7) : '';
+  return ['servidores', 'dev', 'monitor'].indexOf(m) >= 0 ? m : 'servidores';
+}
+
 // Aceleração de GPU: DESLIGADA por padrão, e isso é medido, não crença.
 //
 // Ela foi ligada em 08/09/2026 para o vídeo do navegador parar de engasgar —
@@ -347,12 +357,13 @@ function createWindow() {
     });
   }, { useSystemPicker: true });
 
-  const deps = { app, safeStorage, Notification, shell, log, getWindow: () => mainWindow };
+  const deps = { app, safeStorage, Notification, shell, session, log, getWindow: () => mainWindow };
   sentry.iniciar(deps);
   discord.iniciar(deps);
   agenda.iniciar(deps);
   flamengo.iniciar(deps);
-  video.iniciar(deps);
+  // Na Estação o vídeo é do painel nativo: dois vigias pausariam a mesma aba.
+  if (!ESTACAO) video.iniciar(deps);
   dev.iniciar({ log, empurra, getWindow: () => mainWindow });
   vidro.iniciar({ app, log, empurra });
 
@@ -382,7 +393,7 @@ function createWindow() {
   // Rede de segurança: página que trava no carregamento não pode deixar o
   // painel escondido para sempre.
   setTimeout(() => mostraUmaVez('prazo de 4 s'), 4000).unref();
-  win.loadFile('painel.html');
+  win.loadFile('painel.html', ESTACAO ? { query: { estacao: '1', modo: modoDoArgv(process.argv) } } : undefined);
   log(`Mirante iniciado em {${wa.x},${wa.y}} ${wa.width}x${wa.height} | pid ${process.pid} | displays: ${displaysSummary()}`);
 
   setInterval(() => log('heartbeat: vivo'), 120000).unref();
@@ -510,6 +521,8 @@ ipcMain.handle('musica-comando', async (e, verbo, player) => {
 });
 
 ipcMain.handle('video-get', async () => video.atual());
+ipcMain.handle('video-liga', async (e, valor) => { await video.liga(valor); return video.atual(); });
+ipcMain.handle('video-entra', async () => video.entraComAContaDele());
 ipcMain.handle('video-pausa-navegador', async () => video.pausaNavegador());
 ipcMain.handle('video-toca-navegador', async () => video.tocaNavegador());
 
@@ -872,26 +885,39 @@ ipcMain.on('diag', (e, texto) => log('painel: ' + String(texto).slice(0, 200)));
 // é outra máquina, com gente dentro.
 const SERV_LOCAL_FILE = () => path.join(app.getPath('userData'), 'servidor-local.json');
 
-function receitaDoLocal() {
+// O arquivo pode ser uma receita só ou uma lista delas, uma por servidor da
+// máquina; cada uma diz a porta do txAdmin, que é como a tela local a acha.
+function receitasLocais() {
   try {
-    const r = JSON.parse(fs.readFileSync(SERV_LOCAL_FILE(), 'utf8'));
-    if (!r || !r.cwd || !r.comando) return null;
-    if (!fs.existsSync(r.cwd)) return null;
-    return { cwd: r.cwd, comando: r.comando, args: Array.isArray(r.args) ? r.args : [] };
+    const bruto = JSON.parse(fs.readFileSync(SERV_LOCAL_FILE(), 'utf8'));
+    return (Array.isArray(bruto) ? bruto : [bruto])
+      .filter(r => r && r.cwd && r.comando && fs.existsSync(r.cwd))
+      .map(r => ({
+        nome: String(r.nome || path.basename(path.dirname(r.cwd))).slice(0, 40),
+        porta: Number(r.porta) || 40120,
+        cwd: r.cwd,
+        comando: r.comando,
+        args: Array.isArray(r.args) ? r.args : [],
+        env: r.env && typeof r.env === 'object' ? r.env : {}
+      }));
   } catch (e) {
-    return null;
+    return [];
   }
 }
 
-ipcMain.handle('serv-local-tem-receita', async () => !!receitaDoLocal());
+ipcMain.handle('serv-local-lista', async () => receitasLocais().map(r => ({ nome: r.nome, porta: r.porta })));
 
-ipcMain.handle('serv-local-sobe', async () => {
-  const r = receitaDoLocal();
-  if (!r) return { ok: false, error: 'sem servidor-local.json no userData' };
+ipcMain.handle('serv-local-tem-receita', async () => receitasLocais().length > 0);
+
+ipcMain.handle('serv-local-sobe', async (e, porta) => {
+  const lista = receitasLocais();
+  const r = lista.find(x => x.porta === Number(porta)) || (porta == null ? lista[0] : null);
+  if (!r) return { ok: false, error: 'sem receita para a porta ' + porta + ' no servidor-local.json' };
   try {
     const { spawn } = require('child_process');
     const filho = spawn(r.comando, r.args, {
       cwd: r.cwd,
+      env: Object.assign({}, process.env, r.env),
       detached: true,
       stdio: 'ignore'
     });
@@ -1142,6 +1168,14 @@ app.on('web-contents-created', (e, wc) => ligaEdicao(wc));
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  // A travessa nativa chama de novo com outro `--modo`: a janela que já está
+  // de pé troca de barramento e vem para a frente, em vez de nascer outra.
+  app.on('second-instance', (e, argv) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    empurra('modo-externo', modoDoArgv(argv));
+    mainWindow.show();
+    mainWindow.focus();
+  });
   app.whenReady().then(() => {
     createWindow();
     ligaVigia();

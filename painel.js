@@ -124,9 +124,23 @@ function posicionaBarra(modo) {
   }
 }
 
+// Aberto pela travessa do painel nativo: o Mirante mora lá, então a tecla do
+// Mirante fecha esta janela e devolve a parede.
+const PARAMS = new URLSearchParams(location.search);
+const ESTACAO = PARAMS.get('estacao') === '1';
+// A tecla Mirante daqui cai quase em cima da tecla Servidores da travessa
+// nativa: um segundo clique de quem achou que a janela não abriu fechava a
+// Estação 1 s depois de nascer (12/09/2026). Nos primeiros 2,5 s ela não fecha.
+const ESTACAO_NASCEU = Date.now();
+
 document.getElementById('barramento').addEventListener('click', (e) => {
   const t = e.target.closest('.tecla');
-  if (t) trocaModo(t.dataset.modo);
+  if (!t) return;
+  if (ESTACAO && t.dataset.modo === 'mirante') {
+    if (Date.now() - ESTACAO_NASCEU > 2500) window.api.closeApp();
+    return;
+  }
+  trocaModo(t.dataset.modo);
 });
 
 
@@ -194,7 +208,48 @@ function pintaServidores() {
     const dest = document.getElementById('dest' + i);
     dest.textContent = s.host + ':' + s.porta;
     dest.className = 'destino' + (local ? '' : ' remoto');
+    pintaEscolhaLocal(i);
   });
+}
+
+// Mais de um servidor na máquina: a tela local ganha uma chave por servidor, e
+// a escolhida decide qual txAdmin aparece e qual processo o Ligar sobe.
+function pintaEscolhaLocal(i) {
+  const caixa = document.getElementById('escolha' + i);
+  if (!caixa) return;
+  const s = servidores[i] || {};
+  const mostra = ehLocal(s) && locaisDaMaquina.length > 1;
+  caixa.hidden = !mostra;
+  caixa.textContent = '';
+  if (!mostra) return;
+  locaisDaMaquina.forEach(l => {
+    const b = document.createElement('button');
+    const ativo = l.porta === Number(s.porta);
+    b.className = 'chave-local' + (ativo ? ' on' : '');
+    b.textContent = l.nome;
+    b.title = 'Mostrar o ' + l.nome + ' (txAdmin na ' + l.porta + ')';
+    b.setAttribute('aria-pressed', String(ativo));
+    b.addEventListener('click', () => escolheLocal(i, l));
+    caixa.appendChild(b);
+  });
+}
+
+async function escolheLocal(i, l) {
+  if (Number(servidores[i].porta) === l.porta) return;
+  const nova = servidores.map((s, j) => j === i ? { nome: l.nome, host: s.host, porta: l.porta } : s);
+  const r = await window.api.servSet(nova);
+  if (!r || !r.ok) {
+    const est = document.getElementById('est' + i);
+    est.textContent = (r && r.error) || 'não deu para trocar';
+    est.classList.add('ruim');
+    return;
+  }
+  servidores = r.servidores;
+  estadoLigado[i] = null;
+  pintaServidores();
+  carregaTelas();
+  aplicaBotoesQuentes(i);
+  bateNoTx(i);
 }
 
 // A fonte do Live Console é xterm desenhando em canvas: CSS não alcança. O que
@@ -564,14 +619,21 @@ const ultimoBotoes = ['', ''];
 // Só existe receita para subir o servidor DESTA máquina; produção não sobe pelo
 // painel. Se o arquivo não existir no userData, o botão nem aparece com o
 // txAdmin fora.
-let temReceitaLocal = false;
-window.api.servLocalTemReceita().then(v => {
-  temReceitaLocal = !!v;
+let locaisDaMaquina = [];
+window.api.servLocalLista().then(v => {
+  locaisDaMaquina = Array.isArray(v) ? v : [];
   // A resposta chega depois da primeira pintura: sem repintar, o botão de subir
   // o local só apareceria na próxima mudança de estado.
+  if (servidores.length) pintaServidores();
   aplicaBotoesQuentes(0);
   aplicaBotoesQuentes(1);
 }).catch(() => {});
+
+function receitaDaTela(i) {
+  const s = servidores[i] || {};
+  if (!ehLocal(s)) return null;
+  return locaisDaMaquina.find(l => l.porta === Number(s.porta)) || null;
+}
 
 // Servidor parado não tem o que desligar nem reiniciar; servidor no ar não tem
 // o que ligar. Antes os três botões ficavam sempre acesos, e desligar um
@@ -592,7 +654,7 @@ function aplicaBotoesQuentes(i) {
   // servidor parado; ou subindo o processo aqui na máquina, quando nem o
   // txAdmin responde. A segunda só vale para o servidor local.
   const podeLigar = vivo && ligado === false;
-  const podeSubirLocal = !vivo && temReceitaLocal && ehLocal(servidores[i] || {});
+  const podeSubirLocal = !vivo && !!receitaDaTela(i);
 
   if (desliga) { desliga.disabled = !podeDesligar; desliga.hidden = podeLigar || podeSubirLocal; }
   if (religa) religa.disabled = !podeDesligar;
@@ -1117,7 +1179,7 @@ document.querySelectorAll('[data-liga]').forEach(b => {
     if (b.dataset.modo === 'processo') {
       // txAdmin fora: sobe o processo aqui e deixa a página reconectar sozinha
       // no próximo pulso.
-      try { r = await window.api.servLocalSobe(); } catch (e) {}
+      try { r = await window.api.servLocalSobe(servidores[i].porta); } catch (e) {}
       if (r && r.ok) {
         est.textContent = 'subindo o servidor local';
         setTimeout(() => { est.textContent = ''; }, 20000);
@@ -2613,7 +2675,8 @@ try {
   const guardado = localStorage.getItem('modo');
   if (guardado && ['mirante', 'servidores', 'dev', 'monitor'].indexOf(guardado) >= 0) modoInicial = guardado;
 } catch (e) {}
-trocaModo('mirante');
+trocaModo(ESTACAO ? (PARAMS.get('modo') || 'servidores') : 'mirante');
+if (ESTACAO) window.api.onModoExterno(trocaModo);
 tickRestantes();
 
 // ------------------------------------------------------- trava do teclado

@@ -20,9 +20,12 @@ contextBridge.exposeInMainWorld('api', {
   musicaComando: (verbo, player) => ipcRenderer.invoke('musica-comando', verbo, player),
 
   servLocalTemReceita: () => ipcRenderer.invoke('serv-local-tem-receita'),
-  servLocalSobe: () => ipcRenderer.invoke('serv-local-sobe'),
+  servLocalSobe: (porta) => ipcRenderer.invoke('serv-local-sobe', porta),
+  servLocalLista: () => ipcRenderer.invoke('serv-local-lista'),
 
   videoGet: () => ipcRenderer.invoke('video-get'),
+  videoLiga: (valor) => ipcRenderer.invoke('video-liga', valor),
+  videoEntra: () => ipcRenderer.invoke('video-entra'),
   videoPausaNavegador: () => ipcRenderer.invoke('video-pausa-navegador'),
   videoTocaNavegador: () => ipcRenderer.invoke('video-toca-navegador'),
   onVideo: (cb) => ipcRenderer.on('video-update', (e, d) => cb(d)),
@@ -83,6 +86,8 @@ contextBridge.exposeInMainWorld('api', {
   servSet: (lista) => ipcRenderer.invoke('serv-set', lista),
   alertaConsole: (dados) => ipcRenderer.send('alerta-console', dados),
   fonteLog: () => ipcRenderer.invoke('fonte-log'),
+
+  onModoExterno: (cb) => ipcRenderer.on('modo-externo', (e, m) => cb(m)),
 
   abrirUrl: (url) => ipcRenderer.send('abrir-url', url),
   diag: (texto) => ipcRenderer.send('diag', texto)

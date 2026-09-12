@@ -687,11 +687,13 @@
   $('wMusicaProximo').addEventListener('click', () => mandaMusica('proximo'));
   $('wMusicaAlterna').addEventListener('click', () => mandaMusica('alterna'));
 
+  let ultimaMusica = null;
   function pintaMusica(m) {
-    // Enquanto o painel toca o vídeo daquele navegador, a placa da música cala:
-    // o som que ela anunciaria é o mesmo que já está tocando ali em cima.
-    const ehOVideo = playerDoVideo && m && m.player === playerDoVideo;
-    if (!m || !m.titulo || ehOVideo) { elMusica.hidden = true; if (musicaAnim) musicaAnim.pause(); return; }
+    ultimaMusica = m;
+    // Com a placa de vídeo de pé a da música cala, seja quem for que toca: o
+    // vídeo é o que ele está vendo, e um Spotify pausado embaixo dele é ruído.
+    const comVideo = document.body.classList.contains('com-video');
+    if (!m || !m.titulo || comVideo) { elMusica.hidden = true; if (musicaAnim) musicaAnim.pause(); return; }
     elMusica.hidden = false;
     playerAtual = m.player || '';
 
@@ -779,6 +781,7 @@
     videoMontado = '';
     elVideo.innerHTML = '';
     elVideo.hidden = true;
+    pintaMusica(ultimaMusica);
   }
 
   function montaYoutube(v) {
@@ -789,33 +792,23 @@
     // comentários — some no CSS injetado logo abaixo.
     const src = 'https://www.youtube.com/watch?v=' + encodeURIComponent(v.id) +
       '&t=' + inicio + 's';
+    // A webview tem partição própria (a mesma constante mora em video.js); a
+    // sessão do Chrome dele entra nela por `videoEntra` antes de carregar. O
+    // user-agent perde o carimbo do Electron: o YouTube trata a sessão como a
+    // do navegador de onde os cookies vieram.
+    const ua = navigator.userAgent.replace(/ (ricepanel|electron)\/\S+/gi, '');
     elVideo.innerHTML =
       '<span class="video-quadro">' +
-        '<webview id="wVideoQuadro" partition="persist:video-mirante" allowpopups="false"></webview>' +
+        '<webview id="wVideoQuadro" partition="persist:video-mirante" allowpopups="false"' +
+        ' useragent="' + ua.replace(/"/g, '') + '"></webview>' +
       '</span>' +
       '<span class="video-pe">' +
         '<span class="video-titulo">' + esc(v.titulo || 'Vídeo') + '</span>' +
-        // A webview tem partição própria: cookie do Chrome dele não vale aqui,
-        // então o YouTube entra deslogado e com anúncio. O botão abre a tela de
-        // login DENTRO desta partição; feito uma vez, o Premium vale e o painel
-        // volta a tocar o vídeo sozinho.
-        '<button class="botao-espelho" id="wVideoLogin">Entrar</button>' +
         '<span class="rotulo video-onde">YouTube</span>' +
       '</span>';
     elVideo.hidden = false;
     document.body.classList.add('com-video');
-
-    // O embed do YouTube recusa página sem origem (erro 153): de `file://` não
-    // vai `Referer` nenhum e ele acha que está sendo embutido de lugar
-    // proibido. `loadURL` com `httpReferrer` resolve — é o mesmo cabeçalho que
-    // o navegador mandaria a partir de uma página do próprio YouTube.
-    const botaoLogin = $('wVideoLogin');
-    if (botaoLogin) {
-      botaoLogin.addEventListener('click', () => {
-        const q = $('wVideoQuadro');
-        if (q) q.src = 'https://accounts.google.com/ServiceLogin?service=youtube';
-      });
-    }
+    pintaMusica(ultimaMusica);
 
     const quadro = $('wVideoQuadro');
     if (!quadro) return;
@@ -873,7 +866,12 @@
     }, { once: true });
     quadro.addEventListener('did-finish-load', injeta);
 
-    quadro.src = src;
+    // Cookies primeiro, página depois: carregar antes é entrar deslogado e
+    // recarregar, com o anúncio no meio. Se a placa saiu enquanto esperava, a
+    // webview já não está no documento e não há o que carregar.
+    window.api.videoEntra().catch(() => {}).then(() => {
+      if (quadro.isConnected) quadro.src = src;
+    });
   }
 
   // ---- espelho da janela ----
@@ -882,11 +880,6 @@
   // continua sendo o Chrome dele, com DRM e com o Premium que ele paga. O
   // preço é o diálogo do portal do Hyprland, uma vez por sessão.
   let espelho = null;              // MediaStream de pé
-  // Quem toca o vídeo que a placa assumiu. A placa da música lê o mesmo MPRIS e
-  // mostraria o vídeo do navegador como se fosse faixa — duas placas contando a
-  // mesma coisa, uma delas errada.
-  let playerDoVideo = '';
-
   function paraEspelho() {
     if (!espelho) return;
     try { espelho.getTracks().forEach(t => t.stop()); } catch (e) {}
@@ -937,6 +930,7 @@
       '</span>';
     elVideo.hidden = false;
     document.body.classList.add('com-video');
+    pintaMusica(ultimaMusica);
     const botao = document.getElementById('wEspelhoBotao');
     if (botao) botao.addEventListener('click', ligaEspelho);
   }
@@ -954,8 +948,28 @@
     } catch (e) {}
   }
 
+  // A chave na travessa. O estado vem sempre do main junto com o retrato do
+  // vídeo, então o botão nunca mostra um "ligado" que o main não confirmou.
+  const elVideoChave = $('wVideoChave');
+  let videoLigado = false;
+
+  function pintaChave(ligado) {
+    videoLigado = !!ligado;
+    elVideoChave.classList.toggle('on', videoLigado);
+    elVideoChave.setAttribute('aria-pressed', String(videoLigado));
+    elVideoChave.title = 'Vídeo do navegador na parede: ' + (videoLigado ? 'ligado' : 'desligado');
+  }
+
+  elVideoChave.addEventListener('click', () => {
+    elVideoChave.disabled = true;
+    window.api.videoLiga(!videoLigado)
+      .then(pintaVideo)
+      .catch(() => {})
+      .then(() => { elVideoChave.disabled = false; });
+  });
+
   function pintaVideo(v) {
-    playerDoVideo = (v && v.site && !v.janelaVisivel) ? (v.player || '') : '';
+    if (v && 'ligado' in v) pintaChave(v.ligado);
     if (!v || !v.site || v.janelaVisivel) {
       // Ele voltou para a janela: o painel devolve o vídeo e sai da frente.
       if (videoMontado && /^youtube/.test(videoMontado)) window.api.videoTocaNavegador().catch(() => {});

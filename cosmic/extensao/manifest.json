@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "RicePanel ponte",
+  "description": "Diz ao RicePanel quais abas do YouTube e do Globoplay estão tocando, com volume e posição, e pausa a aba que o painel assumir.",
+  "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0jcpr2ErwUiAAzY/ijbRhCfwaIRW5T32oDgvY394BUv8JmJcUc/I79XfII6sS/ch92VO/XCbAwbq8zdQqWx7K+OWW3kH2fqp9CnnQkZL+NSW2VC0FDUm/sFVVpjW58wt9NHC+cGN6DoCJuLLlvSJ+Vy7CdjIAXEPOfl0WtBvhJOHgr28r5ueLdadxgJCC5T3/b02fNDUmjhHaXYPxE/2cVlpHszhK+cu9WzOs5pDTmeKN9O3LbmqJj+yvgKyCr9RsR5jW7POXoPmX5HgHeGnELSA1KstKYGMf8zwezI5HMjqFgm6Fg0In88toJpwyLFxZh7pTvIf2i49HbEVvRIG0QIDAQAB",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "nativeMessaging",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://globoplay.globo.com/*",
+    "https://*.globo.com/*"
+  ],
+  "background": {
+    "service_worker": "fundo.js"
+  }
+}

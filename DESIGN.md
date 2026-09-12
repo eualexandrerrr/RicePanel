@@ -69,6 +69,16 @@ Mirante o barramento de baixo some: seletor de coisa escondida é ruído.
 - **Estação** é o trabalho, e não perdeu nada: os dois consoles do txAdmin, o modo Dev e o Monitor
   continuam exatamente onde estavam, com a mesma barra central entre os terminais.
 
+### Mirante nativo, Estação no Electron (12/09/2026)
+
+As duas páginas deixaram de morar no mesmo processo. O **Mirante** é app nativo do COSMIC em `cosmic/`
+(Rust e libcosmic), numa layer surface abaixo das janelas; a **Estação** continua no Electron e só sobe
+quando uma tecla da travessa pede. O mundo visual não mudou: mesmos tokens, mesma escala, mesma
+travessa copiada da waybar. O que mudou foi o material do vidro, que agora é recortado com o canto
+redondo no próprio alfa, porque o iced não honra raio em imagem.
+
+Na Estação a tecla **Mirante** fecha a janela: a parede já está embaixo dela.
+
 ### O Mirante tem mundo próprio: luz sobre vidro (08/09/2026)
 
 A metáfora da mesa de som continua mandando na **Estação**, que é tela de trabalho. O **Mirante**

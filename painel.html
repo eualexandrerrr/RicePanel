@@ -378,6 +378,9 @@
       transition: background 200ms var(--saida), color 200ms var(--saida);
     }
     .travessa > .botao:hover { background: rgba(49, 50, 68, 0.8); color: var(--text); }
+    /* Chave ligada fala a cor de interação, como a tecla ativa do barramento. */
+    .travessa > .botao.on,
+    .travessa > .botao.on:hover { background: var(--acento); border-color: var(--acento); color: var(--sobre-acento); }
     .marca {
       font-family: 'JetBrains Mono', 'JetBrainsMono Nerd Font', monospace;
       letter-spacing: 0.16em;
@@ -1045,6 +1048,18 @@
       font-size: 17px; font-weight: 700; color: var(--leitura); letter-spacing: -0.01em;
     }
     .tela .estado { font-size: 11px; color: var(--serigrafia-fraca); }
+    /* Chave de qual servidor local a tela mostra: a acesa é a que está no console. */
+    .escolha-local { display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: var(--sulco); border: 1px solid var(--aresta); flex: none; }
+    .escolha-local[hidden] { display: none; }
+    .chave-local {
+      -webkit-app-region: no-drag;
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 3px 9px; border: 0; border-radius: 4px; cursor: pointer;
+      background: none; color: var(--serigrafia-fraca);
+    }
+    .chave-local:hover { color: var(--leitura); background: rgba(255, 255, 255, 0.05); }
+    .chave-local.on { background: #2a3b4d; color: #9fd0ff; box-shadow: inset 0 0 0 1px #3d5a75; }
     .tela .estado.ruim { color: var(--vermelho); }
     .tela .medidas { margin-left: auto; display: flex; align-items: center; gap: 7px; }
     /* Estado do servidor: pílula com LED. A etiqueta miúda e quadrada sumia no
@@ -2091,6 +2106,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <path d="M4 9.1v.1M6.4 9.1v.1M8.8 9.1v.1M11.2 9.1v.1"/>
         <path d="M5.2 10.9h5.6"/>
       </g>
+      <g id="ic-video" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="1.75" y="2.75" width="12.5" height="9" rx="1.6"/>
+        <path d="M6.6 5.4v3.7l3.2-1.85z" fill="currentColor" stroke="none"/>
+        <path d="M5.5 14.25h5"/>
+      </g>
       <g id="ic-ajuste" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
         <path d="M3 4.6h10M3 8h10M3 11.4h10"/>
         <circle cx="6" cy="4.6" r="1.7" fill="currentColor" stroke="none"/>
@@ -2184,6 +2204,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <button class="tecla" data-modo="monitor"><span class="marcador" id="marcadorMonitor"></span>Monitor</button>
     </span>
     <span class="vao"></span>
+    <!-- Chave do vídeo do navegador: nasce desligada. Ligada, o painel puxa o
+         vídeo que toca fora da vista e pausa a aba; é pedido dele, não padrão. -->
+    <button class="botao" id="wVideoChave" title="Vídeo do navegador na parede: desligado" aria-label="Vídeo do navegador na parede" aria-pressed="false"><svg viewBox="0 0 16 16"><use href="#ic-video"/></svg></button>
     <button class="botao" id="ajusteServ" title="Configurar os servidores" aria-label="Configurar os servidores"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
     <button class="botao" id="closeBtn" title="Fechar o painel" aria-label="Fechar o painel">
       <svg viewBox="0 0 16 16"><use href="#ic-x"/></svg>
@@ -2314,6 +2337,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <span class="selo" id="selo0"></span>
         <span class="serigrafia" id="nome0"></span>
         <span class="destino" id="dest0"></span>
+        <span class="escolha-local" id="escolha0" hidden></span>
         <span class="estado" id="est0"></span>
         <span class="medidas">
           <span class="pastilha" id="sv0"></span>
@@ -2362,6 +2386,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <span class="selo" id="selo1"></span>
         <span class="serigrafia" id="nome1"></span>
         <span class="destino" id="dest1"></span>
+        <span class="escolha-local" id="escolha1" hidden></span>
         <span class="estado" id="est1"></span>
         <span class="medidas">
           <span class="pastilha" id="sv1"></span>

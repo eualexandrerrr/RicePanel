@@ -22,6 +22,12 @@ Spotify com controles, o próximo jogo do Flamengo e a contagem para o GTA VI.
 projetos Expo com emulador Android; e um monitor de cotas, Sentry e anotações
 do Discord.
 
+Desde setembro de 2026 o **Mirante roda nativo no COSMIC**: um app em Rust com
+libcosmic, em [`cosmic/`](cosmic/README.md), desenhado numa layer surface abaixo
+das janelas. Parado, ele gasta perto de 2% de um núcleo e 170 MB, contra meio
+núcleo e 1,2 GB da página em Electron. A Estação continua no Electron e abre sob
+demanda pela travessa nativa, com `--estacao --modo=servidores|dev|monitor`.
+
 ## Como as leituras são feitas
 
 Tudo local, sem serviço extra rodando:

@@ -1,0 +1,3 @@
+/target
+# Chave privada da extensão: fixa o ID, não vai para o repositório.
+.extensao-chave.pem
