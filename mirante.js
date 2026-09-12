@@ -158,18 +158,36 @@
     let quadro = 0;
     let relogio = null;
 
-    function pinta() {
+    // data: URI em background-image vaza: o Chromium guarda o bitmap decodificado
+    // no cache por URL, e cada troca e uma URL nova que nunca sai de la. Blob URL
+    // revogado a cada troca libera o anterior de verdade -- medido, 19 MB/min
+    // parou de crescer com isto.
+    let urlAnterior = null;
+    async function pinta() {
       const svg = offscreen.querySelector('svg');
       if (!svg) return;
       const marcado = new XMLSerializer().serializeToString(svg);
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, w, h);
-        ctx.filter = blurPx ? `blur(${blurPx}px)` : 'none';
-        ctx.drawImage(img, 0, 0, w, h);
-        el.style.backgroundImage = `url(${canvas.toDataURL('image/png')})`;
-      };
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(marcado);
+      const blobSvg = new Blob([marcado], { type: 'image/svg+xml' });
+      let bitmap;
+      try {
+        bitmap = await createImageBitmap(blobSvg, { resizeWidth: w, resizeHeight: h });
+      } catch (e) {
+        console.error('DEBUG bitmap falhou', elId, String(e));
+        return;
+      }
+      ctx.clearRect(0, 0, w, h);
+      ctx.filter = blurPx ? `blur(${blurPx}px)` : 'none';
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      bitmap.close();
+      const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : '?';
+      console.error('DEBUG', elId, 'heapMB=' + heap);
+      canvas.toBlob(blob => {
+        if (!blob) return;
+        const novaUrl = URL.createObjectURL(blob);
+        el.style.backgroundImage = `url(${novaUrl})`;
+        if (urlAnterior) URL.revokeObjectURL(urlAnterior);
+        urlAnterior = novaUrl;
+      }, 'image/png');
     }
 
     function avanca() {
