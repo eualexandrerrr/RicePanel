@@ -481,6 +481,7 @@ async function tique() {
     // O vídeo tem leitura própria (MPRIS + hyprctl) e cadência de 2 s igual à
     // deste tique; aqui só vai o retrato mais recente para a tela.
     empurra('video-update', video.atual());
+    empurraPip();
   } catch (e) {
     log('tique de sistema falhou: ' + e.message);
   }
@@ -545,15 +546,108 @@ ipcMain.handle('musica-comando', async (e, verbo, player) => {
 
 ipcMain.handle('video-get', async () => video.atual());
 
-// Cursor em coordenadas da página. A janelinha do vídeo flutua por cima dos
-// consoles, e o que está por cima de um <webview> não recebe o mouse: o
-// Chromium entrega o evento à página do console. A página do painel também não
-// vê o mouse passando sobre uma webview, então quem sabe onde ele está é o main.
-ipcMain.handle('cursor-janela', async () => {
-  if (!mainWindow || mainWindow.isDestroyed()) return null;
-  const p = screen.getCursorScreenPoint();
+// --- Player do vídeo em janela própria (pip.html) --------------------------
+//
+// No Electron, o que a página do painel desenha por cima de um <webview> não
+// recebe o mouse: nos Servidores a janelinha do vídeo ficava sobre os consoles
+// do txAdmin e não havia como arrastá-la (medido: nem pointerover chegava).
+// O player é uma janela filha do painel, sempre por cima dele:
+//   - modo 'placa' (Mirante): encaixada no retângulo da placa, parada e
+//     transparente ao mouse;
+//   - modo 'flutuante' (outras abas): o Windows arrasta pela barra de título e
+//     redimensiona pelas bordas, em 16:9; posição e tamanho ficam guardados.
+// É uma janela só nos dois modos: trocar de aba não recarrega o vídeo.
+const PIP_FILE = () => path.join(app.getPath('userData'), 'pip.json');
+const PIP_BARRA = 30;
+let pipWin = null;
+let pipPronto = false;
+let pipModo = '';
+
+function lePipBounds() {
+  try {
+    const b = JSON.parse(fs.readFileSync(PIP_FILE(), 'utf8'));
+    return b && b.width > 0 && b.height > 0 ? b : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function pipPadrao() {
   const b = mainWindow.getContentBounds();
-  return { x: p.x - b.x, y: p.y - b.y };
+  const w = 440;
+  const h = Math.round(w * 9 / 16) + PIP_BARRA;
+  return { x: b.x + b.width - w - 18, y: b.y + b.height - h - 64, width: w, height: h };
+}
+
+function empurraPip() {
+  if (!pipWin || pipWin.isDestroyed() || !pipPronto) return;
+  try { pipWin.webContents.send('pip-video', Object.assign({ modo: pipModo }, video.atual())); } catch (e) {}
+}
+
+function garantePip() {
+  if (pipWin && !pipWin.isDestroyed()) return pipWin;
+  pipWin = new BrowserWindow({
+    parent: mainWindow,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    type: process.platform === 'win32' ? 'toolbar' : undefined,
+    backgroundColor: '#000000',
+    minWidth: 260,
+    minHeight: Math.round(260 * 9 / 16) + PIP_BARRA,
+    webPreferences: {
+      preload: path.join(__dirname, 'pip-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      webviewTag: true
+    }
+  });
+  pipWin.loadFile('pip.html');
+  pipWin.webContents.once('did-finish-load', () => { pipPronto = true; empurraPip(); });
+  const guarda = () => {
+    if (pipModo !== 'flutuante' || !pipWin || pipWin.isDestroyed()) return;
+    try { fs.writeFileSync(PIP_FILE(), JSON.stringify(pipWin.getBounds())); } catch (e) {}
+  };
+  pipWin.on('moved', guarda);
+  pipWin.on('resized', guarda);
+  pipWin.on('closed', () => { pipWin = null; pipPronto = false; pipModo = ''; });
+  log('player: janela criada');
+  return pipWin;
+}
+
+// O Mirante manda, a cada mudança: se o player aparece, em que modo e, na
+// placa, o retângulo dela (coordenadas da página).
+ipcMain.on('pip-estado', (e, s) => {
+  const podeMostrar = s && s.visivel && mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
+  if (!podeMostrar) {
+    if (pipWin && !pipWin.isDestroyed() && pipWin.isVisible()) pipWin.hide();
+    return;
+  }
+  const w = garantePip();
+  const b = mainWindow.getContentBounds();
+  if (s.modo === 'placa') {
+    pipModo = 'placa';
+    w.setAspectRatio(0);
+    w.setResizable(false);
+    w.setMovable(false);
+    w.setIgnoreMouseEvents(true);
+    w.setBounds({ x: Math.round(b.x + s.x), y: Math.round(b.y + s.y), width: Math.max(1, Math.round(s.w)), height: Math.max(1, Math.round(s.h)) });
+  } else {
+    const entrou = pipModo !== 'flutuante';
+    pipModo = 'flutuante';
+    w.setIgnoreMouseEvents(false);
+    w.setMovable(true);
+    w.setResizable(true);
+    w.setAspectRatio(16 / 9, { width: 0, height: PIP_BARRA });
+    if (entrou) w.setBounds(lePipBounds() || pipPadrao());
+  }
+  if (!w.isVisible()) w.showInactive();
+  empurraPip();
 });
 ipcMain.handle('video-liga', async (e, valor) => { await video.liga(valor); return video.atual(); });
 ipcMain.handle('video-entra', async () => video.entraComAContaDele());

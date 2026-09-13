@@ -818,123 +818,6 @@
   const elVideo = $('wVideo');
   let videoMontado = '';          // id + site do que está na placa agora
 
-  // ---- janelinha flutuante fora do Mirante: arrastar e redimensionar ----
-  // Arrasta pela barra do título (o vídeo em si é uma webview, que engole o
-  // mouse); redimensiona pelo puxador do canto de cima à esquerda, com o canto
-  // de baixo à direita parado. Posição e largura moram em variáveis CSS na
-  // própria placa e ficam guardadas; no Mirante o CSS nem as lê.
-  const PIP_CHAVE = 'videoPip';
-  const PIP_MIN_W = 260;
-
-  function lePip() {
-    try { return JSON.parse(localStorage.getItem(PIP_CHAVE)) || null; } catch (e) { return null; }
-  }
-
-  function aplicaPip(p) {
-    if (!p) return;
-    elVideo.style.setProperty('--pip-r', Math.round(p.r) + 'px');
-    elVideo.style.setProperty('--pip-b', Math.round(p.b) + 'px');
-    elVideo.style.setProperty('--pip-w', Math.round(p.w) + 'px');
-  }
-
-  function flutuando() {
-    return document.body.classList.contains('com-video') && !document.body.classList.contains('em-mirante');
-  }
-
-  function garantePuxador() {
-    if (elVideo.querySelector('.pip-puxador')) return;
-    const s = document.createElement('span');
-    s.className = 'pip-puxador';
-    s.title = 'Arraste para mudar o tamanho';
-    elVideo.appendChild(s);
-  }
-
-  aplicaPip(lePip());
-
-  // Com o cursor em cima da janelinha, os consoles embaixo dela param de
-  // receber o mouse (`body.pip-sob-cursor`), e o clique chega à barra do título
-  // e ao puxador. Sem isso o evento ia para o <webview> do console por baixo.
-  // Só pergunta ao main enquanto a janelinha existe; com o arraste em curso a
-  // classe fica, mesmo que o cursor escape da caixa.
-  // Alças da janelinha na RAIZ do documento. A placa do vídeo mora dentro da
-  // página do Mirante, que fica invisível e sem clique enquanto a janelinha
-  // flutua — e clique nenhum chegava nela (medido: nem pointerover). As alças
-  // ficam fora dessa página, por cima da barra do título e do canto, e seguem a
-  // caixa do vídeo.
-  const pipAlcas = $('pipAlcas');
-
-  function sincronizaAlcas() {
-    if (!pipAlcas) return;
-    if (!flutuando() || elVideo.hidden) { pipAlcas.hidden = true; return; }
-    const r = elVideo.getBoundingClientRect();
-    const pe = elVideo.querySelector('.video-pe');
-    pipAlcas.hidden = false;
-    pipAlcas.style.left = r.left + 'px';
-    pipAlcas.style.top = r.top + 'px';
-    pipAlcas.style.width = r.width + 'px';
-    pipAlcas.style.height = r.height + 'px';
-    pipAlcas.style.setProperty('--pip-barra', Math.round(pe ? pe.getBoundingClientRect().height : 34) + 'px');
-  }
-
-  setInterval(async () => {
-    sincronizaAlcas();
-    if (!flutuando()) { document.body.classList.remove('pip-sob-cursor'); return; }
-    let c = null;
-    try { c = await window.api.cursorJanela(); } catch (e) {}
-    if (!c) return;
-    const r = elVideo.getBoundingClientRect();
-    const dentro = c.x >= r.left - 6 && c.x <= r.right + 6 && c.y >= r.top - 6 && c.y <= r.bottom + 6;
-    document.body.classList.toggle('pip-sob-cursor', dentro || elVideo.classList.contains('arrastando'));
-  }, 80);
-
-  pipAlcas.addEventListener('pointerdown', (e) => {
-    if (!flutuando() || e.button !== 0) return;
-    const puxador = e.target.closest('.pip-alca-canto');
-    const barra = !puxador && e.target.closest('.pip-alca-barra');
-    if (!puxador && !barra) return;
-    e.preventDefault();
-
-    const caixa = elVideo.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const extraAltura = caixa.height - caixa.width * 9 / 16;   // a barra do título
-    const ini = { x: e.clientX, y: e.clientY, r: vw - caixa.right, b: vh - caixa.bottom, w: caixa.width, h: caixa.height };
-    let ultimo = { r: ini.r, b: ini.b, w: ini.w };
-
-    const alvo = e.target;
-    alvo.setPointerCapture(e.pointerId);
-    elVideo.classList.add('arrastando');
-    window.api.diag('pip: arraste começou (' + (puxador ? 'tamanho' : 'posição') + ')');
-
-    const move = (ev) => {
-      const dx = ev.clientX - ini.x;
-      const dy = ev.clientY - ini.y;
-      if (puxador) {
-        // Cresce para cima e para a esquerda; não passa da borda da tela.
-        const maxW = Math.min(vw - ini.r - 8, (vh - ini.b - 8 - extraAltura) * 16 / 9);
-        ultimo = { r: ini.r, b: ini.b, w: Math.max(PIP_MIN_W, Math.min(maxW, ini.w - dx)) };
-      } else {
-        ultimo = {
-          r: Math.max(0, Math.min(vw - ini.w, ini.r - dx)),
-          b: Math.max(0, Math.min(vh - ini.h, ini.b - dy)),
-          w: ini.w
-        };
-      }
-      aplicaPip(ultimo);
-      sincronizaAlcas();
-    };
-    const solta = () => {
-      alvo.removeEventListener('pointermove', move);
-      alvo.removeEventListener('pointerup', solta);
-      alvo.removeEventListener('pointercancel', solta);
-      elVideo.classList.remove('arrastando');
-      sincronizaAlcas();
-      try { localStorage.setItem(PIP_CHAVE, JSON.stringify(ultimo)); } catch (err) {}
-    };
-    alvo.addEventListener('pointermove', move);
-    alvo.addEventListener('pointerup', solta);
-    alvo.addEventListener('pointercancel', solta);
-  });
   let volumeAplicado = null;      // último volume mandado para o player
 
   function desmontaVideo() {
@@ -944,26 +827,17 @@
     elVideo.innerHTML = '';
     elVideo.hidden = true;
     pintaMusica(ultimaMusica);
+    sincronizaPip();
   }
 
+  // O YouTube não toca aqui dentro: toca na janela do player (pip.html), que o
+  // main põe por cima deste espaço no Mirante e deixa flutuar nas outras abas.
+  // No Electron o que a página desenha por cima de um <webview> não recebe o
+  // mouse, e a janelinha flutuando sobre os consoles não tinha como ser
+  // arrastada. A placa guarda o lugar (preto, 16:9) e o título.
   function montaYoutube(v) {
-    const inicio = Math.max(0, (v.posicao || 0) - 1);
-    // Página normal do YouTube, não o `/embed`: o embed recusa quem não tem
-    // origem HTTP (erro 153), e a página do painel é `file://`. A página cheia
-    // carrega sem reclamar; o que sobra dela — cabeçalho, sugestões,
-    // comentários — some no CSS injetado logo abaixo.
-    const src = 'https://www.youtube.com/watch?v=' + encodeURIComponent(v.id) +
-      '&t=' + inicio + 's';
-    // A webview tem partição própria (a mesma constante mora em video.js); a
-    // sessão do Chrome dele entra nela por `videoEntra` antes de carregar. O
-    // user-agent perde o carimbo do Electron: o YouTube trata a sessão como a
-    // do navegador de onde os cookies vieram.
-    const ua = navigator.userAgent.replace(/ (ricepanel|electron)\/\S+/gi, '');
     elVideo.innerHTML =
-      '<span class="video-quadro">' +
-        '<webview id="wVideoQuadro" partition="persist:video-mirante" allowpopups="false"' +
-        ' useragent="' + ua.replace(/"/g, '') + '"></webview>' +
-      '</span>' +
+      '<span class="video-quadro" id="wVideoVaga"></span>' +
       '<span class="video-pe">' +
         '<span class="video-titulo">' + esc(v.titulo || 'Vídeo') + '</span>' +
         '<span class="rotulo video-onde">YouTube</span>' +
@@ -971,110 +845,33 @@
     elVideo.hidden = false;
     document.body.classList.add('com-video');
     pintaMusica(ultimaMusica);
-
-    const quadro = $('wVideoQuadro');
-    if (!quadro) return;
-
-    // O que fica da página é só o vídeo. Sem isto o painel viraria uma janela
-    // do YouTube na parede, com barra de busca e coluna de sugestões.
-    const SO_O_VIDEO = [
-      '#masthead-container, ytd-masthead, #secondary, #below, #chat,',
-      'ytd-comments, tp-yt-app-drawer, ytd-mini-guide-renderer,',
-      'ytd-watch-metadata, #related, .ytp-chrome-top, .ytp-gradient-top,',
-      'ytd-merch-shelf-renderer { display: none !important; }',
-      // Controles do player por cima do vídeo: barra de progresso e volume,
-      // dicas, sobreposição de pausa, cards e marca d'água. Na parede ninguém
-      // mexe neles, e aparecendo a cada movimento do mouse só tampam a imagem.
-      '.ytp-chrome-bottom, .ytp-gradient-bottom, .ytp-chrome-controls, .ytp-bezel,',
-      '.ytp-bezel-text-wrapper, .ytp-tooltip, .ytp-pause-overlay, .ytp-ce-element,',
-      '.ytp-cards-teaser, .ytp-paid-content-overlay, .ytp-watermark,',
-      '.ytp-overlay-bottom-right, .ytp-iv-player-content { display: none !important; }',
-      '.html5-video-player, .html5-video-player * { cursor: none !important; }',
-      'html, body { overflow: hidden !important; background: #000 !important; }',
-      'ytd-app, #content, ytd-page-manager, ytd-watch-flexy { background: #000 !important; }',
-      '#primary, #primary-inner, #player, #player-container,',
-      '#player-container-inner, #movie_player, .html5-video-player {',
-      '  margin: 0 !important; padding: 0 !important;',
-      '  width: 100vw !important; max-width: 100vw !important;',
-      '  height: 100vh !important; max-height: 100vh !important; }',
-      '.html5-video-container, video { width: 100% !important; height: 100% !important;',
-      '  left: 0 !important; top: 0 !important; object-fit: contain !important; }'
-    ].join('\n');
-
-    // `insertCSS` sozinho não segura, e uma injeção só também não: o YouTube
-    // troca a página inteira depois do `dom-ready` (SPA), e o anúncio que roda
-    // antes do vídeo monta outro DOM em cima. Então o que entra na página é um
-    // vigia: repõe o `<style>` e o volume enquanto o vídeo não estabiliza, e se
-    // desliga sozinho depois de um minuto para não ficar rodando à toa.
-    // Volume pelo PLAYER (`setVolume`, 0 a 100), não pelo `<video>.volume`: o
-    // YouTube aplica a normalização de loudness no elemento, e forçar o número
-    // do elemento brigava com ela a cada segundo — o volume ficava variando.
-    // O alvo mora em `window.__ricepanelVol`, que `aplicaVolume` atualiza.
-    //
-    // O vigia não desiste mais depois de um minuto: com cookie, anúncio ou live
-    // demorando, o vídeo ficava parado esperando um clique. Enquanto a placa
-    // existe, vídeo pausado leva play. Recusa de play vai para o log.
-    const script =
-      '(function(){' +
-      '  var css=' + JSON.stringify(SO_O_VIDEO) + ';' +
-      // Sem volume do Chrome ainda: 15%, nunca os 100% de fábrica do YouTube.
-      '  if(window.__ricepanelVol===undefined) window.__ricepanelVol=' + (v.volume != null ? v.volume.toFixed(3) : '0.15') + ';' +
-      '  var avisou="", confirmou=0;' +
-      '  function poe(){' +
-      '    var e=document.getElementById("ricepanel-so-o-video");' +
-      '    if(!e){ e=document.createElement("style"); e.id="ricepanel-so-o-video";' +
-      '            (document.head||document.documentElement).appendChild(e); }' +
-      '    if(e.textContent!==css) e.textContent=css;' +
-      '    var p=document.getElementById("movie_player");' +
-      '    var v=document.querySelector("video");' +
-      '    var vol=window.__ricepanelVol;' +
-      '    if(p&&typeof p.setVolume==="function"){' +
-      '      try{ if(p.isMuted&&p.isMuted()) p.unMute();' +
-      '           if(vol!==null){ var alvo=Math.round(vol*100);' +
-      '             if(p.getVolume()!==alvo){ p.setVolume(alvo); confirmou=0; } else confirmou++;' +
-      // Duas conferências seguidas com o volume certo: só aí o painel tira o
-      // mudo da webview. Antes disso o som sairia no volume de fábrica.
-      '             if(confirmou>=2&&!window.__ricepanelSom){ window.__ricepanelSom=true; console.log("ricepanel: som-liberado "+alvo); } } }catch(err){}' +
-      '    } else if(v){ if(vol!==null){ v.volume=vol; if(!window.__ricepanelSom){ window.__ricepanelSom=true; console.log("ricepanel: som-liberado "+Math.round(vol*100)); } } }' +
-      '    if(p&&p.setPlaybackQualityRange){ try{p.setPlaybackQualityRange("hd720","hd720");}catch(err){} }' +
-      '    if(v&&v.paused&&!v.ended){' +
-      '      try{ if(p&&typeof p.playVideo==="function") p.playVideo(); }catch(err){}' +
-      '      v.play().catch(function(err){ var m="ricepanel: play recusado — "+err.name+" "+err.message;' +
-      '        if(m!==avisou){ avisou=m; console.log(m); } });' +
-      '    }' +
-      '  }' +
-      '  poe();' +
-      '  if(window.__ricepanelVigia) clearInterval(window.__ricepanelVigia);' +
-      '  window.__ricepanelVigia=setInterval(poe,1500);' +
-      '  return true;})()';
-
-    const injeta = () => {
-      try { quadro.executeJavaScript(script); } catch (e) {}
-    };
-
-    // A webview nasce MUDA e só ganha som quando o vigia confirma que o player
-    // já está no volume do Chrome: o YouTube começa a tocar no volume de
-    // fábrica (100%) antes de o ajuste pegar, e isso saía gritando.
-    quadro.addEventListener('dom-ready', () => {
-      try { quadro.setAudioMuted(true); } catch (e) {}
-      injeta();
-    }, { once: true });
-    // O que o vigia da página reporta chega aqui: liberar o som, ou play recusado.
-    quadro.addEventListener('console-message', (e) => {
-      const msg = String(e.message || '');
-      if (!/^ricepanel:/.test(msg)) return;
-      if (/som-liberado/.test(msg)) { try { quadro.setAudioMuted(false); } catch (err) {} }
-      window.api.diag('video: ' + msg.slice(10, 200));
-    });
-    quadro.addEventListener('did-finish-load', injeta);
-
-    // Cookies primeiro, página depois: carregar antes é entrar deslogado e
-    // recarregar, com o anúncio no meio. Se a placa saiu enquanto esperava, a
-    // webview já não está no documento e não há o que carregar.
-    window.api.videoEntra().catch(() => {}).then(() => {
-      if (quadro.isConnected) quadro.src = src;
-    });
   }
+
+  // Diz ao main onde e como o player aparece: na placa (retângulo da vaga), a
+  // flutuar (fora do Mirante), ou escondido — sem YouTube, ou com modal aberto,
+  // que a janela do player cobriria.
+  let pipUltimo = '';
+  function sincronizaPip() {
+    const vaga = $('wVideoVaga');
+    const temYoutube = !!vaga && /^youtube:/.test(videoMontado);
+    const modal = !!document.querySelector('.cortina.on');
+    let estado = { visivel: false };
+    if (temYoutube && !modal) {
+      if (document.body.classList.contains('em-mirante')) {
+        const r = vaga.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+          estado = { visivel: true, modo: 'placa', x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+        }
+      } else {
+        estado = { visivel: true, modo: 'flutuante' };
+      }
+    }
+    const chave = JSON.stringify(estado);
+    if (chave === pipUltimo) return;
+    pipUltimo = chave;
+    window.api.pipEstado(estado);
+  }
+  setInterval(sincronizaPip, 150);
 
   // ---- espelho da janela ----
   // Globoplay e Netflix não tocam dentro do Electron: falta o Widevine. Em vez
@@ -1189,14 +986,12 @@
 
     if (v.site === 'youtube') {
       montaYoutube(v);
-      garantePuxador();
       videoMontado = assinatura;
       // A aba fica em silêncio enquanto a parede toca.
       window.api.videoPausaNavegador().catch(() => {});
       return;
     }
     montaDrm(v);
-    garantePuxador();
     videoMontado = assinatura;
   }
 

@@ -1614,60 +1614,9 @@
       padding: 9px 14px 11px;
     }
     .video-pe .botao-espelho { margin: 0; padding: 5px 12px; font-size: 12px; }
-    /* Fora do Mirante o vídeo não para (13/09/2026): ele está programando nos
-       Servidores e assistindo ao mesmo tempo. A placa vira janelinha flutuante
-       no canto, e a webview é a MESMA — mover um <webview> no DOM recarrega a
-       página e corta o vídeo, então quem muda é o CSS. A página do Mirante fica
-       montada, invisível e sem receber clique; só a placa do vídeo aparece.
-       Acima dos consoles, abaixo dos modais (z-index 20), e alta o bastante
-       para não tampar a barra de comando do console de baixo. */
-    body.com-video:not(.em-mirante) #modoMirante {
-      display: block; position: fixed; inset: 0; z-index: 18;
-      visibility: hidden; pointer-events: none; overflow: hidden;
-    }
-    /* Posição e largura vêm de variáveis que o arrastar grava (mirante.js); sem
-       elas, o canto de baixo à direita. */
-    body.com-video:not(.em-mirante) #wVideo {
-      visibility: visible; pointer-events: auto;
-      position: fixed; right: var(--pip-r, 18px); bottom: var(--pip-b, 64px); z-index: 18;
-      width: var(--pip-w, min(440px, 46vw)); margin: 0;
-      border-radius: 16px;
-      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6);
-    }
-    body.com-video:not(.em-mirante) #wVideo .video-quadro { max-height: none; }
-    body.com-video:not(.em-mirante) #wVideo .video-pe { padding: 6px 12px 8px; cursor: move; user-select: none; }
-    /* Puxador de tamanho: só na janelinha, no canto de cima à esquerda. */
-    .pip-puxador { display: none; }
-    body.com-video:not(.em-mirante) #wVideo .pip-puxador {
-      display: block; position: absolute; left: 0; top: 0; z-index: 6;
-      width: 26px; height: 26px; cursor: nwse-resize;
-      background: linear-gradient(135deg, rgba(205, 214, 244, 0.6) 0 22%, transparent 22%);
-    }
-    /* Durante o gesto, uma película transparente cobre o vídeo: sem ela o
-       ponteiro cai dentro da webview e a janela para de acompanhar o mouse. */
-    #wVideo.arrastando .video-quadro::after {
-      content: ''; position: absolute; inset: 0; z-index: 5;
-    }
-    /* O que está por cima de um <webview> não recebe o mouse: o Chromium manda
-       o evento para a página do console. Com o cursor sobre a janelinha, os
-       consoles ficam surdos ao mouse e o clique chega nela (mirante.js). */
-    body.pip-sob-cursor .tela webview { pointer-events: none; }
-    /* O puxador desenhado dentro da placa não recebe clique; quem recebe são as
-       alças da raiz, logo abaixo. O desenho do triângulo passa para a alça. */
-    body.com-video:not(.em-mirante) #wVideo .pip-puxador { display: none; }
-    #pipAlcas {
-      position: fixed; z-index: 19; pointer-events: none;
-    }
-    #pipAlcas[hidden] { display: none; }
-    .pip-alca-barra {
-      position: absolute; left: 0; right: 0; bottom: 0; height: var(--pip-barra, 34px);
-      pointer-events: auto; cursor: move;
-    }
-    .pip-alca-canto {
-      position: absolute; left: 0; top: 0; width: 28px; height: 28px;
-      pointer-events: auto; cursor: nwse-resize; border-top-left-radius: 16px;
-      background: linear-gradient(135deg, rgba(205, 214, 244, 0.7) 0 24%, transparent 24%);
-    }
+    /* O YouTube toca numa JANELA própria (pip.html), que o main encaixa por
+       cima deste espaço no Mirante e deixa flutuar nas outras abas. Aqui fica
+       só o lugar vazio e preto no tamanho do vídeo. */
     .video-titulo {
       font-size: 13.5px; color: var(--text); min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -2960,14 +2909,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <button id="servOk" class="btn btn-firme">Salvar</button>
       </div>
     </div>
-  </div>
-
-  <!-- Alças da janelinha do vídeo: fora da página do Mirante (invisível e sem
-       clique enquanto o vídeo flutua), por cima da barra do título e do canto.
-       Posição e tamanho vêm do mirante.js. -->
-  <div id="pipAlcas" hidden>
-    <div class="pip-alca-barra" title="Arraste para mover o player"></div>
-    <div class="pip-alca-canto" title="Arraste para mudar o tamanho"></div>
   </div>
 
   <div id="ligaModal" class="cortina">
