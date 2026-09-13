@@ -166,6 +166,64 @@ function escolhe(jogos) {
   return recentes[0] || null;
 }
 
+// ------------------------------------------------ onde passa, e a rodada
+//
+// O ESPN devolve `broadcasts: []` para jogo brasileiro, e o MeuMengaoApp não
+// mostra transmissão nenhuma. Quem sabe é o ge: a agenda do Flamengo no site
+// traz, embutida na página, a lista `liveWatchSources` de cada jogo (Globo,
+// Premiere, SporTV, Disney+...) e a rodada. Não é API publicada, é o JSON que a
+// própria página usa — então tudo aqui é opcional: mudou o formato, a placa
+// continua com o ESPN e só perde a linha da TV.
+const GE_AGENDA = 'https://ge.globo.com/futebol/times/flamengo/agenda-de-jogos-do-flamengo/';
+const GE_TIME = 262;
+const GE_VALIDADE_MS = 30 * 60 * 1000;
+// Cartola é fantasy, não transmissão.
+const GE_FORA = /^cartola$/i;
+const GE_NOMES = { globoplay: 'Globoplay', sportv: 'SporTV', 'ge tv': 'ge tv' };
+
+let geCache = { quando: 0, jogos: [] };
+
+async function jogosDoGe() {
+  if (Date.now() - geCache.quando < GE_VALIDADE_MS) return geCache.jogos;
+  const corta = AbortSignal.timeout ? AbortSignal.timeout(PRAZO_MS) : undefined;
+  const r = await fetch(GE_AGENDA, {
+    signal: corta,
+    headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36', 'accept-language': 'pt-BR' }
+  });
+  if (!r.ok) throw new Error('ge HTTP ' + r.status);
+  const m = (await r.text()).match(/scheduleTeam:\s*(\{.*\}),\s*\n/);
+  if (!m) throw new Error('ge sem agenda embutida');
+  const agenda = (JSON.parse(m[1]).teamAgenda) || {};
+  const jogos = [].concat(agenda.now || [], agenda.future || [], agenda.past || [])
+    .map(ev => ev && ev.match).filter(Boolean);
+  geCache = { quando: Date.now(), jogos };
+  return jogos;
+}
+
+// Dia do jogo no fuso de Brasília, que é o que o ge escreve em `startDate`.
+function diaBrasilia(iso) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(iso));
+}
+
+// O Flamengo não joga duas vezes no mesmo dia: data mais o próprio time bastam
+// para casar o jogo do ESPN com o do ge, sem depender de grafia de adversário.
+async function completaComGe(jogo) {
+  try {
+    const dia = diaBrasilia(jogo.quando);
+    const doGe = (await jogosDoGe()).find(mt => mt.startDate === dia &&
+      [mt.firstContestant, mt.secondContestant].some(t => t && t.id === GE_TIME));
+    if (!doGe) return;
+    jogo.transmissao = (doGe.liveWatchSources || [])
+      .map(s => String(s && s.name || '').trim())
+      .filter(n => n && !GE_FORA.test(n))
+      .map(n => GE_NOMES[n.toLowerCase()] || n);
+    const fase = doGe.phase && doGe.phase.name && !/fase única/i.test(doGe.phase.name) ? doGe.phase.name : '';
+    jogo.fase = doGe.round ? doGe.round + 'ª rodada' : fase;
+  } catch (e) {
+    log('ge: sem transmissão (' + e.message + ')');
+  }
+}
+
 async function busca() {
   if (buscando) return;
   buscando = true;
@@ -183,6 +241,7 @@ async function busca() {
         const t = escolhido[lado];
         t.escudoLocal = await guardaEscudo(t.escudo, t.id);
       }
+      await completaComGe(escolhido);
     }
     estado = { jogo: escolhido, erro: null, atualizadoEm: new Date().toISOString() };
     gravaCache();

@@ -60,6 +60,7 @@ function roda(cmd, args, ms) {
 // altura é o critério, o mesmo do resto do app; nome de saída não serve porque
 // muda de máquina para máquina.
 async function wallpaperDoMonitorEmPe() {
+  if (process.platform === 'win32') return wallpaperDoWindows();
   const out = await roda('awww', ['query'], 5000);
   if (!out) return null;
   for (const linha of out.split('\n')) {
@@ -71,6 +72,39 @@ async function wallpaperDoMonitorEmPe() {
     return { monitor: m[1], largura, altura, arquivo: m[4] };
   }
   return null;
+}
+
+// No Windows com papel de parede por monitor, o Explorer guarda uma cópia já
+// recortada de cada um em `Themes\Transcoded_NNN`. O número não diz qual é o
+// monitor, mas o formato diz: a cópia em pé é a do monitor em pé. O arquivo
+// muda de conteúdo sem mudar de nome, então a data entra na identidade.
+async function wallpaperDoWindows() {
+  const { screen } = require('electron');
+  const emPe = screen.getAllDisplays().find(d => d.bounds.height > d.bounds.width);
+  if (!emPe) return null;
+  const pasta = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Themes');
+  let nomes;
+  try { nomes = fs.readdirSync(pasta).filter(n => /^Transcoded_\d+$/.test(n)); } catch (e) { return null; }
+
+  let melhor = null;
+  for (const nome of nomes) {
+    const arquivo = path.join(pasta, nome);
+    let mtime;
+    try { mtime = fs.statSync(arquivo).mtimeMs; } catch (e) { continue; }
+    if (melhor && mtime <= melhor.mtime) continue;
+    const dims = (await roda('ffprobe', ['-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height', '-of', 'csv=p=0', arquivo], 5000)).trim().split(',').map(Number);
+    if (!(dims[1] > dims[0])) continue;
+    melhor = { arquivo, mtime };
+  }
+  if (!melhor) return null;
+  return {
+    monitor: 'windows',
+    largura: emPe.bounds.width,
+    altura: emPe.bounds.height,
+    arquivo: melhor.arquivo,
+    identidade: melhor.arquivo + '@' + melhor.mtime
+  };
 }
 
 function destino() {
@@ -114,14 +148,15 @@ async function atualiza() {
     estado = { arquivo: null, origem: null, largura: 0, altura: 0 };
     return estado;
   }
-  if (alvo.arquivo === estado.origem && estado.arquivo) return estado;
+  const origem = alvo.identidade || alvo.arquivo;
+  if (origem === estado.origem && estado.arquivo) return estado;
 
   gerando = true;
   try {
     if (await gera(alvo)) {
       estado = {
         arquivo: destino(),
-        origem: alvo.arquivo,
+        origem,
         largura: alvo.largura,
         altura: alvo.altura
       };

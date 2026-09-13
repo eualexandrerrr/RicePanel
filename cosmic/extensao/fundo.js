@@ -53,6 +53,9 @@ async function relata() {
   const abas = await chrome.tabs.query({ url: ['https://www.youtube.com/*', 'https://m.youtube.com/*', 'https://globoplay.globo.com/*'] });
   const janelas = await chrome.windows.getAll();
   const focada = new Map(janelas.map(j => [j.id, j.focused]));
+  // Minimizada conta como fora da vista: no Windows não há workspace para
+  // perguntar, e é o estado da janela que diz se ele ainda enxerga a aba.
+  const estadoJanela = new Map(janelas.map(j => [j.id, j.state]));
   const lista = [];
   for (const aba of abas) {
     if (!SITES.test(aba.url || '')) continue;
@@ -68,13 +71,27 @@ async function relata() {
       url: aba.url,
       ativa: aba.active,
       janelaFocada: !!focada.get(aba.windowId),
+      janelaEstado: estadoJanela.get(aba.windowId) || '',
       audivel: !!aba.audible
     }, estado));
   }
   try { porta.postMessage({ tipo: 'abas', abas: lista, em: Date.now() }); } catch (e) {}
 }
 
+// Cookies da conta dele para a webview do painel, que tem sessão própria. Lista
+// fechada de domínios: o host não pede cookie de banco nenhum por aqui.
+const DOMINIOS_COOKIES = ['youtube.com'];
+
 async function trataComando(msg) {
+  if (msg && msg.tipo === 'cookies') {
+    const dominio = DOMINIOS_COOKIES.includes(msg.dominio) ? msg.dominio : null;
+    let cookies = [];
+    if (dominio) {
+      try { cookies = await chrome.cookies.getAll({ domain: dominio }); } catch (e) {}
+    }
+    try { porta.postMessage({ tipo: 'cookies', pedido: msg.pedido, cookies }); } catch (e) {}
+    return;
+  }
   if (!msg || typeof msg.aba !== 'number') return;
   if (msg.tipo === 'pausar' || msg.tipo === 'retomar') {
     try {

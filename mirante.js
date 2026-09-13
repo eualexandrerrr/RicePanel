@@ -510,25 +510,26 @@
   }
 
   function svgAnel(id, rotulo, foto) {
+    // Formato compacto (13/09/2026): a peça numa linha só. O anel pequeno abraça
+    // a foto da peça — o arco mede a temperatura dela —, e ao lado vão o número,
+    // o nome e o uso. Antes eram anel, foto, nome e dados empilhados: três
+    // colunas altas para dizer três números.
     return '<div class="anel">' +
-      '<svg viewBox="0 0 84 84">' +
-        '<circle class="trilho" cx="42" cy="42" r="' + R + '"></circle>' +
-        '<circle class="arco" id="' + id + 'Arco" cx="42" cy="42" r="' + R + '"' +
-          ' stroke-dasharray="' + VOLTA.toFixed(2) + '"' +
-          ' stroke-dashoffset="' + VOLTA.toFixed(2) + '"' +
-          ' transform="rotate(-90 42 42)"></circle>' +
-        // Número e grau na MESMA linha de texto. Em dois `<text>` empilhados o
-        // "°C" caía em cima da barriga dos dígitos e o miolo do anel ficava
-        // apertado; sobrescrito, o grau é sinal de unidade e não segunda linha.
-        '<text class="centro" x="42" y="44" text-anchor="middle" dominant-baseline="central">' +
-          '<tspan id="' + id + 'Txt">--</tspan>' +
-          '<tspan class="grau" dy="-9">°C</tspan>' +
-        '</text>' +
-      '</svg>' +
-      // A foto fica entre o anel e o nome: é a peça que aquele número mede.
-      (foto ? '<img class="anel-foto" src="' + esc(foto) + '" alt="" aria-hidden="true">' : '') +
-      '<span class="rotulo">' + rotulo + '</span>' +
-      '<span class="anel-dados" id="' + id + 'Dados"></span>' +
+      '<span class="anel-aro">' +
+        '<svg viewBox="0 0 84 84" aria-hidden="true">' +
+          '<circle class="trilho" cx="42" cy="42" r="' + R + '"></circle>' +
+          '<circle class="arco" id="' + id + 'Arco" cx="42" cy="42" r="' + R + '"' +
+            ' stroke-dasharray="' + VOLTA.toFixed(2) + '"' +
+            ' stroke-dashoffset="' + VOLTA.toFixed(2) + '"' +
+            ' transform="rotate(-90 42 42)"></circle>' +
+        '</svg>' +
+        (foto ? '<img class="anel-foto" src="' + esc(foto) + '" alt="" aria-hidden="true">' : '') +
+      '</span>' +
+      '<span class="anel-info">' +
+        '<span class="anel-temp"><b id="' + id + 'Txt">--</b><i>°C</i></span>' +
+        '<span class="rotulo">' + rotulo + '</span>' +
+        '<span class="anel-dados" id="' + id + 'Dados"></span>' +
+      '</span>' +
     '</div>';
   }
 
@@ -643,9 +644,12 @@
   function montaMedidores(r) {
     // Rótulo curto: a coluna da serigrafia é estreita para o trilho ficar
     // longo, e "Processador" já saía cortado em "Processad".
-    let html = med('mCpu', 'CPU') + med('mRam', 'RAM');
+    // Sem medidor de CPU: o uso já está embaixo do anel dela, e o mesmo número
+    // duas vezes na mesma placa era o excesso. RAM e discos fecham uma linha.
+    let html = med('mRam', 'RAM');
     (r.discos || []).forEach((d, i) => {
-      html += med('mDisco' + i, d.ponto === '/' ? 'Root' : 'Home');
+      // No Windows o ponto já é a letra do volume ("C:", "D:").
+      html += med('mDisco' + i, d.ponto === '/' ? 'Root' : d.ponto === '~' ? 'Home' : d.ponto);
     });
     // Swap praticamente zerado é linha morta: a máquina tem 32 GB e o kernel
     // deixa alguns megabytes lá parados. Só entra quando passa de 256 MB.
@@ -774,7 +778,10 @@
   // e a divisão repo/AUR é o que diz se a atualização é baixar ou compilar.
   function pintaPacotes(p) {
     const el = $('wPacotes');
-    if (!p || !p.total) { el.textContent = 'sistema em dia'; return; }
+    // `null` é "não há gerenciador de pacotes para contar" (Windows): calar é
+    // melhor que dizer "em dia" sem ter olhado.
+    if (!p) { el.textContent = ''; return; }
+    if (!p.total) { el.textContent = 'sistema em dia'; return; }
     const partes = [];
     if (p.repo) partes.push(p.repo + ' repo');
     if (p.aur) partes.push(p.aur + ' AUR');
@@ -1049,9 +1056,40 @@
     return '<img src="' + esc(fonte) + '" alt="" aria-hidden="true"' + reserva + '>';
   }
 
+  // Contagem até o apito, em dias, horas e minutos, como a do GTA. A cor esquenta
+  // conforme o jogo chega: uma semana é informação, dois dias é aviso, o dia do
+  // jogo é âmbar, e as duas últimas horas acendem no rubro do Flamengo. De dois
+  // metros a cor diz "é hoje" antes de alguém ler o número.
+  const NIVEIS_JOGO = [
+    { ate: 2 * 3600e3, classe: 'nivel-ja' },
+    { ate: 12 * 3600e3, classe: 'nivel-hoje' },
+    { ate: 48 * 3600e3, classe: 'nivel-perto' },
+    { ate: 7 * 86400e3, classe: 'nivel-semana' }
+  ];
+  let jogoAtual = null;
+
+  function pintaContagemJogo() {
+    const alvo = $('wJogoConta');
+    if (!alvo || !jogoAtual) return;
+    const resta = new Date(jogoAtual.quando) - Date.now();
+    const nivel = NIVEIS_JOGO.find(n => resta <= n.ate);
+    elJogoCorpo.classList.remove('nivel-ja', 'nivel-hoje', 'nivel-perto', 'nivel-semana');
+    if (nivel) elJogoCorpo.classList.add(nivel.classe);
+    if (resta <= 0) {
+      alvo.innerHTML = '<span class="cr chegou"><b>Já vai</b><i>começar</i></span>';
+      return;
+    }
+    const t = Math.floor(resta / 1000);
+    const d = Math.floor(t / 86400);
+    const h = Math.floor((t % 86400) / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    const cel = (v, rot) => '<span class="cr"><b class="num">' + v + '</b><i>' + rot + '</i></span>';
+    alvo.innerHTML = cel(d, d === 1 ? 'dia' : 'dias') + cel(h, h === 1 ? 'hora' : 'horas') + cel(m, 'min');
+  }
+
   function pintaJogo(d) {
     const j = d && d.jogo;
-    if (!j) { elJogo.hidden = true; return; }
+    if (!j) { elJogo.hidden = true; jogoAtual = null; return; }
     elJogo.hidden = false;
 
     const quando = new Date(j.quando);
@@ -1065,19 +1103,37 @@
         ? 'Fim de jogo · ' + j.competicao
         : quandoDoJogo(quando) + ' · ' + j.competicao;
 
+    // O campeonato ganha linha própria: é o que diz o peso do jogo. A
+    // transmissão entra junto quando a fonte souber; sem ela a linha só cala.
+    const tv = Array.isArray(j.transmissao) && j.transmissao.length
+      ? '<span class="jogo-tv"><b>TV</b>' + j.transmissao.map(esc).join(' · ') + '</span>'
+      : '';
+
+    jogoAtual = j;
     elJogoCorpo.className = 'jogo' + (rolando ? ' rolando' : '');
     elJogoCorpo.innerHTML =
       '<span class="jogo-escudos">' + escudo(j.casa) +
         '<span class="jogo-versus">×</span>' + escudo(j.fora) + '</span>' +
       '<span class="jogo-ident">' +
+        '<span class="jogo-camp">' + esc(j.competicao) + (j.fase ? ' · ' + esc(j.fase) : '') + '</span>' +
         '<span class="jogo-times">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span>' +
-        '<span class="jogo-quando">' + esc(linhaQuando) + '</span>' +
-        (j.local ? '<span class="rotulo">' + esc(j.local) + '</span>' : '') +
+        '<span class="jogo-quando">' + esc(rolando ? 'Ao vivo' : terminou ? 'Fim de jogo' : quandoDoJogo(quando)) +
+          (j.local ? ' · ' + esc(j.local) : '') + '</span>' +
       '</span>' +
       ((rolando || terminou) && temPlacar
         ? '<span class="jogo-placar">' + j.casa.placar + '–' + j.fora.placar + '</span>'
-        : '');
+        : (!rolando && !terminou
+          ? '<span class="conta-regressiva jogo-conta" id="wJogoConta" role="timer" aria-label="Contagem regressiva para o jogo"></span>'
+          : '<span></span>')) +
+      // Onde passa é informação, não enfeite: linha própria, da coluna do texto
+      // até embaixo da contagem, sem cortar canal nenhum.
+      tv;
+    if (!rolando && !terminou) pintaContagemJogo();
   }
+
+  // Resolução de minuto: um tique de 20 s basta para o número nunca ficar um
+  // minuto inteiro atrasado.
+  setInterval(() => { if (acordado) pintaContagemJogo(); }, 20000);
 
   window.api.onFlamengo(pintaJogo);
   window.api.flamengoGet().then(pintaJogo).catch(() => {});

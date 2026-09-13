@@ -13,6 +13,10 @@ const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 
+// O mesmo painel sobe no Windows do monitor LG. Lá não existe /proc nem /sys:
+// cada leitura tem um caminho próprio, escolhido por esta chave.
+const WIN = process.platform === 'win32';
+
 // --------------------------------------------------------------- utilitários
 
 // Comando externo com prazo. Devolve string vazia em qualquer falha: o painel
@@ -47,7 +51,7 @@ function num(v) {
 // entre este tique e o anterior — por isso o estado fica guardado aqui.
 let cpuAnterior = null;
 
-function lerCpuUso() {
+function amostraCpuLinux() {
   const linhas = leArquivo('/proc/stat').split('\n');
   const total = [];
   for (const l of linhas) {
@@ -59,6 +63,24 @@ function lerCpuUso() {
     const soma = v.reduce((a, b) => a + (b || 0), 0);
     total.push({ nome, ocioso, soma });
   }
+  return total;
+}
+
+// No Windows os contadores vêm de os.cpus(), em ms desde o boot, um por fio.
+// A linha agregada `cpu` é a soma deles, como a do /proc/stat.
+function amostraCpuWin() {
+  const nucleos = os.cpus().map((c, i) => {
+    const t = c.times;
+    return { nome: 'cpu' + i, ocioso: t.idle, soma: t.user + t.nice + t.sys + t.idle + t.irq };
+  });
+  if (!nucleos.length) return [];
+  const geral = nucleos.reduce((a, c) => ({ nome: 'cpu', ocioso: a.ocioso + c.ocioso, soma: a.soma + c.soma }),
+    { nome: 'cpu', ocioso: 0, soma: 0 });
+  return [geral].concat(nucleos);
+}
+
+function lerCpuUso() {
+  const total = WIN ? amostraCpuWin() : amostraCpuLinux();
   if (!total.length) return { pct: null, nucleos: [] };
 
   const antes = cpuAnterior;
@@ -82,8 +104,10 @@ function lerCpuUso() {
 }
 
 function lerCpuModelo() {
-  const m = leArquivo('/proc/cpuinfo').match(/^model name\s*:\s*(.+)$/m);
-  if (!m) return '';
+  const m = WIN
+    ? [null, (os.cpus()[0] || {}).model || '']
+    : leArquivo('/proc/cpuinfo').match(/^model name\s*:\s*(.+)$/m);
+  if (!m || !m[1]) return '';
   // "AMD Ryzen 7 5800X 8-Core Processor" — o sufixo comercial não cabe na chapa.
   return m[1].replace(/\((R|TM)\)/gi, '').replace(/\s+\d+-Core Processor/i, '')
     .replace(/CPU @.*/, '').trim();
@@ -92,6 +116,12 @@ function lerCpuModelo() {
 // Frequência média em GHz. cpuinfo_cur_freq só existe em alguns governors, então
 // /proc/cpuinfo (que sempre traz "cpu MHz") é o caminho que não falha.
 function lerCpuFreq() {
+  // O Windows só publica a frequência nominal pelo os.cpus(): não acompanha o
+  // turbo, mas é o número que dá sem driver nem serviço.
+  if (WIN) {
+    const mhz = (os.cpus()[0] || {}).speed;
+    return mhz ? Math.round(mhz) / 1000 : null;
+  }
   const mhz = [...leArquivo('/proc/cpuinfo').matchAll(/^cpu MHz\s*:\s*([\d.]+)$/gm)]
     .map(m => parseFloat(m[1])).filter(Number.isFinite);
   if (!mhz.length) return null;
@@ -140,18 +170,97 @@ function lerTempHwmon() {
   };
 }
 
+// No Windows sensor de CPU e de SSD não é arquivo: quem expõe é o
+// LibreHardwareMonitor com o servidor web ligado na porta 8085 — o mesmo caminho
+// que o painel usava antes do porte para o Linux. Sem ele de pé os dois anéis
+// ficam sem número e o resto do retrato segue.
+//
+// A consulta é HTTP e o tique é de 2 s: o retrato lê o cache e dispara a próxima
+// busca por fora. Porta fechada espera um minuto antes de tentar de novo.
+const LHM_URL = 'http://127.0.0.1:8085/data.json';
+let lhm = { proxima: 0, buscando: false, cpu: null, nvme: null, nvmeModelo: '' };
+
+function tempDoLhm(hw, preferidos) {
+  const grupo = (hw.Children || []).find(c => c.Text === 'Temperatures');
+  if (!grupo) return null;
+  const sensores = grupo.Children || [];
+  const graus = (s) => {
+    const m = String(s.Value || '').replace(',', '.').match(/-?\d+(\.\d+)?/);
+    const v = m ? Math.round(parseFloat(m[0])) : null;
+    return v != null && v > 0 && v <= 130 ? v : null;
+  };
+  for (const nome of preferidos) {
+    const s = sensores.find(x => String(x.Text || '').toLowerCase().includes(nome));
+    if (s && graus(s) != null) return graus(s);
+  }
+  for (const s of sensores) { if (graus(s) != null) return graus(s); }
+  return null;
+}
+
+async function atualizaLhm() {
+  if (lhm.buscando) return;
+  lhm.buscando = true;
+  const ctrl = new AbortController();
+  const prazo = setTimeout(() => ctrl.abort(), 1500);
+  try {
+    const res = await fetch(LHM_URL, { signal: ctrl.signal });
+    const dados = await res.json();
+    const pc = (dados.Children || [])[0] || {};
+    let cpu = null, nvme = null, nvmeModelo = '';
+    for (const hw of pc.Children || []) {
+      const img = String(hw.ImageURL || '').toLowerCase();
+      if (cpu == null && img.includes('cpu')) {
+        cpu = tempDoLhm(hw, ['tctl/tdie', 'tdie', 'package', 'core average', 'core']);
+      }
+      if (nvme == null && img.includes('hdd')) {
+        nvme = tempDoLhm(hw, ['composite', 'temperature']);
+        if (nvme != null) nvmeModelo = String(hw.Text || '');
+      }
+    }
+    lhm = { proxima: Date.now() + 4000, buscando: false, cpu, nvme, nvmeModelo };
+  } catch (e) {
+    lhm = { proxima: Date.now() + 60000, buscando: false, cpu: null, nvme: null, nvmeModelo: '' };
+  } finally {
+    clearTimeout(prazo);
+  }
+}
+
+function lerTempWin() {
+  if (Date.now() > lhm.proxima) atualizaLhm();
+  return { cpu: lhm.cpu, nvme: lhm.nvme };
+}
+
 // Modelo do NVMe. O anel da térmica diz o nome da peça — CPU, placa de vídeo —
 // e o disco não tinha por que ser o único a aparecer como categoria.
+// O nome do disco o Windows entrega sem administrador, pela API de Storage; a
+// temperatura, não. Disco não muda com a máquina ligada: uma consulta por
+// processo. BusType 17 é NVMe.
+let discoWin = null;
+
+function nomeDoDiscoWin() {
+  if (discoWin !== null) return discoWin;
+  discoWin = '';
+  roda('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    'Get-PhysicalDisk | Sort-Object { $_.BusType -ne 17 }, DeviceId | Select-Object -First 1 -ExpandProperty FriendlyName'
+  ], 15000).then(out => { discoWin = out.trim(); });
+  return discoWin;
+}
+
 function lerNvmeModelo() {
+  if (WIN) return limpaMarcaDisco(lhm.nvmeModelo || nomeDoDiscoWin());
   const raiz = '/sys/class/nvme';
   let nomes;
   try { nomes = fs.readdirSync(raiz); } catch (e) { return ''; }
   for (const dir of nomes.sort()) {
     const m = leArquivo(path.join(raiz, dir, 'model')).trim();
     // "Corsair MP700 ELITE" não cabe no rótulo do anel; a linha do modelo cabe.
-    if (m) return m.replace(/^(Corsair|Samsung|Kingston|WDC?|Western Digital|Seagate|Crucial|ADATA|Sabrent|Intel|Micron|SK ?hynix)\s+/i, '');
+    if (m) return limpaMarcaDisco(m);
   }
   return '';
+}
+
+function limpaMarcaDisco(m) {
+  return String(m || '').replace(/^(Corsair|Samsung|Kingston|WDC?|Western Digital|Seagate|Crucial|ADATA|Sabrent|Intel|Micron|SK ?hynix)\s+/i, '');
 }
 
 // -------------------------------------------------------------------- GPU
@@ -238,6 +347,9 @@ function analisaNvidiaSmi(out) {
 }
 
 function temNvidiaNoHost() {
+  // No Windows não há /sys para perguntar; sem placa o nvidia-smi não existe ou
+  // não devolve linha boa, e a lista volta vazia do mesmo jeito.
+  if (WIN) return true;
   const raiz = '/sys/bus/pci/devices';
   let itens;
   try { itens = fs.readdirSync(raiz); } catch (e) { return false; }
@@ -434,6 +546,11 @@ async function lerGpus() {
 // --------------------------------------------------------------- memória
 
 function lerMemoria() {
+  if (WIN) {
+    const total = os.totalmem();
+    const usada = total - os.freemem();
+    return { total, usada, pct: Math.round((usada / total) * 100), swapTotal: null, swapUsado: null };
+  }
   const bruto = leArquivo('/proc/meminfo');
   const campo = (n) => {
     const m = bruto.match(new RegExp('^' + n + ':\\s+(\\d+) kB', 'm'));
@@ -458,7 +575,7 @@ function lerMemoria() {
 // statfs do próprio Node: sem `df`, sem parse de tabela, sem alias do shell
 // (nesta máquina `df` é apelido de `duf`, que imprime outro formato).
 function lerDiscos() {
-  const pontos = ['/', os.homedir()];
+  const pontos = WIN ? ['C:\\', 'D:\\'] : ['/', os.homedir()];
   const vistos = new Set();
   const saida = [];
   for (const ponto of pontos) {
@@ -470,7 +587,7 @@ function lerDiscos() {
       if (!total || vistos.has(chave)) continue;   // / e /home no mesmo volume: mostra uma vez
       vistos.add(chave);
       saida.push({
-        ponto: ponto === os.homedir() ? '~' : ponto,
+        ponto: WIN ? ponto.slice(0, 2) : ponto === os.homedir() ? '~' : ponto,
         total,
         usado: total - livre,
         pct: Math.round(((total - livre) / total) * 100)
@@ -498,22 +615,35 @@ function lerRede() {
     rx += v[0] || 0;
     tx += v[8] || 0;
   }
+  return deltaRede(rx, tx, ativas[0] || '');
+}
+
+function deltaRede(rx, tx, iface) {
   const agora = { rx, tx, t: Date.now() };
   const antes = redeAnterior;
   redeAnterior = agora;
-  if (!antes) return { rxs: null, txs: null, iface: ativas[0] || '' };
+  if (!antes) return { rxs: null, txs: null, iface };
   const dt = (agora.t - antes.t) / 1000;
-  if (dt <= 0) return { rxs: null, txs: null, iface: ativas[0] || '' };
+  if (dt <= 0) return { rxs: null, txs: null, iface };
   return {
     rxs: Math.max(0, (rx - antes.rx) / dt),
     txs: Math.max(0, (tx - antes.tx) / dt),
-    iface: ativas[0] || ''
+    iface
   };
+}
+
+// `netstat -e` soma todas as interfaces numa linha só. A palavra "Bytes" é a
+// mesma em português e em inglês; o cabeçalho acima dela, não.
+async function lerRedeWin() {
+  const m = (await roda('netstat', ['-e'], 1500)).match(/^Bytes\s+(\d+)\s+(\d+)/m);
+  if (!m) return { rxs: null, txs: null, iface: '' };
+  return deltaRede(Number(m[1]), Number(m[2]), '');
 }
 
 // ------------------------------------------------------------------ o resto
 
 function lerUptime() {
+  if (WIN) return Math.round(os.uptime());
   const s = num(leArquivo('/proc/uptime').split(' ')[0]);
   return s == null ? null : Math.round(s);
 }
@@ -523,6 +653,11 @@ function lerCarga() {
 }
 
 function lerDistro() {
+  // O Node ainda chama o Windows 11 de "Windows 10"; o build é que diz.
+  if (WIN) {
+    const build = Number(os.release().split('.')[2]) || 0;
+    return os.version().replace(/Windows 10/, build >= 22000 ? 'Windows 11' : 'Windows 10');
+  }
   const m = leArquivo('/etc/os-release').match(/^PRETTY_NAME="?([^"\n]+)"?/m);
   return m ? m[1] : 'Linux';
 }
@@ -532,7 +667,7 @@ function lerDistro() {
 // Barato o bastante para rodar a cada 2 s: só GPU sai de processo externo.
 async function retrato() {
   const [cpuUso, gpus] = [lerCpuUso(), await lerGpus()];
-  const temps = lerTempHwmon();
+  const temps = WIN ? lerTempWin() : lerTempHwmon();
   return {
     cpu: {
       pct: cpuUso.pct,
@@ -550,7 +685,7 @@ async function retrato() {
     gpus,
     memoria: lerMemoria(),
     discos: lerDiscos(),
-    rede: lerRede(),
+    rede: WIN ? await lerRedeWin() : lerRede(),
     nvme: temps.nvme,
     nvmeModelo: lerNvmeModelo(),
     uptime: lerUptime(),
@@ -578,6 +713,8 @@ function nomesDeLinhas(saida) {
 }
 
 async function pacotes() {
+  // Pacman e AUR são do Arch. No Windows não há o que contar.
+  if (WIN) return null;
   // O AUR é consulta de rede pacote a pacote e pode demorar; o repo é local.
   const [repoBruto, aurBruto] = await Promise.all([
     roda('checkupdates', [], 20000),

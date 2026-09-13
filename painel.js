@@ -199,9 +199,11 @@ function ehLocal(s) {
 
 function pintaServidores() {
   servidores.forEach((s, i) => {
-    const local = ehLocal(s);
+    // A posição decide, não o endereço: em cima é sempre produção, embaixo é
+    // sempre esta máquina.
+    const local = i === 1;
     const selo = document.getElementById('selo' + i);
-    selo.textContent = local ? 'Local' : 'Remoto';
+    selo.textContent = local ? 'Local' : 'Produção';
     selo.className = 'selo ' + (local ? 'local' : 'remoto');
     // O selo já diz remoto/local; repetir "Servidor remoto" ao lado só
     // espremia o cabeçalho e quebrava em duas linhas.
@@ -209,43 +211,60 @@ function pintaServidores() {
     const dest = document.getElementById('dest' + i);
     dest.textContent = s.host + ':' + s.porta;
     dest.className = 'destino' + (local ? '' : ' remoto');
-    pintaEscolhaLocal(i);
+    pintaEscolha(i);
   });
 }
 
-// Mais de um servidor na máquina: a tela local ganha uma chave por servidor, e
-// a escolhida decide qual txAdmin aparece e qual processo o Ligar sobe.
-function pintaEscolhaLocal(i) {
+// Cada tela tem um catálogo: a de cima, os servidores de produção; a de baixo,
+// os locais desta máquina, um no ar por vez. Com mais de um cadastrado o
+// cabeçalho ganha uma chave por servidor, e a escolhida decide o que a tela
+// mostra — e, embaixo, qual processo o Ligar sobe.
+let catalogo = { producao: [], locais: [], ativo: { producao: 0, local: 0 } };
+const GRUPO_DA_TELA = ['producao', 'local'];
+
+function listaDoGrupo(grupo) {
+  return grupo === 'producao' ? catalogo.producao : catalogo.locais;
+}
+
+function pintaEscolha(i) {
   const caixa = document.getElementById('escolha' + i);
   if (!caixa) return;
-  const s = servidores[i] || {};
-  const mostra = ehLocal(s) && locaisDaMaquina.length > 1;
+  const grupo = GRUPO_DA_TELA[i];
+  const lista = listaDoGrupo(grupo);
+  const mostra = lista.length > 1;
   caixa.hidden = !mostra;
   caixa.textContent = '';
   if (!mostra) return;
-  locaisDaMaquina.forEach(l => {
+  lista.forEach((s, j) => {
     const b = document.createElement('button');
-    const ativo = l.porta === Number(s.porta);
+    const ativo = j === catalogo.ativo[grupo];
     b.className = 'chave-local' + (ativo ? ' on' : '');
-    b.textContent = l.nome;
-    b.title = 'Mostrar o ' + l.nome + ' (txAdmin na ' + l.porta + ')';
+    // Nome curto na chave ("Michigan", "FiveM"): o cabeçalho divide a linha com
+    // endereço, estado, zoom e botões. O nome inteiro fica na dica.
+    b.textContent = String(s.nome).replace(/\s*role\s*play$/i, '') || s.nome;
+    b.title = 'Mostrar ' + s.nome + ' (' + (s.host || 'localhost') + ':' + s.porta + ')';
     b.setAttribute('aria-pressed', String(ativo));
-    b.addEventListener('click', () => escolheLocal(i, l));
+    b.addEventListener('click', () => escolheServidor(i, j));
     caixa.appendChild(b);
   });
 }
 
-async function escolheLocal(i, l) {
-  if (Number(servidores[i].porta) === l.porta) return;
-  const nova = servidores.map((s, j) => j === i ? { nome: l.nome, host: s.host, porta: l.porta } : s);
-  const r = await window.api.servSet(nova);
+function aplicaRespostaServidores(r) {
+  servidores = r.servidores;
+  catalogo = r.catalogo;
+}
+
+async function escolheServidor(i, j) {
+  const grupo = GRUPO_DA_TELA[i];
+  if (j === catalogo.ativo[grupo]) return;
+  const r = await window.api.servAtiva(grupo, j);
   if (!r || !r.ok) {
     const est = document.getElementById('est' + i);
     est.textContent = (r && r.error) || 'não deu para trocar';
     est.classList.add('ruim');
     return;
   }
-  servidores = r.servidores;
+  aplicaRespostaServidores(r);
   estadoLigado[i] = null;
   pintaServidores();
   carregaTelas();
@@ -617,23 +636,63 @@ const ROTEIRO_DESLIGA =
 // nem ele respondeu. Os botões quentes obedecem a isto.
 const estadoLigado = [null, null];
 const ultimoBotoes = ['', ''];
-// Só existe receita para subir o servidor DESTA máquina; produção não sobe pelo
-// painel. Se o arquivo não existir no userData, o botão nem aparece com o
-// txAdmin fora.
-let locaisDaMaquina = [];
-window.api.servLocalLista().then(v => {
-  locaisDaMaquina = Array.isArray(v) ? v : [];
-  // A resposta chega depois da primeira pintura: sem repintar, o botão de subir
-  // o local só apareceria na próxima mudança de estado.
-  if (servidores.length) pintaServidores();
-  aplicaBotoesQuentes(0);
-  aplicaBotoesQuentes(1);
-}).catch(() => {});
-
+// Só o servidor DESTA máquina sobe processo pelo painel; produção não. Sem pasta
+// e comando cadastrados no local ativo, o botão nem aparece com o txAdmin fora.
 function receitaDaTela(i) {
-  const s = servidores[i] || {};
-  if (!ehLocal(s)) return null;
-  return locaisDaMaquina.find(l => l.porta === Number(s.porta)) || null;
+  return i === 1 && catalogo.locais.some(l => l.podeSubir) ? true : null;
+}
+
+// Subir um local pelo índice do catálogo. Ele vira o ativo, e a tela de baixo
+// passa a mostrar o txAdmin dele.
+async function sobeLocal(j) {
+  const est = document.getElementById('est1');
+  est.textContent = 'pedindo para subir';
+  est.classList.remove('ruim');
+  let r = null;
+  try { r = await window.api.servLocalSobe(j); } catch (e) {}
+  if (!r || !r.ok) {
+    est.textContent = (r && r.error) || 'não deu para subir o servidor';
+    est.classList.add('ruim');
+    return;
+  }
+  if (r.servidores) {
+    aplicaRespostaServidores(r);
+    estadoLigado[1] = null;
+    pintaServidores();
+    carregaTelas();
+  }
+  est.textContent = 'subindo ' + (r.nome || 'o servidor local');
+  subindo = { nome: r.nome || 'o servidor local', desde: Date.now() };
+  const pre = document.getElementById('bootLog1');
+  if (pre) pre.textContent = '';
+  acompanhaSubida();
+}
+
+// Da hora do Ligar até o txAdmin responder, a tela de baixo não fica esperando
+// a batida de 15 s: mostra a saída do servidor (o arquivo que o main grava) e
+// confere o txAdmin a cada 1,5 s. Quando ele responde, `marcaDePe` troca para
+// o console dele e encerra o acompanhamento.
+let subindo = null;
+let timerSubida = null;
+
+async function acompanhaSubida() {
+  if (timerSubida) { clearTimeout(timerSubida); timerSubida = null; }
+  if (!subindo) return;
+  if (Date.now() - subindo.desde > 180000) {
+    subindo = null;
+    return;
+  }
+  try {
+    const t = await window.api.servLocalLog();
+    const pre = document.getElementById('bootLog1');
+    if (pre && t) {
+      const noFim = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
+      pre.textContent = t.texto || 'Aguardando a primeira linha do servidor…';
+      if (noFim) pre.scrollTop = pre.scrollHeight;
+    }
+  } catch (e) {}
+  await bateNoTx(1);
+  if (subindo) timerSubida = setTimeout(acompanhaSubida, 1500);
 }
 
 // Servidor parado não tem o que desligar nem reiniciar; servidor no ar não tem
@@ -1078,7 +1137,13 @@ const ROTEIRO_FATIA = `
       try {
         const r = await wv.executeJavaScript(
           '({ senha: !!document.querySelector("input[type=password]"), caminho: location.pathname })', false);
-        if (r && r.senha) {
+        // txAdmin recém-instalado não tem campo de senha: ele manda para
+        // /addMaster, a criação da conta master com PIN. Não é "logado".
+        if (r && /^\/addMaster/i.test(r.caminho || '')) {
+          r.senha = true;
+          est.textContent = 'txAdmin sem conta master';
+          est.classList.add('ruim');
+        } else if (r && r.senha) {
           est.textContent = 'login não passou';
           est.classList.add('ruim');
         } else {
@@ -1179,15 +1244,15 @@ document.querySelectorAll('[data-liga]').forEach(b => {
     let r = null;
     if (b.dataset.modo === 'processo') {
       // txAdmin fora: sobe o processo aqui e deixa a página reconectar sozinha
-      // no próximo pulso.
-      try { r = await window.api.servLocalSobe(servidores[i].porta); } catch (e) {}
-      if (r && r.ok) {
-        est.textContent = 'subindo o servidor local';
-        setTimeout(() => { est.textContent = ''; }, 20000);
+      // no próximo pulso. Com mais de um local cadastrado, pergunta qual —
+      // subir o servidor errado derruba o que ele ia testar.
+      const podem = catalogo.locais.map((l, j) => ({ l, j })).filter(x => x.l.podeSubir);
+      if (catalogo.locais.length > 1) {
+        est.textContent = '';
+        abreEscolhaLigar();
         return;
       }
-      est.textContent = (r && r.error) || 'não deu para subir o servidor';
-      est.classList.add('ruim');
+      await sobeLocal(podem.length ? podem[0].j : null);
       return;
     }
     try { r = await document.getElementById('wv' + i).executeJavaScript(ROTEIRO_LIGA, false); } catch (e) {}
@@ -1286,6 +1351,13 @@ function marcaCaido(i, motivo) {
   const s = servidores[i] || {};
   document.getElementById('offAlvo' + i).textContent = (s.host || '') + ':' + (s.porta || '');
   document.getElementById('offMotivo' + i).textContent = motivoLegivel(motivo);
+  // Subindo não é queda: o cartão vira acompanhamento, com a saída do servidor.
+  const titulo = caixa.querySelector('.titulo');
+  const boot = document.getElementById('bootLog' + i);
+  const acompanhando = i === 1 && !!subindo;
+  if (titulo) titulo.textContent = acompanhando ? 'Subindo ' + subindo.nome : 'Sem resposta';
+  if (acompanhando) document.getElementById('offMotivo' + i).textContent = 'O txAdmin ainda não abriu a porta. Saída do servidor:';
+  if (boot) boot.hidden = !acompanhando;
   if (caiuEm[i] === null) {
     caiuEm[i] = Date.now();
     window.api.diag('console ' + (i === 0 ? 'remoto' : 'local') + ': sem resposta — ' + (motivo || '?'));
@@ -1294,8 +1366,13 @@ function marcaCaido(i, motivo) {
   document.getElementById('offDesde' + i).textContent = textoDesde(caiuEm[i]);
   caixa.hidden = false;
   const est = document.getElementById('est' + i);
-  est.textContent = 'sem resposta';
-  est.classList.add('ruim');
+  if (acompanhando) {
+    est.textContent = 'subindo ' + subindo.nome;
+    est.classList.remove('ruim');
+  } else {
+    est.textContent = 'sem resposta';
+    est.classList.add('ruim');
+  }
   // Sem sinal não tem número: manter o "No ar" de antes na tela seria mentira.
   const sv = document.getElementById('sv' + i);
   sv.textContent = '';
@@ -1309,6 +1386,13 @@ function marcaCaido(i, motivo) {
 function marcaDePe(i) {
   const caixa = document.getElementById('off' + i);
   if (caixa) caixa.hidden = true;
+  if (i === 1 && subindo) {
+    window.api.diag('console local: txAdmin de ' + subindo.nome + ' respondeu em ' +
+      Math.round((Date.now() - subindo.desde) / 1000) + ' s');
+    subindo = null;
+    const est = document.getElementById('est1');
+    if (/^subindo /.test(est.textContent)) est.textContent = '';
+  }
   if (caiuEm[i] === null) return;
   const quanto = textoDesde(caiuEm[i]);
   caiuEm[i] = null;
@@ -1360,33 +1444,181 @@ const servModal = document.getElementById('servModal');
 function abre(el) { el.classList.add('on'); }
 function fecha(el) { el.classList.remove('on'); }
 
-document.getElementById('ajusteServ').addEventListener('click', () => {
-  document.getElementById('nomeA').value = servidores[0].nome;
-  document.getElementById('hostA').value = servidores[0].host;
-  document.getElementById('portaA').value = servidores[0].porta;
-  document.getElementById('nomeB').value = servidores[1].nome;
-  document.getElementById('hostB').value = servidores[1].host;
-  document.getElementById('portaB').value = servidores[1].porta;
+// Cadastro: duas listas, uma linha por servidor. Os campos são criados pelo DOM
+// e o valor entra por `.value`, nunca por innerHTML — nome e caminho vêm de
+// digitação e não podem virar marcação.
+const servListaProd = document.getElementById('servListaProd');
+const servListaLocal = document.getElementById('servListaLocal');
+
+function campoServ(rotulo, chave, valor, dica, classe) {
+  const caixa = document.createElement('div');
+  caixa.className = 'campo' + (classe ? ' ' + classe : '');
+  const label = document.createElement('label');
+  label.textContent = rotulo;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.spellcheck = false;
+  input.dataset.chave = chave;
+  input.placeholder = dica || '';
+  input.value = valor == null ? '' : String(valor);
+  label.appendChild(input);
+  caixa.appendChild(label);
+  return caixa;
+}
+
+function botaoRemove(linha) {
+  const b = document.createElement('button');
+  b.className = 'btn btn-fantasma btn-mini';
+  b.textContent = 'Remover';
+  b.addEventListener('click', () => linha.remove());
+  return b;
+}
+
+// `data-orig` guarda a posição de antes da edição: é por ela que o ativo
+// continua sendo o mesmo servidor depois de remover uma linha acima dele.
+function linhaProducao(s, orig) {
+  const linha = document.createElement('div');
+  linha.className = 'linha-serv';
+  linha.dataset.orig = orig == null ? '' : String(orig);
+  const grade = document.createElement('div');
+  grade.className = 'grade-serv prod';
+  grade.append(
+    campoServ('Nome', 'nome', s.nome, 'Michigan RedM'),
+    campoServ('Endereço', 'host', s.host, '192.0.2.10'),
+    campoServ('Porta', 'porta', s.porta || 40120, '40120'),
+    botaoRemove(linha)
+  );
+  linha.appendChild(grade);
+  return linha;
+}
+
+// Local: nome, porta, a bat que sobe o servidor (com Procurar) e o profile do
+// txAdmin, que a bat recebe como primeiro argumento.
+function linhaLocal(s, orig) {
+  const linha = document.createElement('div');
+  linha.className = 'linha-serv';
+  linha.dataset.orig = orig == null ? '' : String(orig);
+  const topo = document.createElement('div');
+  topo.className = 'grade-serv local';
+  topo.append(
+    campoServ('Nome', 'nome', s.nome, 'FiveMRoleplay'),
+    campoServ('Porta do txAdmin', 'porta', s.porta || 40120, '40120'),
+    botaoRemove(linha)
+  );
+  const batch = campoServ('Bat que sobe o servidor', 'batch', s.batch, 'D:\\FiveMRoleplay\\aa1-txAdmin-FiveMRoleplay.bat');
+  const procura = document.createElement('button');
+  procura.className = 'btn btn-fantasma btn-mini';
+  procura.textContent = 'Procurar';
+  procura.addEventListener('click', async () => {
+    let p = '';
+    try { p = await window.api.escolheArquivo('batch'); } catch (e) {}
+    if (p) batch.querySelector('input').value = p;
+  });
+  const linhaBatch = document.createElement('div');
+  linhaBatch.className = 'grade-serv batch';
+  linhaBatch.append(batch, procura);
+  linha.append(topo, linhaBatch, campoServ('Profile do txAdmin', 'perfil', s.perfil, 'devProfileWin'));
+  return linha;
+}
+
+// Argumento com espaço vai entre aspas, nos dois sentidos.
+function juntaArgs(args) {
+  return (args || []).map(a => /\s/.test(a) ? '"' + a + '"' : a).join(' ');
+}
+function separaArgs(texto) {
+  return [...String(texto || '').matchAll(/"([^"]*)"|(\S+)/g)].map(m => m[1] != null ? m[1] : m[2]);
+}
+
+function leLinhas(lista) {
+  return [...lista.querySelectorAll('.linha-serv')].map(linha => {
+    const o = { orig: linha.dataset.orig };
+    linha.querySelectorAll('input[data-chave]').forEach(inp => { o[inp.dataset.chave] = inp.value; });
+    return o;
+  });
+}
+
+function novoAtivo(linhas, antes) {
+  const i = linhas.findIndex(l => l.orig !== '' && Number(l.orig) === antes);
+  return i >= 0 ? i : 0;
+}
+
+document.getElementById('ajusteServ').addEventListener('click', () => abreAjusteServ());
+document.querySelectorAll('[data-configura-local]').forEach(b =>
+  b.addEventListener('click', () => abreAjusteServ()));
+
+async function abreAjusteServ() {
+  try { catalogo = await window.api.servCatalogo(); } catch (e) {}
+  servListaProd.textContent = '';
+  servListaLocal.textContent = '';
+  catalogo.producao.forEach((s, i) => servListaProd.appendChild(linhaProducao(s, i)));
+  catalogo.locais.forEach((s, i) => servListaLocal.appendChild(linhaLocal(s, i)));
   document.getElementById('servNota').textContent = 'Salvar recarrega as duas telas e refaz o login.';
   abre(servModal);
-});
+}
+document.getElementById('servAddProd').addEventListener('click', () =>
+  servListaProd.appendChild(linhaProducao({}, null)));
+document.getElementById('servAddLocal').addEventListener('click', () =>
+  servListaLocal.appendChild(linhaLocal({}, null)));
 document.getElementById('servCancel').addEventListener('click', () => fecha(servModal));
 servModal.addEventListener('click', (e) => { if (e.target === servModal) fecha(servModal); });
 document.getElementById('servOk').addEventListener('click', async () => {
-  const nova = [
-    { nome: document.getElementById('nomeA').value, host: document.getElementById('hostA').value, porta: document.getElementById('portaA').value },
-    { nome: document.getElementById('nomeB').value, host: document.getElementById('hostB').value, porta: document.getElementById('portaB').value }
-  ];
-  const r = await window.api.servSet(nova);
+  const prod = leLinhas(servListaProd);
+  const locais = leLinhas(servListaLocal);
+  const novo = {
+    producao: prod.map(l => ({ nome: l.nome, host: l.host, porta: l.porta })),
+    // Pasta, comando e argumentos soltos não aparecem mais na tela, mas
+    // continuam no cadastro de quem já os tinha: a linha editada é mesclada
+    // sobre o original em vez de apagar o que não foi mostrado.
+    locais: locais.map(l => Object.assign({},
+      l.orig !== '' ? catalogo.locais[Number(l.orig)] || {} : {},
+      { nome: l.nome, porta: l.porta, batch: l.batch, perfil: l.perfil })),
+    ativo: {
+      producao: novoAtivo(prod, catalogo.ativo.producao),
+      local: novoAtivo(locais, catalogo.ativo.local)
+    }
+  };
+  const r = await window.api.servCatalogoSet(novo);
   if (!r || !r.ok) {
     document.getElementById('servNota').textContent = (r && r.error) || 'não deu para salvar';
     return;
   }
-  servidores = r.servidores;
+  aplicaRespostaServidores(r);
+  estadoLigado[0] = null;
+  estadoLigado[1] = null;
   pintaServidores();
   carregaTelas();
+  aplicaBotoesQuentes(0);
+  aplicaBotoesQuentes(1);
   fecha(servModal);
 });
+
+// Pergunta do Ligar: com mais de um local cadastrado, ele escolhe qual sobe.
+// Local sem bat válida aparece apagado, com o convite para configurar.
+const ligaModal = document.getElementById('ligaModal');
+
+function abreEscolhaLigar() {
+  const lista = document.getElementById('ligaLista');
+  lista.textContent = '';
+  catalogo.locais.forEach((l, j) => {
+    const b = document.createElement('button');
+    b.className = 'opcao-serv' + (j === catalogo.ativo.local ? ' on' : '');
+    b.disabled = !l.podeSubir;
+    const nome = document.createElement('b');
+    nome.textContent = l.nome;
+    const det = document.createElement('span');
+    det.textContent = l.podeSubir
+      ? (l.perfil ? 'profile ' + l.perfil : 'sem profile') + ' · txAdmin na ' + l.porta
+      : 'bat não encontrada — use Configurar';
+    b.append(nome, det);
+    b.addEventListener('click', () => { fecha(ligaModal); sobeLocal(j); });
+    lista.appendChild(b);
+  });
+  abre(ligaModal);
+}
+
+document.getElementById('ligaCancel').addEventListener('click', () => fecha(ligaModal));
+document.getElementById('ligaConfig').addEventListener('click', () => { fecha(ligaModal); abreAjusteServ(); });
+ligaModal.addEventListener('click', (e) => { if (e.target === ligaModal) fecha(ligaModal); });
 
 // Migracao de uma vez: o padrao era 1.25 e os cliques de teste desalinharam os
 // dois consoles. Zera o que estava guardado para todo mundo comecar no padrao
@@ -1401,9 +1633,13 @@ try {
 } catch (e) {}
 
 (async () => {
-  servidores = await window.api.servGet();
+  const [cat, pares] = await Promise.all([window.api.servCatalogo(), window.api.servGet()]);
+  catalogo = cat;
+  servidores = pares;
   pintaServidores();
   carregaTelas();
+  aplicaBotoesQuentes(0);
+  aplicaBotoesQuentes(1);
 })();
 
 // ---------------------------------------------------------------------- dev
@@ -1805,11 +2041,16 @@ function linhaLimite(l, opc) {
   '</div>';
 }
 
+// Duas vitrines da mesma leitura: a faixa do meio dos Servidores e a placa da
+// cota no Mirante. Sem dado, a placa do Mirante some em vez de ficar vazia.
 function pintaCotaBarra() {
-  const alvo = document.getElementById('cotaBarra');
-  if (!alvo) return;
-  if (!cotaLimites.length) { alvo.innerHTML = ''; return; }
-  alvo.innerHTML = cotaLimites.map(l => linhaLimite(l)).join('');
+  const html = cotaLimites.map(l => linhaLimite(l)).join('');
+  for (const id of ['cotaBarra', 'cotaMirante']) {
+    const alvo = document.getElementById(id);
+    if (alvo) alvo.innerHTML = html;
+  }
+  const placa = document.getElementById('placaCota');
+  if (placa) placa.hidden = !cotaLimites.length;
   atualizaContadores();
 }
 
@@ -2568,7 +2809,7 @@ async function acompanhaManut() {
   }
   if (!comecou && maintTicks > 26) {
     fimManut();
-    mostraManut('Não começou — o manutencao.sh não subiu; veja o mirante.log.', true);
+    mostraManut('Não começou — o UAC foi recusado ou o script não subiu; veja o mirante.log.', true);
     setTimeout(() => mostraManut('', false), 6000);
   }
 }

@@ -340,7 +340,7 @@ async function reconfere(ids) {
 function toast(titulo, corpo, url) {
   try {
     if (!dep.Notification.isSupported()) return;
-    const n = new dep.Notification({ title: titulo, body: corpo, urgency: 'critical' });
+    const n = new dep.Notification({ title: titulo, body: corpo, urgency: 'critical', silent: true });
     n.on('click', () => { if (url) dep.shell.openExternal(url); });
     n.show();
   } catch (e) {}
@@ -417,7 +417,6 @@ async function tick() {
       for (const p of chegaram.slice(0, 3)) {
         toast('Anotação nova · Michigan', p.autor + (p.texto ? ': ' + p.texto.slice(0, 160) : ''), p.link);
       }
-      try { dep.shell.beep(); } catch (e) {}
     }
 
     cache = {

@@ -38,6 +38,13 @@ const path = require('path');
 const INTERVALO_MS = 2000;
 const PRAZO_MS = 1500;
 
+// No Windows não há MPRIS, PipeWire nem hyprctl, e o banco de cookies do Chrome
+// é cifrado com chave presa ao executável dele. Tudo que o Linux descobre por
+// fora, lá quem conta é a extensão ponte (`ponte.js`): quais abas tocam, em que
+// volume e posição, se a janela está à vista, e os cookies do YouTube.
+const WIN = process.platform === 'win32';
+let ponte = null;
+
 let deps = null;                 // { log, app, session }
 const PARTICAO = 'persist:video-mirante';   // a mesma do <webview> em mirante.js
 let ligado = false;
@@ -353,13 +360,33 @@ async function cookiesDoNavegador() {
   return saida;
 }
 
+// Cookies do YouTube pela extensão (Windows), já no formato do `chrome.cookies`.
+// Cookie `hostOnly` vai sem `domain`: com domínio o Electron o espalharia para
+// os subdomínios, e o `__Host-` seria recusado.
+async function cookiesDaPonte() {
+  if (!ponte) return [];
+  const lista = await ponte.pedeCookies('youtube.com', 4000);
+  const SAMESITE_OK = ['no_restriction', 'lax', 'strict', 'unspecified'];
+  return lista.filter(c => c && c.name && c.domain).map(c => ({
+    url: 'https://' + String(c.domain).replace(/^\./, '') + (c.path || '/'),
+    domain: c.hostOnly ? undefined : c.domain,
+    name: c.name,
+    value: c.value || '',
+    path: c.path || '/',
+    secure: !!c.secure,
+    httpOnly: !!c.httpOnly,
+    sameSite: SAMESITE_OK.includes(c.sameSite) ? c.sameSite : 'unspecified',
+    expirationDate: c.session ? undefined : c.expirationDate
+  }));
+}
+
 // Põe a sessão do Chrome na partição da webview. Os cookies antigos de
 // youtube.com saem antes: se ele trocou de conta ou saiu no Chrome, o painel
 // acompanha em vez de continuar logado num fantasma.
 async function entraComAContaDele() {
   if (!deps.session) return { ok: false, total: 0 };
   const ses = deps.session.fromPartition(PARTICAO);
-  const cookies = await cookiesDoNavegador();
+  const cookies = WIN ? await cookiesDaPonte() : await cookiesDoNavegador();
   try {
     const velhos = await ses.cookies.get({ domain: 'youtube.com' });
     for (const c of velhos) {
@@ -368,6 +395,7 @@ async function entraComAContaDele() {
   } catch (e) {}
   let total = 0;
   for (const c of cookies) {
+    if (!c.name || !c.url) continue;
     try { await ses.cookies.set(c); total++; }
     catch (e) { log('cookie ' + c.name + ' recusado: ' + e.message); }
   }
@@ -406,7 +434,55 @@ async function janelaVisivel(titulo) {
 
 function limpa() {
   estado = { site: '', id: '', titulo: '', posicao: null, duracao: null,
-    tocando: false, janelaVisivel: true, player: '', volume: ultimoVolume };
+    tocando: false, janelaVisivel: true, player: '', aba: null, volume: ultimoVolume };
+}
+
+// Aba à vista dele: ativa na janela, janela com o foco e não minimizada. Fora
+// disso, tocando, a parede assume. Janela do Chrome visível num monitor mas sem
+// foco conta como fora da vista — é o gesto de "saiu do navegador" no Windows.
+function abaAVista(a) {
+  return !!(a.ativa && a.janelaFocada && a.janelaEstado !== 'minimized');
+}
+
+function olhaPelaPonte() {
+  const abas = ponte ? ponte.abasAtuais() : [];
+  // A aba que o próprio painel pausou não está mais "tocando", mas continua
+  // sendo o vídeo da parede até ele voltar para ela.
+  const pausadaAqui = pausadoPeloPainel && estado.aba != null
+    ? abas.find(a => a.aba === estado.aba) : null;
+  const tocando = abas.filter(a => a.tocando);
+  const aba = pausadaAqui || tocando.find(a => !abaAVista(a)) || tocando[0];
+  if (!aba) {
+    if (estado.site) log('nenhuma aba de vídeo tocando');
+    pausadoPeloPainel = false;
+    limpa();
+    return estado;
+  }
+
+  const id = idDaUrlYoutube(aba.url);
+  const drm = !id && /^https:\/\/globoplay\.globo\.com\//.test(aba.url || '');
+  if (!id && !drm) { limpa(); return estado; }
+  if (aba.volume != null) ultimoVolume = aba.volume;
+
+  const antes = estado.id || estado.titulo;
+  estado = {
+    site: id ? 'youtube' : 'drm',
+    id,
+    titulo: aba.titulo || '',
+    posicao: aba.posicao != null ? Math.round(aba.posicao) : null,
+    duracao: aba.duracao != null ? Math.round(aba.duracao) : null,
+    tocando: !!aba.tocando,
+    janelaVisivel: abaAVista(aba),
+    player: '',
+    aba: aba.aba,
+    volume: ultimoVolume
+  };
+  if (antes !== (id || estado.titulo)) {
+    log('achou ' + estado.site + ' pela ponte: ' + estado.titulo + (id ? ' (' + id + ')' : ''));
+  }
+  // Ele voltou para a aba: o que o painel pausou deixa de ser dele.
+  if (estado.janelaVisivel) pausadoPeloPainel = false;
+  return estado;
 }
 
 // Atalho de desenvolvimento: `RICEPANEL_VIDEO_FAKE=drm` (ou `youtube:<id>`)
@@ -432,6 +508,7 @@ async function olha() {
   if (!ligado) { limpa(); return estado; }
   const falso = fingido();
   if (falso) { estado = falso; return estado; }
+  if (WIN) return olhaPelaPonte();
   try {
     const players = await lePlayers();
     for (const p of players) {
@@ -474,6 +551,12 @@ async function olha() {
 // Pausa a aba do navegador quando o painel assume o vídeo: dois áudios ao mesmo
 // tempo é o pior resultado possível dessa funcionalidade.
 async function pausaNavegador() {
+  if (WIN) {
+    if (estado.aba == null || !ponte || !ponte.envia({ tipo: 'pausar', aba: estado.aba })) return { ok: false };
+    estado.tocando = false;
+    pausadoPeloPainel = true;
+    return { ok: true };
+  }
   if (!estado.player) return { ok: false };
   await roda('playerctl', ['-p', estado.player, 'pause']);
   estado.tocando = false;
@@ -482,6 +565,11 @@ async function pausaNavegador() {
 }
 
 async function tocaNavegador() {
+  if (WIN) {
+    if (estado.aba == null || !ponte || !ponte.envia({ tipo: 'retomar', aba: estado.aba })) return { ok: false };
+    pausadoPeloPainel = false;
+    return { ok: true };
+  }
   if (!estado.player) return { ok: false };
   await roda('playerctl', ['-p', estado.player, 'play']);
   pausadoPeloPainel = false;
@@ -490,6 +578,10 @@ async function tocaNavegador() {
 
 function iniciar(d) {
   deps = d;
+  if (WIN) {
+    ponte = require('./ponte');
+    ponte.iniciar({ log: d.log });
+  }
   leChave();
   log((ligado ? 'ligado' : 'desligado') + '; vigiando o navegador a cada ' + (INTERVALO_MS / 1000) + ' s');
   const passo = async () => {

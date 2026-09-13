@@ -17,9 +17,15 @@ const JANELA = '90d';          // quanto tempo para tras a lista de nao resolvid
 const LIMITE = 50;
 const MAX_TOASTS = 3;          // rajada maior vira um toast-resumo
 
-// Token de administracao (sntryu_). Ordem: cofre local -> variavel de ambiente
-// -> arquivo de segredos do _CLAUDE. Achando fora do cofre, importa para ele.
-const SECRETS_ENV = path.join(os.homedir(), 'Downloads', 'Apps', '_CLAUDE', '.secrets', 'sentry.env');
+// Token de CONTA (sntryu_), com event:read — o de org (sntrys_) so serve para
+// release e da 403 na lista de issues. Ordem: cofre local -> variavel de
+// ambiente -> arquivo de segredos. Achando fora do cofre, importa para ele.
+// Os segredos moram em D:\Claude\.secrets desde a volta ao Windows; o caminho
+// antigo do _CLAUDE fica de reserva.
+const SECRETS_ENVS = [
+  path.join('D:', 'Claude', '.secrets', 'sentry.env'),
+  path.join(os.homedir(), 'Downloads', 'Apps', '_CLAUDE', '.secrets', 'sentry.env')
+];
 
 let dep = null;                // { app, safeStorage, Notification, shell, log, getWindow }
 let timer = null;
@@ -60,9 +66,10 @@ function leToken() {
     }
   } catch (e) {}
   let t = (process.env.SENTRY_AUTH_TOKEN || '').trim();
-  if (!t) {
+  for (const arq of SECRETS_ENVS) {
+    if (t) break;
     try {
-      const m = fs.readFileSync(SECRETS_ENV, 'utf8').match(/^\s*SENTRY_AUTH_TOKEN\s*=\s*(.+)$/m);
+      const m = fs.readFileSync(arq, 'utf8').match(/^\s*SENTRY_AUTH_TOKEN\s*=\s*"?([^"\r\n]+)"?\s*$/m);
       if (m) t = m[1].trim();
     } catch (e) {}
   }
@@ -143,7 +150,7 @@ function compara(lista) {
 function toast(titulo, corpo, link) {
   try {
     if (!dep.Notification.isSupported()) return;
-    const n = new dep.Notification({ title: titulo, body: corpo, urgency: 'critical' });
+    const n = new dep.Notification({ title: titulo, body: corpo, urgency: 'critical', silent: true });
     n.on('click', () => { if (link) dep.shell.openExternal(link); });
     n.show();
   } catch (e) {
@@ -201,7 +208,6 @@ async function tick() {
     if (alertas.length) {
       log(alertas.length + ' alerta(s): ' + alertas.map(a => a.tipo + ' ' + a.it.shortId).join(', '));
       avisa(alertas);
-      try { dep.shell.beep(); } catch (e) {}
     }
     empurra();
     agenda(POLL_MS);

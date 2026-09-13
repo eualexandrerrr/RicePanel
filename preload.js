@@ -19,9 +19,9 @@ contextBridge.exposeInMainWorld('api', {
   // agenda (Google Calendar por iCal)
   musicaComando: (verbo, player) => ipcRenderer.invoke('musica-comando', verbo, player),
 
-  servLocalTemReceita: () => ipcRenderer.invoke('serv-local-tem-receita'),
-  servLocalSobe: (porta) => ipcRenderer.invoke('serv-local-sobe', porta),
-  servLocalLista: () => ipcRenderer.invoke('serv-local-lista'),
+  servLocalSobe: (indice) => ipcRenderer.invoke('serv-local-sobe', indice),
+  escolheArquivo: (tipo) => ipcRenderer.invoke('escolhe-arquivo', tipo),
+  servLocalLog: () => ipcRenderer.invoke('serv-local-log'),
 
   videoGet: () => ipcRenderer.invoke('video-get'),
   videoLiga: (valor) => ipcRenderer.invoke('video-liga', valor),
@@ -83,7 +83,9 @@ contextBridge.exposeInMainWorld('api', {
   txPing: (host, porta) => ipcRenderer.invoke('tx-ping', host, porta),
   telaEstado: (i, r) => ipcRenderer.send('tela-estado', i, r),
   servGet: () => ipcRenderer.invoke('serv-get'),
-  servSet: (lista) => ipcRenderer.invoke('serv-set', lista),
+  servCatalogo: () => ipcRenderer.invoke('serv-catalogo'),
+  servCatalogoSet: (cat) => ipcRenderer.invoke('serv-catalogo-set', cat),
+  servAtiva: (grupo, indice) => ipcRenderer.invoke('serv-ativa', grupo, indice),
   alertaConsole: (dados) => ipcRenderer.send('alerta-console', dados),
   fonteLog: () => ipcRenderer.invoke('fonte-log'),
 

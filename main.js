@@ -8,7 +8,7 @@
 // tarefa agendada, LibreHardwareMonitor e variável de ambiente do registro virou
 // leitura de /proc, hyprctl, script sh e systemd de usuário.
 
-const { app, BrowserWindow, ipcMain, screen, safeStorage, Notification, shell, desktopCapturer, session } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, safeStorage, Notification, shell, desktopCapturer, session, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -60,7 +60,9 @@ if (process.env.RICEPANEL_COM_GPU === '1') {
       app.commandLine.appendSwitch('render-node-override', NO_RADEON);
     }
   } catch (e) {}
-} else {
+} else if (process.platform !== 'win32') {
+  // No Windows a janela transparente não passa pelo Wayland, e a falha acima
+  // não se aplica: lá a aceleração fica no padrão do Electron.
   app.disableHardwareAcceleration();
 }
 app.setAppUserModelId('com.alexandre.mirante');
@@ -349,8 +351,18 @@ function createWindow() {
   session.defaultSession.setDisplayMediaRequestHandler((pedido, responde) => {
     desktopCapturer.getSources({ types: ['window', 'screen'] }).then((fontes) => {
       if (!fontes.length) { responde({}); return; }
-      log('espelho: fonte "' + fontes[0].name + '"');
-      responde({ video: fontes[0] });
+      // No Windows não há diálogo do sistema para escolher: o painel pega a
+      // janela do Chrome cujo título tem o do vídeo; sem ela, a primeira janela
+      // do Chrome; sem nenhuma, a tela.
+      let fonte = fontes[0];
+      if (process.platform === 'win32') {
+        const titulo = String((video.atual() || {}).titulo || '').toLowerCase().slice(0, 30);
+        const doChrome = fontes.filter(f => /google chrome/i.test(f.name));
+        fonte = (titulo && doChrome.find(f => f.name.toLowerCase().includes(titulo))) ||
+          doChrome[0] || fontes.find(f => String(f.id).startsWith('screen:')) || fontes[0];
+      }
+      log('espelho: fonte "' + fonte.name + '"');
+      responde({ video: fonte });
     }).catch((e) => {
       log('espelho: falhou ao listar fontes — ' + e.message);
       responde({});
@@ -363,7 +375,9 @@ function createWindow() {
   agenda.iniciar(deps);
   flamengo.iniciar(deps);
   // Na Estação o vídeo é do painel nativo: dois vigias pausariam a mesma aba.
-  if (!ESTACAO) video.iniciar(deps);
+  // No Linux o vídeo lê MPRIS, PipeWire e hyprctl; no Windows, a extensão ponte
+  // do Chrome (ponte.js). Nos dois só na página do Mirante.
+  if (!ESTACAO && (process.platform === 'linux' || process.platform === 'win32')) video.iniciar(deps);
   dev.iniciar({ log, empurra, getWindow: () => mainWindow });
   vidro.iniciar({ app, log, empurra });
 
@@ -574,11 +588,25 @@ function leStatusManutencao() {
   }
 }
 
+const MANUT_PS1 = path.join(__dirname, 'maintenance.ps1');
+
 // No Linux não há elevação a pedir: o script só mexe em $HOME e roda como o
 // usuário. Dispara solto e o painel acompanha pelo status, como antes.
+//
+// No Windows o `maintenance.ps1` limpa Temp do sistema, Prefetch e o cache do
+// Windows Update, e isso pede administrador: a elevação sai daqui, com UAC.
+// Recusar o UAC deixa o status sem passo nenhum e a tela desiste sozinha.
 function disparaManutencao() {
   const { spawn } = require('child_process');
   try {
+    if (process.platform === 'win32') {
+      const cmd = "Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden " +
+        "-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','\"" +
+        MANUT_PS1 + "\"'";
+      spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd],
+        { windowsHide: true, detached: true, stdio: 'ignore' }).unref();
+      return true;
+    }
     const p = spawn('/usr/bin/env', ['bash', MANUT_SH], { detached: true, stdio: 'ignore' });
     p.unref();
     return true;
@@ -611,7 +639,9 @@ function ultimaLimpezaMs() {
 
 function avisa(titulo, corpo) {
   try {
-    if (Notification.isSupported()) new Notification({ title: titulo, body: corpo }).show();
+    // Silenciosa sempre: painel de parede não faz barulho. O aviso é o balão e
+    // o marcador aceso, nunca o som do Windows.
+    if (Notification.isSupported()) new Notification({ title: titulo, body: corpo, silent: true }).show();
   } catch (e) {}
 }
 
@@ -642,6 +672,9 @@ function limpezaAutomatica() {
 }
 
 function agendaLimpezaAutomatica() {
+  // No Windows a limpeza pede UAC: sozinha, de 6 em 6 horas, ela abriria o
+  // pedido de administrador com ninguém na frente da tela. Lá é só pelo botão.
+  if (process.platform === 'win32') return;
   setTimeout(limpezaAutomatica, 2 * 60 * 1000).unref();
   setInterval(limpezaAutomatica, LIMPEZA_CHECAGEM_MS).unref();
 }
@@ -788,6 +821,8 @@ ipcMain.handle('discord-reagir', async (e, id, emoji) => {
 // A senha nunca mora no repositorio nem no HTML: vem de um arquivo fora do git e
 // fica cifrada com safeStorage em userData.
 const TX_ENV = path.join(os.homedir(), '.config', 'mirante', 'txadmin.env');
+// No Windows os segredos moram em D:\Claude\.secrets, junto do sentry.env.
+const TX_ENV_CLAUDE = path.join('D:', 'Claude', '.secrets', 'txadmin.env');
 const TX_ENV_ANTIGO = path.join(os.homedir(), 'Downloads', 'Apps', '_CLAUDE', '.secrets', 'txadmin.env');
 const TX_CRED = () => path.join(app.getPath('userData'), 'txadmin-cred.bin');
 let txCredCache = null;
@@ -800,7 +835,7 @@ function lerTxCred() {
       if (c && c.user && c.pass) { txCredCache = c; return c; }
     }
   } catch (e) {}
-  for (const arq of [TX_ENV, TX_ENV_ANTIGO]) {
+  for (const arq of [TX_ENV, TX_ENV_CLAUDE, TX_ENV_ANTIGO]) {
     try {
       const raw = fs.readFileSync(arq, 'utf8');
       const u = (raw.match(/^\s*TXADMIN_USER\s*=\s*(.+)$/m) || [])[1];
@@ -870,104 +905,281 @@ ipcMain.on('alerta-console', (e, dados) => {
   const cabeca = dados.linhas[0].slice(0, 180);
   log('console ' + dados.onde + ': ' + dados.linhas.length + ' erro(s) — ' + cabeca);
   avisa('Erro no console · ' + dados.onde, cabeca);
-  try { shell.beep(); } catch (err) {}
 });
 
 ipcMain.on('diag', (e, texto) => log('painel: ' + String(texto).slice(0, 200)));
 
-// --- Subir o servidor local -------------------------------------------------
-// Quando o txAdmin local está fora do ar não existe página para clicar: quem
-// precisa subir é o processo do servidor. O comando não mora no repositório —
-// ele descreve a máquina de quem roda, não o projeto — e sim em
-// `servidor-local.json` no userData. Sem o arquivo, o botão nem aparece.
+// --- Servidores: catálogo de produção e de locais ---------------------------
 //
-// Só o LOCAL sobe por aqui. Produção não tem botão de ligar no painel: aquilo
-// é outra máquina, com gente dentro.
+// A tela de cima é SEMPRE produção e a de baixo SEMPRE esta máquina. Cada lado
+// tem um catálogo e um ativo. Produção pode ter mais de um servidor; o local é
+// um por vez de propósito — dois FXServer na mesma máquina brigam por porta e
+// memória, então trocar de local é trocar qual servidor esta máquina sobe.
+//
+// Nada disso mora no repositório: endereço de painel administrativo publicado é
+// convite. O catálogo fica em `servidores.json` no userData, escrito pela tela
+// de ajuste. O formato antigo (um par fixo remoto/local, com as receitas de
+// subir em `servidor-local.json`) é lido e convertido na primeira gravação.
+//
+// Só o LOCAL sobe processo por aqui. Produção não tem botão de subir no painel:
+// aquilo é outra máquina, com gente dentro.
+const SERV_FILE = () => path.join(app.getPath('userData'), 'servidores.json');
 const SERV_LOCAL_FILE = () => path.join(app.getPath('userData'), 'servidor-local.json');
+const HOST_LOCAL = /^(localhost|127\.0\.0\.1|::1|0\.0\.0\.0)$/i;
 
-// O arquivo pode ser uma receita só ou uma lista delas, uma por servidor da
-// máquina; cada uma diz a porta do txAdmin, que é como a tela local a acha.
-function receitasLocais() {
-  try {
-    const bruto = JSON.parse(fs.readFileSync(SERV_LOCAL_FILE(), 'utf8'));
-    return (Array.isArray(bruto) ? bruto : [bruto])
-      .filter(r => r && r.cwd && r.comando && fs.existsSync(r.cwd))
-      .map(r => ({
-        nome: String(r.nome || path.basename(path.dirname(r.cwd))).slice(0, 40),
-        porta: Number(r.porta) || 40120,
-        cwd: r.cwd,
-        comando: r.comando,
-        args: Array.isArray(r.args) ? r.args : [],
-        env: r.env && typeof r.env === 'object' ? r.env : {}
-      }));
-  } catch (e) {
-    return [];
-  }
+function limpaTexto(v, max) {
+  return String(v == null ? '' : v).trim().slice(0, max || 200);
 }
 
-ipcMain.handle('serv-local-lista', async () => receitasLocais().map(r => ({ nome: r.nome, porta: r.porta })));
+// Host e porta vêm de campo de texto: valida antes de gravar, senão um espaço a
+// mais vira uma URL quebrada que o webview nunca carrega.
+function limpaPorta(v) {
+  const porta = Number(v);
+  if (!Number.isInteger(porta) || porta < 1 || porta > 65535) throw new Error('porta inválida: ' + v);
+  return porta;
+}
 
-ipcMain.handle('serv-local-tem-receita', async () => receitasLocais().length > 0);
+function limpaProducao(s) {
+  const host = limpaTexto(s && s.host).replace(/^https?:\/\//i, '').replace(/[:/].*$/, '');
+  if (!/^[a-z0-9.\-]+$/i.test(host)) throw new Error('endereço inválido: ' + host);
+  if (HOST_LOCAL.test(host)) throw new Error('produção não aponta para esta máquina (' + host + '): cadastre em Local');
+  return { nome: limpaTexto(s.nome, 40) || host, host, porta: limpaPorta(s.porta) };
+}
 
-ipcMain.handle('serv-local-sobe', async (e, porta) => {
-  const lista = receitasLocais();
-  const r = lista.find(x => x.porta === Number(porta)) || (porta == null ? lista[0] : null);
-  if (!r) return { ok: false, error: 'sem receita para a porta ' + porta + ' no servidor-local.json' };
+// Um local sobe de dois jeitos. O cadastro do dia a dia é a BAT mais o PROFILE
+// do txAdmin: a bat recebe o profile como primeiro argumento. Pasta, comando e
+// argumentos soltos continuam valendo para quem não usa bat (e para o Linux).
+function limpaLocal(s) {
+  const perfil = limpaTexto(s && s.perfil, 60);
+  if (perfil && !/^[A-Za-z0-9_.-]+$/.test(perfil)) throw new Error('profile inválido: ' + perfil);
+  return {
+    nome: limpaTexto(s && s.nome, 40) || 'Local',
+    porta: limpaPorta(s.porta),
+    batch: limpaTexto(s.batch, 400),
+    perfil,
+    cwd: limpaTexto(s.cwd, 400),
+    comando: limpaTexto(s.comando, 400),
+    args: (Array.isArray(s.args) ? s.args : []).map(a => limpaTexto(a, 400)).filter(Boolean),
+    env: s.env && typeof s.env === 'object' && !Array.isArray(s.env) ? s.env : {}
+  };
+}
+
+function limpaAtivo(i, lista) {
+  return Math.min(Math.max(0, Math.floor(Number(i)) || 0), Math.max(0, lista.length - 1));
+}
+
+function converteFormatoAntigo(par) {
+  const cat = { producao: [], locais: [], ativo: { producao: 0, local: 0 } };
+  let receitas = [];
   try {
-    const { spawn } = require('child_process');
-    const filho = spawn(r.comando, r.args, {
-      cwd: r.cwd,
-      env: Object.assign({}, process.env, r.env),
-      detached: true,
-      stdio: 'ignore'
-    });
-    filho.unref();
-    log('servidor local: subindo com ' + r.comando + ' (' + r.cwd + ')');
-    return { ok: true };
-  } catch (e) {
-    log('servidor local: falhou ao subir — ' + e.message);
-    return { ok: false, error: e.message };
-  }
-});
-
-// --- Servidores configuráveis ---------------------------------------------
-const SERV_FILE = () => path.join(app.getPath('userData'), 'servidores.json');
-// Sem endereço de verdade no código: quem clona o projeto não tem nada a ver
-// com o servidor de ninguém, e endereço de painel administrativo publicado é
-// convite. Os dois hosts reais moram em `servidores.json` no userData, que o
-// próprio painel escreve pela tela de ajuste.
-const SERV_PADRAO = [
-  { nome: 'Servidor remoto', host: 'localhost', porta: 40120 },
-  { nome: 'Servidor local', host: 'localhost', porta: 40120 }
-];
-
-function lerServidores() {
-  try {
-    const s = JSON.parse(fs.readFileSync(SERV_FILE(), 'utf8'));
-    if (Array.isArray(s) && s.length === 2) return s;
+    const bruto = JSON.parse(fs.readFileSync(SERV_LOCAL_FILE(), 'utf8'));
+    receitas = (Array.isArray(bruto) ? bruto : [bruto]).filter(Boolean);
   } catch (e) {}
-  return SERV_PADRAO;
+  for (const s of par) {
+    try {
+      if (HOST_LOCAL.test(limpaTexto(s && s.host))) {
+        const r = receitas.find(x => Number(x.porta || 40120) === Number(s.porta)) || {};
+        cat.locais.push(limpaLocal(Object.assign({}, r, { nome: s.nome, porta: s.porta })));
+      } else {
+        cat.producao.push(limpaProducao(s));
+      }
+    } catch (e) {}
+  }
+  for (const r of receitas) {
+    if (cat.locais.some(l => l.cwd && l.cwd === r.cwd)) continue;
+    try {
+      cat.locais.push(limpaLocal(Object.assign({ porta: 40120, nome: path.basename(path.dirname(r.cwd || '')) }, r)));
+    } catch (e) {}
+  }
+  return cat;
+}
+
+function lerCatalogo() {
+  let bruto = null;
+  try { bruto = JSON.parse(fs.readFileSync(SERV_FILE(), 'utf8')); } catch (e) {}
+  if (Array.isArray(bruto)) return converteFormatoAntigo(bruto);
+  const cat = { producao: [], locais: [], ativo: { producao: 0, local: 0 } };
+  if (!bruto || typeof bruto !== 'object') return cat;
+  for (const s of bruto.producao || []) { try { cat.producao.push(limpaProducao(s)); } catch (e) {} }
+  for (const s of bruto.locais || []) { try { cat.locais.push(limpaLocal(s)); } catch (e) {} }
+  const a = bruto.ativo || {};
+  cat.ativo = { producao: limpaAtivo(a.producao, cat.producao), local: limpaAtivo(a.local, cat.locais) };
+  return cat;
+}
+
+function temReceita(l) {
+  return !!comoSobe(l);
+}
+
+// O que de fato roda: a bat (com o profile de argumento) quando há bat, senão
+// o comando solto. Devolve null quando o cadastro não aponta para nada que exista.
+function comoSobe(l) {
+  if (!l) return null;
+  if (l.batch) {
+    if (!fs.existsSync(l.batch)) return null;
+    return {
+      cwd: path.dirname(l.batch),
+      comando: process.platform === 'win32' ? 'cmd.exe' : l.batch,
+      args: (process.platform === 'win32' ? ['/c', l.batch] : []).concat(l.perfil ? [l.perfil] : []),
+      env: l.env || {}
+    };
+  }
+  if (l.cwd && l.comando && fs.existsSync(l.cwd)) {
+    return { cwd: l.cwd, comando: l.comando, args: l.args || [], env: l.env || {} };
+  }
+  return null;
+}
+
+// O par que as duas telas mostram, na ordem fixa [produção, local]. Lado sem
+// cadastro vira um endereço que não resolve: a tela mostra "sem resposta" com o
+// ajuste ao lado, em vez de sumir e deixar o layout torto.
+function lerServidores() {
+  const cat = lerCatalogo();
+  const p = cat.producao[cat.ativo.producao];
+  const l = cat.locais[cat.ativo.local];
+  return [
+    p ? { nome: p.nome, host: p.host, porta: p.porta }
+      : { nome: 'Sem produção cadastrada', host: 'sem-cadastro.invalid', porta: 40120 },
+    l ? { nome: l.nome, host: 'localhost', porta: l.porta, podeSubir: temReceita(l) }
+      : { nome: 'Sem servidor local', host: 'localhost', porta: 40120, podeSubir: false }
+  ];
+}
+
+function respostaServidores() {
+  const cat = lerCatalogo();
+  return {
+    ok: true,
+    servidores: lerServidores(),
+    catalogo: Object.assign({}, cat, { locais: cat.locais.map(l => Object.assign({ podeSubir: temReceita(l) }, l)) })
+  };
 }
 
 ipcMain.handle('serv-get', async () => lerServidores());
+ipcMain.handle('serv-catalogo', async () => respostaServidores().catalogo);
 
-ipcMain.handle('serv-set', async (e, lista) => {
-  // Host e porta vem de campo de texto: valida antes de gravar, senao um espaco
-  // a mais vira uma URL quebrada que o webview nunca carrega.
-  if (!Array.isArray(lista) || lista.length !== 2) return { ok: false, error: 'lista inválida' };
+ipcMain.handle('serv-catalogo-set', async (e, novo) => {
   try {
-    const limpa = lista.map((s, i) => {
-      const host = String(s.host || '').trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
-      const porta = Number(s.porta);
-      if (!/^[a-z0-9.\-]+$/i.test(host)) throw new Error('endereço inválido: ' + host);
-      if (!Number.isInteger(porta) || porta < 1 || porta > 65535) throw new Error('porta inválida: ' + s.porta);
-      return { nome: String(s.nome || SERV_PADRAO[i].nome).trim().slice(0, 40), host, porta };
-    });
-    fs.writeFileSync(SERV_FILE(), JSON.stringify(limpa, null, 1));
-    log('servidores: ' + limpa.map(s => s.host + ':' + s.porta).join(' | '));
-    return { ok: true, servidores: limpa };
+    if (!novo || !Array.isArray(novo.producao) || !Array.isArray(novo.locais)) throw new Error('catálogo inválido');
+    const cat = {
+      producao: novo.producao.map(limpaProducao),
+      locais: novo.locais.map(limpaLocal)
+    };
+    const a = novo.ativo || {};
+    cat.ativo = { producao: limpaAtivo(a.producao, cat.producao), local: limpaAtivo(a.local, cat.locais) };
+    fs.writeFileSync(SERV_FILE(), JSON.stringify(cat, null, 1));
+    log('servidores: ' + cat.producao.length + ' de produção, ' + cat.locais.length + ' local(is)');
+    return respostaServidores();
   } catch (err) {
     return { ok: false, error: err.message };
+  }
+});
+
+// Trocar qual servidor a tela mostra. `grupo` é 'producao' ou 'local'.
+ipcMain.handle('serv-ativa', async (e, grupo, indice) => {
+  const cat = lerCatalogo();
+  const lista = grupo === 'producao' ? cat.producao : grupo === 'local' ? cat.locais : null;
+  const i = Number(indice);
+  if (!lista || !Number.isInteger(i) || i < 0 || i >= lista.length) return { ok: false, error: 'servidor inexistente' };
+  cat.ativo[grupo] = i;
+  try {
+    fs.writeFileSync(SERV_FILE(), JSON.stringify(cat, null, 1));
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+  log('servidores: ' + grupo + ' ativo agora é ' + lista[i].nome);
+  return respostaServidores();
+});
+
+// Saída do servidor local, gravada desde o primeiro segundo do Ligar. O txAdmin
+// leva alguns segundos para abrir a porta; até lá é daqui que vem o log da tela
+// de baixo — inclusive o PIN de conta master, quando o txAdmin é novo.
+const BOOT_LOG = () => path.join(app.getPath('userData'), 'servidor-local.log');
+const BOOT_ERR = () => path.join(app.getPath('userData'), 'servidor-local.err.log');
+
+ipcMain.handle('serv-local-log', async () => {
+  const partes = [];
+  for (const arq of [BOOT_LOG(), BOOT_ERR()]) {
+    try {
+      const st = fs.statSync(arq);
+      const tam = Math.min(st.size, 64 * 1024);
+      const buf = Buffer.alloc(tam);
+      const fd = fs.openSync(arq, 'r');
+      try { fs.readSync(fd, buf, 0, tam, st.size - tam); } finally { fs.closeSync(fd); }
+      partes.push(buf.toString('utf8'));
+    } catch (e) {}
+  }
+  // Tira as cores de terminal do FXServer: no <pre> elas viram lixo `[32m`.
+  const texto = partes.join('\n')
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r/g, '')
+    .split('\n').filter(l => l.trim()).slice(-150).join('\n');
+  return { texto };
+});
+
+// Seletor de arquivo do cadastro: caminho de bat não se digita de cabeça.
+ipcMain.handle('escolhe-arquivo', async (e, tipo) => {
+  const filtros = tipo === 'batch'
+    ? [{ name: 'Bat ou executável', extensions: ['bat', 'cmd', 'exe', 'sh'] }, { name: 'Todos', extensions: ['*'] }]
+    : [{ name: 'Todos', extensions: ['*'] }];
+  const r = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'], filters: filtros });
+  return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
+});
+
+// Sobe um local. Com índice, ele vira o ativo antes de subir — é o que a
+// pergunta "subir qual?" do painel manda. Sem índice, sobe o ativo. Dois locais
+// usam a mesma porta do txAdmin (os dois nascem na 40120), então a porta não
+// identifica a receita: quem identifica é a posição no catálogo.
+ipcMain.handle('serv-local-sobe', async (e, indice) => {
+  const cat = lerCatalogo();
+  if (indice != null) {
+    const i = Number(indice);
+    if (!Number.isInteger(i) || i < 0 || i >= cat.locais.length) return { ok: false, error: 'servidor local inexistente' };
+    if (cat.ativo.local !== i) {
+      cat.ativo.local = i;
+      try { fs.writeFileSync(SERV_FILE(), JSON.stringify(cat, null, 1)); } catch (err) {}
+    }
+  }
+  const alvo = cat.locais[cat.ativo.local];
+  const r = comoSobe(alvo);
+  if (!r) return { ok: false, error: 'o servidor local ' + ((alvo && alvo.nome) || '') + ' não tem bat nem comando válido' };
+  r.nome = alvo.nome;
+  try {
+    const { spawn } = require('child_process');
+    const env = Object.assign({}, process.env, r.env);
+    if (process.platform === 'win32') {
+      // Sem janela, e medido (13/09/2026). O caminho óbvio falha:
+      //   - `detached` + `windowsHide` esconde só o cmd; ele nasce SEM console, e
+      //     o FXServer (programa de console) cria um console novo, visível.
+      //   - sem `detached`, o console oculto é herdado, mas o filho entra no job
+      //     do painel e morre quando o painel reinicia.
+      //   - PowerShell `detached` nem chega a executar.
+      // O que funciona: PowerShell preso ao painel só pelo tempo do
+      // `Start-Process -WindowStyle Hidden`, que cria o processo com console
+      // novo e oculto, fora do job. O FXServer herda esse console escondido e
+      // sobrevive ao painel. O log dele aparece no console do txAdmin.
+      const aspas = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+      const arg = (s) => aspas(/\s/.test(s) ? '"' + s + '"' : s);
+      // A saída vai para arquivo no userData: o console está escondido, e é esse
+      // arquivo que o painel mostra enquanto o txAdmin ainda não respondeu.
+      const ps = 'Start-Process -WindowStyle Hidden -WorkingDirectory ' + aspas(r.cwd) +
+        ' -FilePath ' + aspas(r.comando) +
+        (r.args.length ? ' -ArgumentList ' + r.args.map(arg).join(',') : '') +
+        ' -RedirectStandardOutput ' + aspas(BOOT_LOG()) + ' -RedirectStandardError ' + aspas(BOOT_ERR());
+      const filho = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+        cwd: r.cwd, env, windowsHide: true, stdio: 'ignore'
+      });
+      filho.on('exit', (c) => { if (c) log('servidor local: Start-Process saiu com ' + c); });
+    } else {
+      const saida = fs.openSync(BOOT_LOG(), 'w');
+      const erro = fs.openSync(BOOT_ERR(), 'w');
+      const filho = spawn(r.comando, r.args, { cwd: r.cwd, env, detached: true, stdio: ['ignore', saida, erro] });
+      filho.unref();
+    }
+    log('servidor local: subindo ' + r.nome + ' com ' + r.comando + ' ' + r.args.join(' ') + ' (' + r.cwd + ')');
+    // O catálogo volta junto: o ativo pode ter mudado com a escolha.
+    return Object.assign(respostaServidores(), { nome: r.nome });
+  } catch (e) {
+    log('servidor local: falhou ao subir — ' + e.message);
+    return { ok: false, error: e.message };
   }
 });
 
@@ -1010,7 +1222,57 @@ async function tecladosSumiram(nomes) {
   return nomes.every(n => ainda.indexOf(n) < 0);
 }
 
+// No Windows a trava é o `trava-teclado.ps1`: um hook de teclado de baixo nível
+// que engole toda tecla, sem administrador. O Ctrl+Alt+Del continua passando,
+// porque o Windows não entrega essa combinação a hook nenhum. O script vigia o
+// pid do painel e solta sozinho se ele morrer, e também solta no fim do tempo.
+const TRAVA_PS1 = path.join(__dirname, 'trava-teclado.ps1');
+let travaProc = null;
+
+async function travaNoWindows(seg) {
+  const { spawn } = require('child_process');
+  const p = spawn('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', TRAVA_PS1,
+    '-Segundos', String(seg), '-Pai', String(process.pid)
+  ], { windowsHide: true });
+  // Só diz "travado" quando o próprio script confirma que o hook entrou.
+  const ligou = await new Promise((resolve) => {
+    let saida = '';
+    const prazo = setTimeout(() => resolve(false), 8000);
+    p.stdout.on('data', (d) => {
+      saida += String(d);
+      if (/ligado/.test(saida)) { clearTimeout(prazo); resolve(true); }
+      if (/erro/.test(saida)) { clearTimeout(prazo); resolve(false); }
+    });
+    p.on('error', () => { clearTimeout(prazo); resolve(false); });
+    p.on('exit', () => { clearTimeout(prazo); resolve(false); });
+  });
+  if (!ligou) {
+    try { p.kill(); } catch (e) {}
+    log('teclado: o hook do Windows nao entrou');
+    return { ok: false, error: 'não consegui instalar o hook de teclado' };
+  }
+  travaProc = p;
+  travaAte = Date.now() + seg * 1000;
+  p.on('exit', () => {
+    if (travaProc !== p) return;
+    travaProc = null;
+    travaAte = 0;
+    log('teclado: solto (tempo)');
+  });
+  log('teclado: travado por ' + seg + 's (hook do Windows)');
+  return { ok: true, ate: travaAte, segundos: seg };
+}
+
 function soltaTecladoJa(motivo) {
+  if (travaProc) {
+    const p = travaProc;
+    travaProc = null;
+    travaAte = 0;
+    try { p.kill(); } catch (e) {}
+    log('teclado: solto (' + motivo + ')');
+    return true;
+  }
   if (!travaTeclados.length) return false;
   const nomes = travaTeclados;
   travaTeclados = [];
@@ -1022,8 +1284,16 @@ function soltaTecladoJa(motivo) {
 }
 
 ipcMain.handle('teclado-travar', async (e, segundos) => {
-  if (travaTeclados.length) return { ok: true, ja: true, ate: travaAte };
+  if (travaTeclados.length || travaProc) return { ok: true, ja: true, ate: travaAte };
   const seg = Math.max(TRAVA_MIN_S, Math.min(TRAVA_MAX_S, Number(segundos) || 120));
+  if (process.platform === 'win32') {
+    try {
+      return await travaNoWindows(seg);
+    } catch (err) {
+      log('teclado ERRO: ' + err.message);
+      return { ok: false, error: err.message };
+    }
+  }
   const nomes = await tecladosDoHypr();
   if (!nomes.length) {
     log('teclado: nenhum dispositivo listado pelo hyprctl');
@@ -1069,11 +1339,10 @@ ipcMain.handle('teclado-travar', async (e, segundos) => {
 
 ipcMain.handle('teclado-soltar', async () => ({ ok: true, soltou: soltaTecladoJa('painel') }));
 
-ipcMain.handle('teclado-estado', async () => ({
-  travado: !!travaTeclados.length,
-  ate: travaAte,
-  restante: travaTeclados.length ? Math.max(0, travaAte - Date.now()) : 0
-}));
+ipcMain.handle('teclado-estado', async () => {
+  const travado = !!travaTeclados.length || !!travaProc;
+  return { travado, ate: travaAte, restante: travado ? Math.max(0, travaAte - Date.now()) : 0 };
+});
 
 app.on('before-quit', () => soltaTecladoJa('app encerrando'));
 
@@ -1082,7 +1351,18 @@ app.on('before-quit', () => soltaTecladoJa('app encerrando'));
 app.on('before-quit', () => { try { dev.matar(); } catch (e) {} });
 
 // --- Dormir as telas -------------------------------------------------------
+// No Windows é o `telas-dormir.ps1`: SC_MONITORPOWER para todas as janelas,
+// com uma folga antes para o próprio clique não acordar a tela de volta.
+const TELAS_PS1 = path.join(__dirname, 'telas-dormir.ps1');
+
 ipcMain.handle('telas-dormir', async () => {
+  if (process.platform === 'win32') {
+    const out = await sistema.roda('powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', TELAS_PS1], 10000);
+    const ok = /^ok/m.test(out);
+    log('telas-dormir: ' + (ok ? 'monitores apagados' : 'falhou'));
+    return { ok };
+  }
   const out = await lua("hl.dispatch(hl.dsp.dpms({ action = 'disable' })) return 'ok'");
   const ok = /ok/i.test(out) && !/error/i.test(out);
   log('telas-dormir: ' + (ok ? 'monitores apagados' : 'falhou (' + out.trim().slice(0, 80) + ')'));
@@ -1101,7 +1381,8 @@ ipcMain.handle('painel-reiniciar', async () => {
 // Abre no navegador padrao. Lista curta de destinos: nao vira abridor generico.
 ipcMain.on('abrir-url', (e, url) => {
   if (typeof url !== 'string') return;
-  const servs = lerServidores();
+  const cat = lerCatalogo();
+  const servs = cat.producao.concat(cat.locais.map(l => ({ host: 'localhost', porta: l.porta })));
   const doTx = servs.some(s =>
     url.startsWith('http://' + s.host + ':' + s.porta + '/'));
   if (/^https:\/\/(discord\.com|[a-z0-9.-]*sentry\.io)\//i.test(url) || doTx) shell.openExternal(url);

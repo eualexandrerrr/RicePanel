@@ -8,11 +8,13 @@
     "tabs",
     "scripting",
     "nativeMessaging",
-    "alarms"
+    "alarms",
+    "cookies"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",
+    "https://*.youtube.com/*",
     "https://globoplay.globo.com/*",
     "https://*.globo.com/*"
   ],

@@ -578,7 +578,10 @@
        era isso que dava peso de card. Os dois `.vao` do markup empurram por
        igual, então o rótulo cai no centro ótico mesmo com contagens de botão
        diferentes de um cabeçalho para o outro. */
-    .placa > header {
+    /* `.t-lado > header` porque mês e agenda moram cada um numa coluna dentro
+       da placa: só com `.placa > header` o cabeçalho ficava sem recuo, colado
+       na aresta de cima e com o rótulo vazando do canto redondo. */
+    .placa > header, .t-lado > header {
       position: relative;
       display: flex; align-items: center; justify-content: center; gap: 9px;
       min-height: 26px;
@@ -587,11 +590,16 @@
     /* Os botões saem do fluxo para o rótulo cair no centro de verdade, e não no
        centro do que sobra depois deles — que muda de cabeçalho para cabeçalho,
        porque o mês tem três botões e a agenda tem dois. */
-    .placa > header .acoes {
+    .placa > header .acoes, .t-lado > header .acoes {
       position: absolute; right: 14px; top: 13px;
       display: flex; align-items: center; gap: 6px;
     }
-    .placa > header .botao { padding: 4px 8px; border-radius: 999px; }
+    .placa > header .botao, .t-lado > header .botao { padding: 4px 8px; border-radius: 999px; }
+    /* A coluna do mês tem 320px: rótulo centrado mais três botões fora do fluxo
+       não cabem, e os botões cobriam o nome do mês. Ali o rótulo vai para a
+       esquerda e os botões voltam ao fluxo, na ponta direita. */
+    .m-tempo > .t-lado:first-child > header { justify-content: space-between; }
+    .m-tempo > .t-lado:first-child > header .acoes { position: static; }
 
     /* --- material GAZE ---
        O material LUZ (tipo direto no papel de parede) só se lê sobre um
@@ -617,8 +625,12 @@
          retangulares, com 22% de centro chapado — encostavam uma na outra e
          liam como UMA caixa translúcida grande atrás das duas. É exatamente a
          caixa que a gaze existe para não trazer de volta. */
-      -webkit-mask-image: radial-gradient(68% 94% at 50% 50%, #000 14%, transparent 84%);
-      mask-image: radial-gradient(68% 94% at 50% 50%, #000 14%, transparent 84%);
+      /* `closest-side` (13/09/2026): com raio de 68% a elipse ainda estava
+         opaca na lateral da caixa, e sobre wallpaper claro a gaze aparecia como
+         retângulo de borda dura. Medida pelo lado mais próximo, ela chega a
+         zero exatamente na borda. */
+      -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000 40%, transparent 100%);
+      mask-image: radial-gradient(closest-side at 50% 50%, #000 40%, transparent 100%);
       z-index: -2;
       pointer-events: none;
     }
@@ -822,51 +834,71 @@
     .m-vitais { padding: 2px 0 0; }
     /* Uma coluna por sensor: a máquina pode ter uma placa de vídeo ou três, e
        quem conta é o retrato. `--n-aneis` chega do mirante.js. */
+    /* Formato compacto (13/09/2026): cada peça numa linha — anel pequeno com a
+       foto dentro, e ao lado temperatura, nome e uso. A placa cai para 600px,
+       a mesma largura das placas de baixo, e perde mais da metade da altura. */
     .aneis {
-      display: grid; grid-template-columns: repeat(var(--n-aneis, 3), 1fr);
-      padding: 12px 14px 8px;
+      display: grid; grid-template-columns: repeat(var(--n-aneis, 3), minmax(0, 1fr));
+      column-gap: 12px;
+      padding: 14px 18px 12px;
     }
-    .anel { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-    /* O rótulo do anel virou o nome da placa ("RTX 3090"): com quatro colunas
-       a coluna fica estreita, e nome comprido tem de cortar em vez de empurrar
-       o anel do vizinho. */
-    .anel .rotulo {
-      color: var(--subtext0);
-      max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+    .anel {
+      display: grid; grid-template-columns: 50px minmax(0, auto);
+      align-items: center; justify-content: center; column-gap: 10px;
+      min-width: 0;
     }
-    .anel svg { width: 76px; height: 76px; display: block; }
-    .anel .trilho { fill: none; stroke: rgba(205, 214, 244, 0.10); stroke-width: 3; }
-    /* Traço fino: anel grosso vira rosquinha de dashboard, que é o oposto do
-       que esta página é. */
+    .anel-aro { position: relative; width: 50px; height: 50px; display: block; }
+    .anel-aro svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .anel .trilho { fill: none; stroke: rgba(205, 214, 244, 0.10); stroke-width: 5; }
     .anel .arco {
-      fill: none; stroke-width: 3; stroke-linecap: round;
+      fill: none; stroke-width: 5; stroke-linecap: round;
       transition: stroke-dashoffset 800ms var(--saida), stroke 800ms linear;
     }
-    .anel .centro {
-      font-family: 'Archivo', sans-serif; font-weight: 300; font-size: 27px;
-      fill: var(--text); font-variant-numeric: tabular-nums;
-      letter-spacing: -0.02em;
-    }
-    /* O grau é sobrescrito, na mesma linha do número. Menor e mais claro para
-       ser unidade, não dado. */
-    /* A foto da peça, entre o anel e o nome: o número mede uma coisa que existe,
-       e a foto é o que diz qual. Caixa fixa com `contain` porque o processador é
-       quadrado e a placa de vídeo é comprida — cada um mantém sua proporção sem
-       mexer na altura da fila. A sombra descola a peça do vidro. */
+    /* A foto mora no miolo do aro: o arco em volta mede a temperatura daquela
+       peça, sem precisar de legenda ligando uma coisa à outra. */
     .anel-foto {
-      width: 100%; max-width: 96px; height: 42px; display: block;
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 32px; height: 24px; display: block;
       object-fit: contain; object-position: center;
-      margin-top: -2px;
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+      filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
     }
-
-    .anel .grau { font-size: 12.5px; fill: var(--subtext0); letter-spacing: 0.04em; }
+    .anel-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .anel-temp { display: flex; align-items: baseline; gap: 2px; line-height: 1; }
+    .anel-temp b {
+      font-family: 'Archivo', sans-serif; font-weight: 300; font-size: 24px;
+      color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    }
+    .anel-temp i { font-style: normal; font-size: 11px; color: var(--subtext0); }
+    .anel .rotulo {
+      font-size: 10.5px; color: var(--subtext0);
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+    }
+    .anel-dados {
+      font-size: 11.5px; color: var(--subtext1); font-variant-numeric: tabular-nums;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
 
     /* Processador e placas de vídeo, uma linha cada. O anel em cima já deu a
        temperatura; aqui fica o que não cabe dentro do anel — quanto está sendo
        usado e de quanta memória. Nome à esquerda, números à direita, para o
        olho descer a coluna dos números sem procurar. */
-    .m-cinta { height: 1px; margin: 0 20px; background: rgba(205, 214, 244, 0.09); }
+    .m-cinta { height: 1px; margin: 0 18px; background: rgba(205, 214, 244, 0.09); }
+    /* Carga numa faixa só: RAM e discos à esquerda, rede empilhada na ponta. */
+    .m-carga {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end; column-gap: 20px;
+      padding: 10px 18px 13px;
+    }
+    .m-carga .medidores { padding: 0; gap: 8px 16px; }
+    .m-carga .med .valor { font-size: 13px; }
+    .m-carga .med .rotulo { font-size: 10.5px; }
+    .m-carga .m-rede {
+      flex-direction: column; align-items: flex-end; gap: 3px; padding: 0;
+    }
+    .m-carga .m-rede .par + .par { margin-left: 0; }
+    .m-carga .m-rede .rotulo:last-child { display: none; }
+    .m-carga .m-rede .par .rotulo { font-size: 11px; letter-spacing: 0; }
+    .m-carga .m-rede b { font-size: 13px; }
 
     /* Medidor compacto: rótulo e valor na mesma linha, trilho curto logo
        abaixo. O fio atravessando a placa inteira, com o valor na outra ponta,
@@ -875,8 +907,8 @@
        o swap quando aparece cabem em duas linhas em vez de três. */
     .medidores {
       display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 9px 18px;
-      padding: 10px 14px 6px;
+      gap: 9px 22px;
+      padding: 12px 22px 8px;
     }
     .med { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .med .topo { display: flex; align-items: baseline; gap: 8px; }
@@ -890,7 +922,7 @@
        borda de baixo, como o resto da chapa. Barra chapada de 4px lia como
        risco de placeholder. */
     .med .trilho {
-      height: 7px; border-radius: 999px;
+      height: 5px; border-radius: 999px;
       background: rgba(17, 17, 27, 0.55);
       box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45),
                   inset 0 -1px 0 rgba(205, 214, 244, 0.07);
@@ -916,7 +948,7 @@
 
     .m-rede {
       display: flex; align-items: baseline; justify-content: center; gap: 8px;
-      padding: 2px 16px 11px;
+      padding: 4px 16px 12px;
     }
     .m-rede .par { display: flex; align-items: baseline; gap: 7px; }
     .m-rede .par + .par { margin-left: 20px; }
@@ -1058,15 +1090,20 @@
     .tela .destino.remoto {
       font-size: 17px; font-weight: 700; color: var(--leitura); letter-spacing: -0.01em;
     }
-    .tela .estado { font-size: 11px; color: var(--serigrafia-fraca); }
+    /* Uma linha só: recado de duas linhas ("desligamento confirmado") empurrava
+       o contador de jogadores para fora do cabeçalho. */
+    .tela .estado {
+      font-size: 11px; color: var(--serigrafia-fraca);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; min-width: 0;
+    }
     /* Chave de qual servidor local a tela mostra: a acesa é a que está no console. */
     .escolha-local { display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: var(--sulco); border: 1px solid var(--aresta); flex: none; }
     .escolha-local[hidden] { display: none; }
     .chave-local {
       -webkit-app-region: no-drag;
       font-family: 'Archivo Narrow', sans-serif;
-      font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-      padding: 3px 9px; border: 0; border-radius: 4px; cursor: pointer;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+      padding: 2px 7px; border: 0; border-radius: 4px; cursor: pointer;
       background: none; color: var(--serigrafia-fraca);
     }
     .chave-local:hover { color: var(--leitura); background: rgba(255, 255, 255, 0.05); }
@@ -1176,6 +1213,17 @@
       background-attachment: scroll, fixed;
     }
     .sem-sinal[hidden] { display: none; }
+    /* Saída do servidor enquanto ele sobe: o console do txAdmin ainda não existe,
+       mas o log já está correndo. Fica rolando para o fim sozinho. */
+    .boot-log {
+      width: min(900px, 86vw); max-height: 52vh; overflow: auto;
+      margin: 10px 0 4px; padding: 10px 12px;
+      background: rgba(10, 10, 16, 0.78); border: 1px solid var(--aresta); border-radius: 6px;
+      font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+      font-size: 11.5px; line-height: 1.45; color: #cdd6f4;
+      text-align: left; white-space: pre-wrap; word-break: break-word;
+    }
+    .boot-log[hidden] { display: none; }
     .sem-sinal .cartao {
       display: flex; flex-direction: column; align-items: center; gap: 9px;
       max-width: 340px; padding: 22px 26px; text-align: center;
@@ -1576,9 +1624,91 @@
        coisa dele, não leitura de serviço. Dois escudos e a hora — de dois
        metros o escudo é o que se reconhece primeiro, então ele é o que é
        grande; o texto vem depois, para quem chega perto. */
-    .m-jogo { padding: 14px 18px; }
-    .jogo {
-      display: flex; align-items: center; justify-content: center; gap: 16px;
+    /* Jogo e GTA são a mesma coisa — algo dele com data marcada — e ficam um
+       embaixo do outro. Então dividem a mesma grade (13/09/2026): marca numa
+       coluna de largura fixa, texto alinhado à esquerda, contagem na ponta
+       direita com células de largura fixa. Assim dias, horas e minutos das
+       duas placas caem na mesma coluna, e o olho desce reto de uma para a
+       outra. Com cada uma centrada do seu jeito, as duas pareciam de páginas
+       diferentes. */
+    .m-jogo, .m-lancamento, .m-cota { padding: 14px 22px; }
+    /* As três placas de baixo são lembrete, não painel de leitura: mais
+       estreitas que a coluna (600 contra 760), centradas, para não pesarem
+       tanto quanto calendário e vitais lá em cima. */
+    body.em-mirante .tapete > .m-vitais,
+    body.em-mirante .tapete > .m-jogo,
+    body.em-mirante .tapete > .m-lancamento,
+    body.em-mirante .tapete > .m-cota {
+      width: min(100%, 600px);
+      margin-left: auto; margin-right: auto;
+    }
+    /* A cota do Claude no Mirante: as mesmas linhas da faixa do meio dos
+       Servidores (rótulo e período, trilho, porcentagem, cronômetro do reset),
+       na escala de leitura da parede. */
+    /* Mesma grade do jogo e do GTA: a marca na coluna de 104px, as linhas no
+       resto. Compacta: a logo já diz de quem é a cota, então o rótulo saiu, e
+       cada limite é uma linha baixa. */
+    .m-cota { padding: 11px 22px; }
+    .cota-mirante {
+      display: grid; grid-template-columns: 104px minmax(0, 1fr);
+      align-items: center; gap: 18px;
+    }
+    .marca-claude { width: 34px; height: 34px; justify-self: center; display: block; }
+    .m-cota .cota-barra { width: 100%; gap: 5px; }
+    .m-cota .limite { font-size: 13px; color: var(--text); gap: 10px; }
+    .m-cota .limite .lbl { flex: 0 0 92px; }
+    .m-cota .limite .per { font-size: 10.5px; color: var(--subtext0); }
+    .m-cota .limite .trilho {
+      height: 5px; border-radius: 999px;
+      background: rgba(17, 17, 27, 0.55);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(205, 214, 244, 0.07);
+    }
+    .m-cota .limite .cheio { border-radius: 999px; }
+    .m-cota .limite .pct { flex: 0 0 42px; font-size: 13.5px; font-weight: 600; }
+    .m-cota .limite .pct .u { color: var(--subtext0); }
+    .m-cota .limite .rst { flex: 0 0 88px; }
+    .m-cota .contador { font-size: 11.5px; }
+    .jogo, .lancamento {
+      display: grid; grid-template-columns: 104px minmax(0, 1fr) auto;
+      align-items: center; gap: 18px;
+    }
+    .jogo-escudos { justify-content: center; }
+    .jogo-ident, .lanc-ident { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .jogo-camp, .lancamento .lanc-nome {
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 11.5px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--lavender);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    /* Canais em texto, não em pílulas: quatro pílulas quebravam em duas linhas e
+       a placa ficava bem mais alta que a do GTA. A linha é da placa inteira
+       (coluna do texto até embaixo da contagem), e nunca corta: canal é
+       informação. Se um dia não couber, quebra em vez de sumir. */
+    .jogo { row-gap: 7px; }
+    .jogo-tv {
+      grid-column: 2 / -1;
+      font-family: 'Archivo Narrow', 'Segoe UI', sans-serif;
+      font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .jogo-tv b { font-weight: 700; color: var(--overlay1); margin-right: 6px; }
+    /* A contagem esquenta conforme o apito chega. Cor é estado aqui, como no
+       resto da página: quanto mais perto, mais quente — e só as duas últimas
+       horas ganham brilho, no rubro do Flamengo. */
+    .jogo .conta-regressiva .cr b { transition: color 1.2s linear, text-shadow 1.2s linear; }
+    .jogo.nivel-semana .conta-regressiva .cr b { color: var(--lavender); }
+    .jogo.nivel-perto .conta-regressiva .cr b { color: var(--ambar); }
+    .jogo.nivel-hoje .conta-regressiva .cr b { color: #ff7a45; }
+    .jogo.nivel-hoje .jogo-quando { color: #ff9b70; }
+    .jogo.nivel-ja .conta-regressiva .cr b {
+      color: #ff3347;
+      text-shadow: 0 0 14px rgba(226, 0, 26, 0.75);
+    }
+    .jogo.nivel-ja .jogo-quando { color: #ff6b78; }
+    .m-jogo:has(.jogo.nivel-ja) {
+      border-color: rgba(226, 0, 26, 0.55);
+      box-shadow: inset 0 1px 0 var(--vidro-brilho), 0 0 26px -6px rgba(226, 0, 26, 0.6);
     }
     .jogo-escudos { display: flex; align-items: center; gap: 10px; flex: none; }
     .jogo-escudos img {
@@ -1589,8 +1719,7 @@
       font-family: 'Archivo Narrow', sans-serif; font-size: 12px; font-weight: 700;
       letter-spacing: 0.18em; color: var(--subtext0);
     }
-    .jogo-ident { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-    .jogo-times {
+    .jogo-times, .lanc-titulo {
       font-size: 15px; color: var(--text);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
@@ -1608,25 +1737,21 @@
       color: var(--leitura); font-variant-numeric: tabular-nums; flex: none;
     }
 
-    .m-lancamento { padding: 16px 20px; }
-    .lancamento {
-      display: flex; align-items: center; justify-content: center; gap: 18px;
-    }
     /* Marca de terceiro, como Sentry e Discord: entra pelo desenho dela, não
        pelo traço da casa. Único lugar da mesa onde cor não é estado. */
-    .lancamento .marca-gta { height: 34px; width: auto; flex: none; display: block; }
-    .lanc-ident { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-    .lanc-nome { font-size: 13px; letter-spacing: 0.18em; color: var(--text); }
-    .lanc-data {
+    .lancamento .marca-gta { height: 38px; width: auto; display: block; justify-self: center; }
+    .lanc-data, .jogo-quando {
       font-family: 'Archivo Narrow', 'Segoe UI', sans-serif;
       font-size: 12.5px; font-weight: 600; letter-spacing: 0.06em;
       color: var(--subtext0);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .conta-regressiva { display: flex; align-items: stretch; flex: none; }
+    /* Largura fixa por célula: "0" e "66" ocupam o mesmo espaço, e as duas
+       contagens empilhadas alinham coluna com coluna. */
     .conta-regressiva .cr {
       display: flex; flex-direction: column; align-items: center; gap: 5px;
-      padding: 0 13px;
+      width: 62px;
     }
     /* Dentro da placa a contagem não encosta em borda nenhuma, então as três
        células ficam com o mesmo respiro dos dois lados. */
@@ -1643,7 +1768,7 @@
     }
     /* Chegou o dia: a contagem não tem mais o que contar e vira recado. */
     .conta-regressiva .cr.chegou b { font-size: 21px; letter-spacing: 0.02em; }
-    .plataformas { display: flex; gap: 6px; flex: none; }
+    .plataformas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
     .plataformas span {
       font-family: 'Archivo Narrow', 'Segoe UI', sans-serif;
       font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em;
@@ -2043,6 +2168,32 @@
       padding: 12px; margin-bottom: 10px;
     }
     .grupo-serv > .serigrafia { display: block; margin-bottom: 9px; }
+    /* Cadastro com lista: cabe mais de um servidor por lado, então a caixa
+       alarga e rola em vez de empurrar os botões para fora da tela. */
+    .caixa.caixa-serv { max-width: 640px; max-height: 88vh; overflow-y: auto; }
+    .grupo-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .btn-mini { padding: 5px 10px; font-size: 11px; }
+    .linha-serv { padding: 10px 0 2px; border-top: 1px solid var(--aresta); }
+    .linha-serv:first-child { border-top: none; padding-top: 2px; }
+    .grade-serv { display: grid; gap: 8px; align-items: end; }
+    .grade-serv.prod { grid-template-columns: 1fr 1.2fr 90px auto; }
+    .grade-serv.local { grid-template-columns: 1fr 130px auto; }
+    .grade-serv .btn-mini { margin-bottom: 10px; }
+    .grade-serv.batch { grid-template-columns: 1fr auto; }
+    /* Pergunta do Ligar: um botão largo por servidor local, com o profile e a
+       porta embaixo do nome. O ativo vem marcado. */
+    .lista-liga { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+    .opcao-serv {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+      background: var(--face-alta); border: 1px solid var(--aresta); border-radius: 5px;
+      color: var(--leitura); font-family: inherit; padding: 11px 14px; cursor: pointer; text-align: left;
+    }
+    .opcao-serv b { font-size: 15px; }
+    .opcao-serv span { font-size: 12px; color: var(--serigrafia-fraca); }
+    .opcao-serv:hover:not(:disabled) { border-color: var(--ambar); }
+    .opcao-serv.on { box-shadow: inset 3px 0 0 var(--ambar); }
+    .opcao-serv:disabled { opacity: 0.5; cursor: not-allowed; }
+    .campo label input { margin-top: 4px; text-transform: none; letter-spacing: normal; }
 
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
@@ -2203,6 +2354,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <path d="M0 0h13.2l8.8 16.4L30.8 0H44L22 40z"/>
         <path d="M50 0h13v40H50z"/>
       </g>
+      <!-- Estrela do Claude, desenhada à mão em raios de ponta redonda, na cor
+           da marca. viewBox 0 0 24 24. -->
+      <g id="ic-claude" stroke="#D97757" stroke-width="2.3" stroke-linecap="round" fill="none">
+        <path d="M12 12V2.6"/>
+        <path d="M12 12l5.6-7.6"/>
+        <path d="M12 12l8.9-3"/>
+        <path d="M12 12l9.4 1.6"/>
+        <path d="M12 12l6.4 7"/>
+        <path d="M12 12l.9 9.4"/>
+        <path d="M12 12l-5.5 7.7"/>
+        <path d="M12 12l-9 3.1"/>
+        <path d="M12 12L2.6 10.6"/>
+        <path d="M12 12L5.9 4.9"/>
+      </g>
     </defs>
   </svg>
 
@@ -2264,11 +2429,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="placa m-vitais">
         <div class="aneis" id="wAneis"></div>
         <div class="m-cinta"></div>
-        <div class="medidores" id="wMedidores"></div>
-        <div class="m-rede">
-          <span class="par"><i class="rotulo">Baixando</i><b class="num" id="wRedeRx">—</b></span>
-          <span class="par"><i class="rotulo">Subindo</i><b class="num" id="wRedeTx">—</b></span>
-          <span class="rotulo" id="wRedeIface"></span>
+        <div class="m-carga">
+          <div class="medidores" id="wMedidores"></div>
+          <div class="m-rede">
+            <span class="par" title="Baixando"><i class="rotulo">↓</i><b class="num" id="wRedeRx">—</b></span>
+            <span class="par" title="Subindo"><i class="rotulo">↑</i><b class="num" id="wRedeTx">—</b></span>
+            <span class="rotulo" id="wRedeIface"></span>
+          </div>
         </div>
       </div>
 
@@ -2326,15 +2493,24 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <!-- A prateleira: coisa dele, não trabalho. Fecha a coluna abaixo da hora,
            que é onde ela já morava — a diferença é que agora ela é uma placa da
            coluna, e não uma faixa de ponta a ponta no rodapé. -->
-      <div class="placa m-lancamento">
+      <div class="placa m-lancamento" id="placaGta">
         <div class="lancamento">
           <svg class="marca-gta" viewBox="0 0 63 40" aria-hidden="true"><use href="#ic-gta6"/></svg>
           <span class="lanc-ident">
-            <span class="serigrafia lanc-nome">Grand Theft Auto VI</span>
+            <span class="lanc-nome">Lançamento</span>
+            <span class="lanc-titulo">Grand Theft Auto VI</span>
             <span class="lanc-data">Quinta, 19 de novembro de 2026</span>
             <span class="plataformas"><span>PS5</span><span>Xbox Series X|S</span></span>
           </span>
           <span class="conta-regressiva" id="gtaConta" role="timer" aria-label="Contagem regressiva para o lançamento de GTA VI"></span>
+        </div>
+      </div>
+
+      <!-- Cota do Claude: a mesma leitura da faixa do meio dos Servidores. -->
+      <div class="placa m-cota" id="placaCota" hidden>
+        <div class="cota-mirante">
+          <svg class="marca-claude" viewBox="0 0 24 24" role="img" aria-label="Claude"><use href="#ic-claude"/></svg>
+          <span class="cota-barra" id="cotaMirante"></span>
         </div>
       </div>
 
@@ -2418,6 +2594,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg><span class="rot">Reiniciar</span>
           </button>
         </span>
+        <button class="botao" data-configura-local title="Configurar os servidores locais" aria-label="Configurar os servidores locais"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
         <button class="botao" data-recarrega="1" title="Recarregar esta tela" aria-label="Recarregar a tela de baixo"><svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg></button>
         <button class="botao" data-abre="1" title="Abrir no navegador" aria-label="Abrir a tela de baixo no navegador"><svg viewBox="0 0 16 16"><use href="#ic-sai"/></svg></button>
         <span class="jogadores" id="jogCaixa1" style="display:none" role="button" tabindex="0" title="Abrir a lista de jogadores do txAdmin" aria-label="Abrir a lista de jogadores do servidor de baixo">
@@ -2432,6 +2609,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <span class="alvo" id="offAlvo1"></span>
           <span class="motivo" id="offMotivo1"></span>
           <span class="desde" id="offDesde1"></span>
+          <pre class="boot-log" id="bootLog1" hidden></pre>
           <button class="botao" data-retenta="1">
             <svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg><span class="rot">Tentar de novo</span>
           </button>
@@ -2673,28 +2851,39 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   </div>
 
   <div id="servModal" class="cortina">
-    <div class="caixa">
+    <div class="caixa caixa-serv">
       <h2>Servidores</h2>
       <div class="grupo-serv">
-        <span class="serigrafia">Tela de cima</span>
-        <div class="campo"><label for="nomeA">Nome</label><input id="nomeA" type="text" spellcheck="false"></div>
-        <div class="dupla">
-          <div class="campo"><label for="hostA">Endereço</label><input id="hostA" type="text" spellcheck="false" placeholder="192.0.2.10"></div>
-          <div class="campo"><label for="portaA">Porta</label><input id="portaA" type="text" spellcheck="false" placeholder="40120"></div>
+        <div class="grupo-cab">
+          <span class="serigrafia">Produção · tela de cima</span>
+          <button class="btn btn-fantasma btn-mini" id="servAddProd">+ Adicionar</button>
         </div>
+        <div id="servListaProd"></div>
       </div>
       <div class="grupo-serv">
-        <span class="serigrafia">Tela de baixo</span>
-        <div class="campo"><label for="nomeB">Nome</label><input id="nomeB" type="text" spellcheck="false"></div>
-        <div class="dupla">
-          <div class="campo"><label for="hostB">Endereço</label><input id="hostB" type="text" spellcheck="false" placeholder="localhost"></div>
-          <div class="campo"><label for="portaB">Porta</label><input id="portaB" type="text" spellcheck="false" placeholder="40120"></div>
+        <div class="grupo-cab">
+          <span class="serigrafia">Local · tela de baixo</span>
+          <button class="btn btn-fantasma btn-mini" id="servAddLocal">+ Adicionar</button>
         </div>
+        <p class="miudo">Um no ar por vez nesta máquina. O Ligar pergunta qual subir e roda a bat com o profile como argumento.</p>
+        <div id="servListaLocal"></div>
       </div>
       <p class="miudo" id="servNota">Salvar recarrega as duas telas e refaz o login.</p>
       <div class="acoes-caixa">
         <button id="servCancel" class="btn btn-fantasma">Cancelar</button>
         <button id="servOk" class="btn btn-firme">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ligaModal" class="cortina">
+    <div class="caixa">
+      <h2>Subir qual servidor?</h2>
+      <p class="miudo">Os locais usam a mesma porta do txAdmin (40120): só um fica no ar por vez nesta máquina.</p>
+      <div class="lista-liga" id="ligaLista"></div>
+      <div class="acoes-caixa">
+        <button id="ligaConfig" class="btn btn-fantasma">Configurar</button>
+        <button id="ligaCancel" class="btn btn-fantasma">Cancelar</button>
       </div>
     </div>
   </div>
