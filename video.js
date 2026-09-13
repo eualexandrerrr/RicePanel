@@ -509,7 +509,9 @@ function olhaPelaPonte() {
     volume: ultimoVolume
   };
   if (antes !== (id || estado.titulo)) {
-    log('achou ' + estado.site + ' pela ponte: ' + estado.titulo + (id ? ' (' + id + ')' : ''));
+    log('achou ' + estado.site + ' pela ponte: ' + estado.titulo + (id ? ' (' + id + ')' : '') +
+      ' | volume ' + (ultimoVolume == null ? 'desconhecido' : Math.round(ultimoVolume * 100) + '%') +
+      (aba.volumeYoutube != null ? ' (do player)' : ' (do elemento — extensão sem recarregar?)'));
   }
   // Ele voltou para a aba: o que o painel pausou deixa de ser dele.
   if (estado.janelaVisivel) pausadoPeloPainel = false;

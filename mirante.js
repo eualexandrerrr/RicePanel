@@ -891,8 +891,9 @@
     const script =
       '(function(){' +
       '  var css=' + JSON.stringify(SO_O_VIDEO) + ';' +
-      '  if(window.__ricepanelVol===undefined) window.__ricepanelVol=' + (v.volume != null ? v.volume.toFixed(3) : 'null') + ';' +
-      '  var avisou="";' +
+      // Sem volume do Chrome ainda: 15%, nunca os 100% de fábrica do YouTube.
+      '  if(window.__ricepanelVol===undefined) window.__ricepanelVol=' + (v.volume != null ? v.volume.toFixed(3) : '0.15') + ';' +
+      '  var avisou="", confirmou=0;' +
       '  function poe(){' +
       '    var e=document.getElementById("ricepanel-so-o-video");' +
       '    if(!e){ e=document.createElement("style"); e.id="ricepanel-so-o-video";' +
@@ -903,8 +904,12 @@
       '    var vol=window.__ricepanelVol;' +
       '    if(p&&typeof p.setVolume==="function"){' +
       '      try{ if(p.isMuted&&p.isMuted()) p.unMute();' +
-      '           if(vol!==null){ var alvo=Math.round(vol*100); if(p.getVolume()!==alvo) p.setVolume(alvo); } }catch(err){}' +
-      '    } else if(v){ v.muted=false; if(vol!==null) v.volume=vol; }' +
+      '           if(vol!==null){ var alvo=Math.round(vol*100);' +
+      '             if(p.getVolume()!==alvo){ p.setVolume(alvo); confirmou=0; } else confirmou++;' +
+      // Duas conferências seguidas com o volume certo: só aí o painel tira o
+      // mudo da webview. Antes disso o som sairia no volume de fábrica.
+      '             if(confirmou>=2&&!window.__ricepanelSom){ window.__ricepanelSom=true; console.log("ricepanel: som-liberado "+alvo); } } }catch(err){}' +
+      '    } else if(v){ if(vol!==null){ v.volume=vol; if(!window.__ricepanelSom){ window.__ricepanelSom=true; console.log("ricepanel: som-liberado "+Math.round(vol*100)); } } }' +
       '    if(p&&p.setPlaybackQualityRange){ try{p.setPlaybackQualityRange("hd720","hd720");}catch(err){} }' +
       '    if(v&&v.paused&&!v.ended){' +
       '      try{ if(p&&typeof p.playVideo==="function") p.playVideo(); }catch(err){}' +
@@ -921,13 +926,19 @@
       try { quadro.executeJavaScript(script); } catch (e) {}
     };
 
+    // A webview nasce MUDA e só ganha som quando o vigia confirma que o player
+    // já está no volume do Chrome: o YouTube começa a tocar no volume de
+    // fábrica (100%) antes de o ajuste pegar, e isso saía gritando.
     quadro.addEventListener('dom-ready', () => {
-      try { quadro.setAudioMuted(false); } catch (e) {}
+      try { quadro.setAudioMuted(true); } catch (e) {}
       injeta();
     }, { once: true });
-    // O que o vigia da página reporta (play recusado) chega ao mirante.log.
+    // O que o vigia da página reporta chega aqui: liberar o som, ou play recusado.
     quadro.addEventListener('console-message', (e) => {
-      if (/^ricepanel:/.test(String(e.message || ''))) window.api.diag('video: ' + String(e.message).slice(10, 200));
+      const msg = String(e.message || '');
+      if (!/^ricepanel:/.test(msg)) return;
+      if (/som-liberado/.test(msg)) { try { quadro.setAudioMuted(false); } catch (err) {} }
+      window.api.diag('video: ' + msg.slice(10, 200));
     });
     quadro.addEventListener('did-finish-load', injeta);
 
