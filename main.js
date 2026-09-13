@@ -8,7 +8,7 @@
 // tarefa agendada, LibreHardwareMonitor e variável de ambiente do registro virou
 // leitura de /proc, hyprctl, script sh e systemd de usuário.
 
-const { app, BrowserWindow, ipcMain, screen, safeStorage, Notification, shell, desktopCapturer, session, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, safeStorage, Notification, shell, desktopCapturer, session, dialog, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -1429,8 +1429,37 @@ process.on('unhandledRejection', (r) => log(`unhandledRejection: ${r}`));
 // Então o atalho é atendido aqui, antes de a página ver a tecla. O
 // preventDefault evita colar duas vezes se um dia o Chromium passar a tratar
 // isso sozinho.
+// O Live Console do txAdmin é xterm.js em canvas: a seleção dele não é seleção
+// do documento, e o "copiar" nativo só a alcança se o foco estiver exatamente no
+// textarea escondido do xterm. O caminho que não depende de foco: disparar um
+// `copy` sintético com um DataTransfer nosso no elemento `.xterm` — o xterm
+// responde a esse evento escrevendo a seleção nele — e gravar o texto na área
+// de transferência do sistema. Sem seleção no xterm, vale a seleção comum.
+const LE_SELECAO_XTERM =
+  '(function(){' +
+  '  var alvos=document.querySelectorAll(".xterm");' +
+  '  for(var i=0;i<alvos.length;i++){' +
+  '    try{' +
+  '      var dt=new DataTransfer();' +
+  '      alvos[i].dispatchEvent(new ClipboardEvent("copy",{clipboardData:dt,bubbles:true,cancelable:true}));' +
+  '      var t=dt.getData("text/plain"); if(t) return t;' +
+  '    }catch(e){}' +
+  '  }' +
+  '  return "";' +
+  '})()';
+
+async function copia(wc) {
+  let texto = '';
+  try { texto = await wc.executeJavaScript(LE_SELECAO_XTERM, true); } catch (e) {}
+  if (texto) {
+    clipboard.writeText(String(texto));
+    return;
+  }
+  wc.copy();
+}
+
 const EDICAO = {
-  c: (wc) => wc.copy(),
+  c: (wc) => { copia(wc); },
   v: (wc) => wc.paste(),
   x: (wc) => wc.cut(),
   a: (wc) => wc.selectAll()
