@@ -327,6 +327,10 @@ function createWindow() {
     transparent: true,
     hasShadow: false,
     resizable: true,
+    // Painel de parede não sai do monitor dele (13/09/2026): no Windows, arrastar
+    // a barra do topo levava a janela inteira junto, e ele queria arrastar só a
+    // janelinha do vídeo. Quem posiciona é `aplicarMonitor`, nunca o mouse.
+    movable: false,
     show: false,
     skipTaskbar: true,
     // No Windows o skipTaskbar só pede à barra para esconder o botão, e ela esquece a cada reinício do Explorer:

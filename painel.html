@@ -138,8 +138,9 @@
        parede aparecer atrás da barra.
        Geometria fixa e igual em toda página: mesma margem, mesma altura mínima.
        Nada aqui muda com o modo, então a barra não sai do lugar. */
+    /* Sem região de arrastar a janela: painel de parede não se move, e no
+       Windows segurar a barra levava o painel inteiro para fora do monitor. */
     .travessa {
-      -webkit-app-region: drag;
       display: flex; align-items: center; gap: 14px; min-width: 0;
       min-height: 46px;
       margin: 8px 12px 0;
