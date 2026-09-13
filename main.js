@@ -1354,6 +1354,9 @@ app.on('before-quit', () => soltaTecladoJa('app encerrando'));
 // travado e a porta do Metro ocupada até o próximo reboot.
 app.on('before-quit', () => { try { dev.matar(); } catch (e) {} });
 
+// Vídeo que o painel pausou no Chrome volta a tocar lá quando o painel sai.
+app.on('before-quit', () => { try { video.devolveAoSair(); } catch (e) {} });
+
 // --- Dormir as telas -------------------------------------------------------
 // No Windows é o `telas-dormir.ps1`: SC_MONITORPOWER para todas as janelas,
 // com uma folga antes para o próprio clique não acordar a tela de volta.

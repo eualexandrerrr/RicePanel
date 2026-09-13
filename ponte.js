@@ -23,6 +23,7 @@ let conexao = null;
 let abas = [];
 let abasEm = 0;
 let seq = 0;
+let ultimoResumo = '';
 const esperando = new Map();
 
 function log(msg) {
@@ -36,6 +37,10 @@ function trata(linha) {
   if (m.tipo === 'abas' && Array.isArray(m.abas)) {
     abas = m.abas;
     abasEm = Date.now();
+    // Só quando muda: quantas abas de vídeo existem e quantas tocam. É o que
+    // responde "por que o vídeo não veio" sem palpite.
+    const resumo = abas.length + ' aba(s) de vídeo, ' + abas.filter(a => a.tocando).length + ' tocando';
+    if (resumo !== ultimoResumo) { ultimoResumo = resumo; log(resumo); }
     return;
   }
   if (m.tipo === 'cookies' && esperando.has(m.pedido)) {

@@ -88,14 +88,29 @@ function arquivoChave() {
   return path.join(deps.app.getPath('userData'), 'video.json');
 }
 
+// A aba que o painel pausou fica gravada junto da chave. Sem isto, painel
+// reiniciado esquecia que a pausa era dele: a aba ficava parada no Chrome, nada
+// tocava, e o vídeo nunca mais vinha para a parede.
+let pendenteRetomar = null;      // { aba, url } lido do disco na subida
+
 function leChave() {
-  try { ligado = !!JSON.parse(fs.readFileSync(arquivoChave(), 'utf8')).ligado; }
-  catch (e) { ligado = false; }
+  try {
+    const c = JSON.parse(fs.readFileSync(arquivoChave(), 'utf8'));
+    ligado = !!c.ligado;
+    pendenteRetomar = c.pausada && c.pausada.aba != null ? c.pausada : null;
+  } catch (e) {
+    ligado = false;
+    pendenteRetomar = null;
+  }
+}
+
+function gravaChave(pausada) {
+  try { fs.writeFileSync(arquivoChave(), JSON.stringify({ ligado, pausada: pausada || null })); } catch (e) {}
 }
 
 async function liga(valor) {
   ligado = !!valor;
-  try { fs.writeFileSync(arquivoChave(), JSON.stringify({ ligado })); } catch (e) {}
+  gravaChave(pausadoPeloPainel && estado.aba != null ? { aba: estado.aba, url: estado.url || '' } : null);
   // Desligar com a aba pausada pelo painel devolve o som ao navegador: senão
   // ele desliga a chave e o vídeo fica mudo nos dois lugares.
   if (!ligado) {
@@ -446,6 +461,18 @@ function abaAVista(a) {
 
 function olhaPelaPonte() {
   const abas = ponte ? ponte.abasAtuais() : [];
+  // Primeira lista depois de subir: a aba que o painel tinha pausado volta a
+  // tocar no Chrome. Se ele não estiver olhando para ela, a regra de sempre a
+  // traz de novo para a parede no tique seguinte.
+  if (pendenteRetomar && abas.length) {
+    const alvo = abas.find(a => a.aba === pendenteRetomar.aba) ||
+      abas.find(a => pendenteRetomar.url && a.url === pendenteRetomar.url);
+    if (alvo && !alvo.tocando && ponte.envia({ tipo: 'retomar', aba: alvo.aba })) {
+      log('retomando no Chrome a aba que o painel pausou antes de reiniciar: ' + (alvo.titulo || alvo.url));
+    }
+    pendenteRetomar = null;
+    gravaChave(null);
+  }
   // A aba que o próprio painel pausou não está mais "tocando", mas continua
   // sendo o vídeo da parede até ele voltar para ela.
   const pausadaAqui = pausadoPeloPainel && estado.aba != null
@@ -478,6 +505,7 @@ function olhaPelaPonte() {
     janelaVisivel: abaAVista(aba),
     player: '',
     aba: aba.aba,
+    url: aba.url || '',
     volume: ultimoVolume
   };
   if (antes !== (id || estado.titulo)) {
@@ -558,6 +586,7 @@ async function pausaNavegador() {
     if (estado.aba == null || !ponte || !ponte.envia({ tipo: 'pausar', aba: estado.aba })) return { ok: false };
     estado.tocando = false;
     pausadoPeloPainel = true;
+    gravaChave({ aba: estado.aba, url: estado.url || '' });
     return { ok: true };
   }
   if (!estado.player) return { ok: false };
@@ -571,6 +600,7 @@ async function tocaNavegador() {
   if (WIN) {
     if (estado.aba == null || !ponte || !ponte.envia({ tipo: 'retomar', aba: estado.aba })) return { ok: false };
     pausadoPeloPainel = false;
+    gravaChave(null);
     return { ok: true };
   }
   if (!estado.player) return { ok: false };
@@ -595,8 +625,16 @@ function iniciar(d) {
   passo();
 }
 
+// Painel saindo com a aba pausada por ele: devolve o play antes de ir embora.
+// Se a mensagem não chegar a tempo, a pausa gravada resolve na próxima subida.
+function devolveAoSair() {
+  if (!WIN || !pausadoPeloPainel || estado.aba == null || !ponte) return;
+  ponte.envia({ tipo: 'retomar', aba: estado.aba });
+}
+
 module.exports = {
   iniciar,
+  devolveAoSair,
   atual: () => Object.assign({ ligado }, estado),
   ligado: () => ligado,
   liga,
