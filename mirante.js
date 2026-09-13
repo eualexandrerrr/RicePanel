@@ -1035,7 +1035,8 @@
     elVideoChave.setAttribute('aria-pressed', String(videoLigado));
     elVideoChave.title = 'Vídeo do navegador na parede: ' + (videoLigado ? 'ligado' : 'desligado');
     const rot = $('wVideoChaveRot');
-    if (rot) rot.textContent = 'Player do navegador: ' + (videoLigado ? 'ligado' : 'desligado');
+    // O texto é a AÇÃO do clique, não o estado: o estado já está na cor.
+    if (rot) rot.textContent = videoLigado ? 'Desligar player' : 'Ligar player';
   }
 
   elVideoChave.addEventListener('click', () => {
