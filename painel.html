@@ -1590,6 +1590,26 @@
       padding: 9px 14px 11px;
     }
     .video-pe .botao-espelho { margin: 0; padding: 5px 12px; font-size: 12px; }
+    /* Fora do Mirante o vídeo não para (13/09/2026): ele está programando nos
+       Servidores e assistindo ao mesmo tempo. A placa vira janelinha flutuante
+       no canto, e a webview é a MESMA — mover um <webview> no DOM recarrega a
+       página e corta o vídeo, então quem muda é o CSS. A página do Mirante fica
+       montada, invisível e sem receber clique; só a placa do vídeo aparece.
+       Acima dos consoles, abaixo dos modais (z-index 20), e alta o bastante
+       para não tampar a barra de comando do console de baixo. */
+    body.com-video:not(.em-mirante) #modoMirante {
+      display: block; position: fixed; inset: 0; z-index: 18;
+      visibility: hidden; pointer-events: none; overflow: hidden;
+    }
+    body.com-video:not(.em-mirante) #wVideo {
+      visibility: visible; pointer-events: auto;
+      position: fixed; right: 18px; bottom: 64px; z-index: 18;
+      width: min(440px, 46vw); margin: 0;
+      border-radius: 16px;
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6);
+    }
+    body.com-video:not(.em-mirante) #wVideo .video-quadro { max-height: none; }
+    body.com-video:not(.em-mirante) #wVideo .video-pe { padding: 6px 12px 8px; }
     .video-titulo {
       font-size: 13.5px; color: var(--text); min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
