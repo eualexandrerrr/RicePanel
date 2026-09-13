@@ -377,7 +377,8 @@ function createWindow() {
   sentry.iniciar(deps);
   discord.iniciar(deps);
   agenda.iniciar(deps);
-  flamengo.iniciar(deps);
+  // O jogo ao vivo empurra o placar na hora, sem esperar o tique lento de 60 s.
+  flamengo.iniciar(Object.assign({}, deps, { empurra }));
   // Na Estação o vídeo é do painel nativo: dois vigias pausariam a mesma aba.
   // No Linux o vídeo lê MPRIS, PipeWire e hyprctl; no Windows, a extensão ponte
   // do Chrome (ponte.js). Nos dois só na página do Mirante.

@@ -99,6 +99,15 @@ async function pegaJson(url) {
 // Um competidor do ESPN vira o mínimo que a placa desenha: nome curto para o
 // texto, sigla para quando não couber, escudo para o olho reconhecer antes de
 // ler.
+// O placar vem como texto na agenda (`"2"`) e como objeto no scoreboard ao vivo
+// (`{ value: 2, displayValue: "2" }`).
+function placarDe(s) {
+  if (s == null) return null;
+  const v = typeof s === 'object' ? (s.value != null ? s.value : s.displayValue) : s;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function lado(c) {
   const t = (c && c.team) || {};
   const logos = t.logos || [];
@@ -107,12 +116,13 @@ function lado(c) {
     nome: t.shortDisplayName || t.displayName || t.name || '',
     nomeLongo: t.displayName || t.shortDisplayName || '',
     sigla: t.abbreviation || '',
-    escudo: (logos[0] && logos[0].href) || t.logo || '',
-    placar: c && c.score != null ? Number(c.score) : null
+    escudo: (logos[0] && logos[0].href) || t.logo || (t.logo && t.logo.href) || '',
+    placar: placarDe(c && c.score)
   };
 }
 
-function converte(ev, competicao) {
+function converte(ev, comp0) {
+  const competicao = comp0 && comp0.nome;
   const comp = (ev.competitions || [])[0];
   if (!comp) return null;
   const times = comp.competitors || [];
@@ -121,11 +131,16 @@ function converte(ev, competicao) {
   if (!casa || !fora) return null;
   const quando = new Date(ev.date);
   if (!Number.isFinite(quando.getTime())) return null;
-  const estadoJogo = ((comp.status || {}).type || {}).state || 'pre';
+  const status = comp.status || ev.status || {};
+  const estadoJogo = (status.type || {}).state || 'pre';
   return {
     id: ev.id || '',
     quando: quando.toISOString(),
     competicao,
+    slug: (comp0 && comp0.slug) || '',
+    // Minuto do jogo ("67'", "45'+2'") e o detalhe curto ("HT" no intervalo).
+    relogio: status.displayClock || '',
+    detalhe: (status.type || {}).shortDetail || '',
     estado: estadoJogo,                       // pre | in | post
     casa: lado(casa),
     fora: lado(fora),
@@ -141,7 +156,7 @@ async function daCompeticao(c) {
     c.slug + '/teams/' + TIME + '/schedule?fixture=true';
   try {
     const d = await pegaJson(url);
-    return (d.events || []).map(ev => converte(ev, c.nome)).filter(Boolean);
+    return (d.events || []).map(ev => converte(ev, c)).filter(Boolean);
   } catch (e) {
     return [];
   }
@@ -268,10 +283,63 @@ function reagenda() {
   if (timer.unref) timer.unref();
 }
 
+// ------------------------------------------------------- placar ao vivo
+//
+// A agenda do ESPN (`schedule`) atualiza placar devagar e o tique normal é de
+// minutos. Com jogo rolando — ou a dez minutos do apito — o painel pergunta ao
+// `scoreboard` da competição, que é o placar ao vivo, a cada 20 s, e empurra
+// para a tela na hora em vez de esperar o tique lento.
+const VIVO_MS = 20 * 1000;
+const ANTES_DO_APITO_MS = 10 * 60 * 1000;
+let timerVivo = null;
+let vendoAoVivo = false;
+
+function valeAoVivo(j) {
+  if (!j || !j.slug) return false;
+  if (j.estado === 'in') return true;
+  if (j.estado !== 'pre') return false;
+  const falta = new Date(j.quando).getTime() - Date.now();
+  return falta < ANTES_DO_APITO_MS && falta > -3 * 3600e3;
+}
+
+async function placarAoVivo() {
+  const j = estado.jogo;
+  if (!valeAoVivo(j)) { vendoAoVivo = false; return; }
+  if (!vendoAoVivo) { vendoAoVivo = true; log('placar ao vivo ligado: ' + j.casa.nome + ' x ' + j.fora.nome); }
+  let ev = null;
+  try {
+    const d = await pegaJson('https://site.api.espn.com/apis/site/v2/sports/soccer/' + j.slug + '/scoreboard');
+    ev = (d.events || []).find(e => String(e.id) === String(j.id));
+  } catch (e) {
+    return;
+  }
+  const novo = ev && converte(ev, { nome: j.competicao, slug: j.slug });
+  if (!novo) return;
+  const antes = [j.estado, j.casa.placar, j.fora.placar, j.relogio, j.detalhe].join('|');
+  // Só o que muda durante o jogo; escudo, transmissão e rodada ficam.
+  j.estado = novo.estado;
+  j.casa.placar = novo.casa.placar;
+  j.fora.placar = novo.fora.placar;
+  j.relogio = novo.relogio;
+  j.detalhe = novo.detalhe;
+  const depois = [j.estado, j.casa.placar, j.fora.placar, j.relogio, j.detalhe].join('|');
+  if (antes === depois) return;
+  if (j.casa.placar !== null && antes.split('|').slice(1, 3).join('-') !== depois.split('|').slice(1, 3).join('-')) {
+    log('placar: ' + j.casa.nome + ' ' + j.casa.placar + ' x ' + j.fora.placar + ' ' + j.fora.nome + ' (' + (j.detalhe || j.relogio) + ')');
+  }
+  estado.atualizadoEm = new Date().toISOString();
+  gravaCache();
+  if (deps.empurra) deps.empurra('flamengo-update', estado);
+  // Apito final: a agenda volta a mandar, e o próximo jogo entra no lugar.
+  if (j.estado === 'post') reagenda();
+}
+
 function iniciar(d) {
   deps = d;
   leCache();
   busca();
+  timerVivo = setInterval(placarAoVivo, VIVO_MS);
+  if (timerVivo.unref) timerVivo.unref();
 }
 
 function atual() {

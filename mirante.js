@@ -1034,6 +1034,8 @@
     elVideoChave.classList.toggle('on', videoLigado);
     elVideoChave.setAttribute('aria-pressed', String(videoLigado));
     elVideoChave.title = 'Vídeo do navegador na parede: ' + (videoLigado ? 'ligado' : 'desligado');
+    const rot = $('wVideoChaveRot');
+    if (rot) rot.textContent = 'Player do navegador: ' + (videoLigado ? 'ligado' : 'desligado');
   }
 
   elVideoChave.addEventListener('click', () => {
@@ -1138,6 +1140,13 @@
     alvo.innerHTML = cel(d, d === 1 ? 'dia' : 'dias') + cel(h, h === 1 ? 'hora' : 'horas') + cel(m, 'min');
   }
 
+  // "Ao vivo · 67'", ou "Intervalo". O minuto vem do scoreboard do ESPN, a cada 20 s.
+  function aoVivo(j) {
+    if (/^(HT|half ?time|intervalo)$/i.test(String(j.detalhe || '').trim())) return 'Intervalo';
+    const min = String(j.relogio || '').trim();
+    return 'Ao vivo' + (min && min !== "0'" ? ' · ' + min : '');
+  }
+
   function pintaJogo(d) {
     const j = d && d.jogo;
     if (!j) { elJogo.hidden = true; jogoAtual = null; return; }
@@ -1168,7 +1177,7 @@
       '<span class="jogo-ident">' +
         '<span class="jogo-camp">' + esc(j.competicao) + (j.fase ? ' · ' + esc(j.fase) : '') + '</span>' +
         '<span class="jogo-times">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span>' +
-        '<span class="jogo-quando">' + esc(rolando ? 'Ao vivo' : terminou ? 'Fim de jogo' : quandoDoJogo(quando)) +
+        '<span class="jogo-quando">' + esc(rolando ? aoVivo(j) : terminou ? 'Fim de jogo' : quandoDoJogo(quando)) +
           (j.local ? ' · ' + esc(j.local) : '') + '</span>' +
       '</span>' +
       ((rolando || terminou) && temPlacar

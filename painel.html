@@ -1571,6 +1571,29 @@
        por dentro: o quadro do vídeo JÁ é um retângulo, e vidro em volta de
        vidro só some com o conteúdo. */
     .m-video { padding: 0; overflow: hidden; }
+    /* Chave do player: pílula solta entre a hora e o jogo, no idioma da
+       travessa. Desligada é vidro discreto; ligada acende no degradê do acento,
+       o mesmo da tecla ativa lá em cima. */
+    .m-video-chave { display: flex; justify-content: center; }
+    .chave-player {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 16px; border-radius: 999px; cursor: pointer;
+      font-family: 'Archivo Narrow', sans-serif; font-size: 11.5px; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--subtext0);
+      background: rgba(24, 24, 37, 0.62);
+      border: 1px solid var(--vidro-aresta);
+      box-shadow: inset 0 1px 0 var(--vidro-brilho);
+      transition: color 200ms, background 200ms, border-color 200ms;
+    }
+    .chave-player svg { width: 15px; height: 15px; display: block; }
+    .chave-player:hover { color: var(--text); border-color: rgba(205, 214, 244, 0.28); }
+    .chave-player.on {
+      color: var(--sobre-acento);
+      background: linear-gradient(135deg, var(--mauve), var(--blue));
+      border-color: transparent;
+    }
+    .chave-player:disabled { opacity: 0.6; cursor: progress; }
     /* Teto de altura: em 16/9 numa coluna de 760px o quadro pediria 427px, e
        com a coluna já cheia isso empurrava o rodapé para fora da tela. O vídeo
        cede antes do resto — ele é o convidado. */
@@ -2400,9 +2423,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <button class="tecla" data-modo="monitor"><span class="marcador" id="marcadorMonitor"></span>Monitor</button>
     </span>
     <span class="vao"></span>
-    <!-- Chave do vídeo do navegador: nasce desligada. Ligada, o painel puxa o
-         vídeo que toca fora da vista e pausa a aba; é pedido dele, não padrão. -->
-    <button class="botao" id="wVideoChave" title="Vídeo do navegador na parede: desligado" aria-label="Vídeo do navegador na parede" aria-pressed="false"><svg viewBox="0 0 16 16"><use href="#ic-video"/></svg></button>
     <button class="botao" id="ajusteServ" title="Configurar os servidores" aria-label="Configurar os servidores"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
     <button class="botao" id="closeBtn" title="Fechar o painel" aria-label="Fechar o painel">
       <svg viewBox="0 0 16 16"><use href="#ic-x"/></svg>
@@ -2497,6 +2517,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <span><i class="rotulo">Dia</i><b class="num" id="wDiaAno">—</b></span>
           <span><i class="rotulo">Uptime</i><b class="num" id="wUptime">—</b></span>
         </span>
+      </div>
+
+      <!-- Chave do vídeo do navegador, logo abaixo da hora e antes do jogo
+           (13/09/2026): é ali que o olho está quando ele pensa em assistir.
+           Nasce desligada; ligada, o painel puxa o vídeo que toca fora da vista
+           e pausa a aba. -->
+      <div class="m-video-chave">
+        <button class="chave-player" id="wVideoChave" title="Vídeo do navegador na parede: desligado" aria-label="Vídeo do navegador na parede" aria-pressed="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-video"/></svg>
+          <span id="wVideoChaveRot">Player do navegador: desligado</span>
+        </button>
       </div>
 
       <!-- Vídeo do navegador. Só aparece quando ele NÃO está no workspace da
