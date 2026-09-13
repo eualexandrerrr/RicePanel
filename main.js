@@ -329,6 +329,10 @@ function createWindow() {
     resizable: true,
     show: false,
     skipTaskbar: true,
+    // No Windows o skipTaskbar só pede à barra para esconder o botão, e ela esquece a cada reinício do Explorer:
+    // o "Electron - 1 janela" voltava. 'toolbar' cria a janela com WS_EX_TOOLWINDOW, que nunca entra na barra
+    // nem no Alt+Tab, que é o certo para um painel de widgets.
+    type: process.platform === 'win32' ? 'toolbar' : undefined,
     backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
