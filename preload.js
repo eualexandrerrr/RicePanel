@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   servLocalSobe: (indice) => ipcRenderer.invoke('serv-local-sobe', indice),
   escolheArquivo: (tipo) => ipcRenderer.invoke('escolhe-arquivo', tipo),
   servLocalLog: () => ipcRenderer.invoke('serv-local-log'),
+  cursorJanela: () => ipcRenderer.invoke('cursor-janela'),
 
   videoGet: () => ipcRenderer.invoke('video-get'),
   videoLiga: (valor) => ipcRenderer.invoke('video-liga', valor),

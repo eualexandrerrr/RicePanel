@@ -544,6 +544,17 @@ ipcMain.handle('musica-comando', async (e, verbo, player) => {
 });
 
 ipcMain.handle('video-get', async () => video.atual());
+
+// Cursor em coordenadas da página. A janelinha do vídeo flutua por cima dos
+// consoles, e o que está por cima de um <webview> não recebe o mouse: o
+// Chromium entrega o evento à página do console. A página do painel também não
+// vê o mouse passando sobre uma webview, então quem sabe onde ele está é o main.
+ipcMain.handle('cursor-janela', async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  const p = screen.getCursorScreenPoint();
+  const b = mainWindow.getContentBounds();
+  return { x: p.x - b.x, y: p.y - b.y };
+});
 ipcMain.handle('video-liga', async (e, valor) => { await video.liga(valor); return video.atual(); });
 ipcMain.handle('video-entra', async () => video.entraComAContaDele());
 ipcMain.handle('video-pausa-navegador', async () => video.pausaNavegador());

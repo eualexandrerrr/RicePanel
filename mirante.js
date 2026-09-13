@@ -851,12 +851,47 @@
 
   aplicaPip(lePip());
 
-  elVideo.addEventListener('pointerdown', (e) => {
+  // Com o cursor em cima da janelinha, os consoles embaixo dela param de
+  // receber o mouse (`body.pip-sob-cursor`), e o clique chega à barra do título
+  // e ao puxador. Sem isso o evento ia para o <webview> do console por baixo.
+  // Só pergunta ao main enquanto a janelinha existe; com o arraste em curso a
+  // classe fica, mesmo que o cursor escape da caixa.
+  // Alças da janelinha na RAIZ do documento. A placa do vídeo mora dentro da
+  // página do Mirante, que fica invisível e sem clique enquanto a janelinha
+  // flutua — e clique nenhum chegava nela (medido: nem pointerover). As alças
+  // ficam fora dessa página, por cima da barra do título e do canto, e seguem a
+  // caixa do vídeo.
+  const pipAlcas = $('pipAlcas');
+
+  function sincronizaAlcas() {
+    if (!pipAlcas) return;
+    if (!flutuando() || elVideo.hidden) { pipAlcas.hidden = true; return; }
+    const r = elVideo.getBoundingClientRect();
+    const pe = elVideo.querySelector('.video-pe');
+    pipAlcas.hidden = false;
+    pipAlcas.style.left = r.left + 'px';
+    pipAlcas.style.top = r.top + 'px';
+    pipAlcas.style.width = r.width + 'px';
+    pipAlcas.style.height = r.height + 'px';
+    pipAlcas.style.setProperty('--pip-barra', Math.round(pe ? pe.getBoundingClientRect().height : 34) + 'px');
+  }
+
+  setInterval(async () => {
+    sincronizaAlcas();
+    if (!flutuando()) { document.body.classList.remove('pip-sob-cursor'); return; }
+    let c = null;
+    try { c = await window.api.cursorJanela(); } catch (e) {}
+    if (!c) return;
+    const r = elVideo.getBoundingClientRect();
+    const dentro = c.x >= r.left - 6 && c.x <= r.right + 6 && c.y >= r.top - 6 && c.y <= r.bottom + 6;
+    document.body.classList.toggle('pip-sob-cursor', dentro || elVideo.classList.contains('arrastando'));
+  }, 80);
+
+  pipAlcas.addEventListener('pointerdown', (e) => {
     if (!flutuando() || e.button !== 0) return;
-    const puxador = e.target.closest('.pip-puxador');
-    const barra = !puxador && e.target.closest('.video-pe');
+    const puxador = e.target.closest('.pip-alca-canto');
+    const barra = !puxador && e.target.closest('.pip-alca-barra');
     if (!puxador && !barra) return;
-    if (barra && e.target.closest('button')) return;   // o botão do espelho segue clicável
     e.preventDefault();
 
     const caixa = elVideo.getBoundingClientRect();
@@ -866,8 +901,10 @@
     const ini = { x: e.clientX, y: e.clientY, r: vw - caixa.right, b: vh - caixa.bottom, w: caixa.width, h: caixa.height };
     let ultimo = { r: ini.r, b: ini.b, w: ini.w };
 
-    elVideo.setPointerCapture(e.pointerId);
+    const alvo = e.target;
+    alvo.setPointerCapture(e.pointerId);
     elVideo.classList.add('arrastando');
+    window.api.diag('pip: arraste começou (' + (puxador ? 'tamanho' : 'posição') + ')');
 
     const move = (ev) => {
       const dx = ev.clientX - ini.x;
@@ -884,17 +921,19 @@
         };
       }
       aplicaPip(ultimo);
+      sincronizaAlcas();
     };
     const solta = () => {
-      elVideo.removeEventListener('pointermove', move);
-      elVideo.removeEventListener('pointerup', solta);
-      elVideo.removeEventListener('pointercancel', solta);
+      alvo.removeEventListener('pointermove', move);
+      alvo.removeEventListener('pointerup', solta);
+      alvo.removeEventListener('pointercancel', solta);
       elVideo.classList.remove('arrastando');
+      sincronizaAlcas();
       try { localStorage.setItem(PIP_CHAVE, JSON.stringify(ultimo)); } catch (err) {}
     };
-    elVideo.addEventListener('pointermove', move);
-    elVideo.addEventListener('pointerup', solta);
-    elVideo.addEventListener('pointercancel', solta);
+    alvo.addEventListener('pointermove', move);
+    alvo.addEventListener('pointerup', solta);
+    alvo.addEventListener('pointercancel', solta);
   });
   let volumeAplicado = null;      // último volume mandado para o player
 

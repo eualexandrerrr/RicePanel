@@ -1648,6 +1648,26 @@
     #wVideo.arrastando .video-quadro::after {
       content: ''; position: absolute; inset: 0; z-index: 5;
     }
+    /* O que está por cima de um <webview> não recebe o mouse: o Chromium manda
+       o evento para a página do console. Com o cursor sobre a janelinha, os
+       consoles ficam surdos ao mouse e o clique chega nela (mirante.js). */
+    body.pip-sob-cursor .tela webview { pointer-events: none; }
+    /* O puxador desenhado dentro da placa não recebe clique; quem recebe são as
+       alças da raiz, logo abaixo. O desenho do triângulo passa para a alça. */
+    body.com-video:not(.em-mirante) #wVideo .pip-puxador { display: none; }
+    #pipAlcas {
+      position: fixed; z-index: 19; pointer-events: none;
+    }
+    #pipAlcas[hidden] { display: none; }
+    .pip-alca-barra {
+      position: absolute; left: 0; right: 0; bottom: 0; height: var(--pip-barra, 34px);
+      pointer-events: auto; cursor: move;
+    }
+    .pip-alca-canto {
+      position: absolute; left: 0; top: 0; width: 28px; height: 28px;
+      pointer-events: auto; cursor: nwse-resize; border-top-left-radius: 16px;
+      background: linear-gradient(135deg, rgba(205, 214, 244, 0.7) 0 24%, transparent 24%);
+    }
     .video-titulo {
       font-size: 13.5px; color: var(--text); min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -2940,6 +2960,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <button id="servOk" class="btn btn-firme">Salvar</button>
       </div>
     </div>
+  </div>
+
+  <!-- Alças da janelinha do vídeo: fora da página do Mirante (invisível e sem
+       clique enquanto o vídeo flutua), por cima da barra do título e do canto.
+       Posição e tamanho vêm do mirante.js. -->
+  <div id="pipAlcas" hidden>
+    <div class="pip-alca-barra" title="Arraste para mover o player"></div>
+    <div class="pip-alca-canto" title="Arraste para mudar o tamanho"></div>
   </div>
 
   <div id="ligaModal" class="cortina">
