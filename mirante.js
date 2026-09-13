@@ -151,6 +151,15 @@
       return null;
     }
 
+    // Blur grande apaga o detalhe de qualquer jeito: rasterizar em 1/4 da largura
+    // e da altura (e o blur na mesma escala) sai igual na tela, que estica com
+    // background-size 100% 100%, e custa 1/16 do blur em software do canvas.
+    // Medido em 13/09/2026: a bruma em 900x1600 com blur 46 levava o painel a ~5,6%
+    // de CPU parado.
+    const escala = blurPx >= 20 ? 0.25 : 1;
+    w = Math.round(w * escala);
+    h = Math.round(h * escala);
+    blurPx = blurPx * escala;
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
@@ -163,24 +172,34 @@
     // revogado a cada troca libera o anterior de verdade -- medido, 19 MB/min
     // parou de crescer com isto.
     let urlAnterior = null;
+    let pintando = false;
+    // createImageBitmap não decodifica Blob de SVG no Chromium do Electron 33
+    // ("The source image could not be decoded", a cada intervalo, sem nunca
+    // pintar): o SVG entra por um <img>, com largura e altura fixas para ter
+    // tamanho intrínseco.
     async function pinta() {
       const svg = offscreen.querySelector('svg');
-      if (!svg) return;
-      const marcado = new XMLSerializer().serializeToString(svg);
-      const blobSvg = new Blob([marcado], { type: 'image/svg+xml' });
-      let bitmap;
+      if (!svg || pintando) return;
+      pintando = true;
+      const copia = svg.cloneNode(true);
+      copia.setAttribute('width', w);
+      copia.setAttribute('height', h);
+      const marcado = new XMLSerializer().serializeToString(copia);
+      const urlSvg = URL.createObjectURL(new Blob([marcado], { type: 'image/svg+xml' }));
+      const img = new Image();
       try {
-        bitmap = await createImageBitmap(blobSvg, { resizeWidth: w, resizeHeight: h });
+        img.src = urlSvg;
+        await img.decode();
       } catch (e) {
-        console.error('DEBUG bitmap falhou', elId, String(e));
+        pintando = false;
         return;
+      } finally {
+        URL.revokeObjectURL(urlSvg);
       }
       ctx.clearRect(0, 0, w, h);
       ctx.filter = blurPx ? `blur(${blurPx}px)` : 'none';
-      ctx.drawImage(bitmap, 0, 0, w, h);
-      bitmap.close();
-      const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : '?';
-      console.error('DEBUG', elId, 'heapMB=' + heap);
+      ctx.drawImage(img, 0, 0, w, h);
+      pintando = false;
       canvas.toBlob(blob => {
         if (!blob) return;
         const novaUrl = URL.createObjectURL(blob);
