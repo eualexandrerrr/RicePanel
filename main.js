@@ -1435,27 +1435,46 @@ process.on('unhandledRejection', (r) => log(`unhandledRejection: ${r}`));
 // `copy` sintético com um DataTransfer nosso no elemento `.xterm` — o xterm
 // responde a esse evento escrevendo a seleção nele — e gravar o texto na área
 // de transferência do sistema. Sem seleção no xterm, vale a seleção comum.
-const LE_SELECAO_XTERM =
+//
+// Copiou, desmarca — como no Windows Terminal. No xterm isso é um clique simples
+// sintético na tela dele; o `detail: 1` é obrigatório: o xterm só trata como
+// clique o evento com contagem 1, e evento sintético nasce com 0 e é ignorado.
+// Medido com o xterm 5.5 em 13/09/2026.
+const COPIA_E_DESMARCA_XTERM =
   '(function(){' +
   '  var alvos=document.querySelectorAll(".xterm");' +
   '  for(var i=0;i<alvos.length;i++){' +
   '    try{' +
   '      var dt=new DataTransfer();' +
   '      alvos[i].dispatchEvent(new ClipboardEvent("copy",{clipboardData:dt,bubbles:true,cancelable:true}));' +
-  '      var t=dt.getData("text/plain"); if(t) return t;' +
+  '      var t=dt.getData("text/plain"); if(!t) continue;' +
+  '      var tela=alvos[i].querySelector(".xterm-screen")||alvos[i];' +
+  '      var r=tela.getBoundingClientRect();' +
+  '      var base={bubbles:true,cancelable:true,view:window,button:0,detail:1,clientX:r.left+2,clientY:r.bottom-2};' +
+  '      tela.dispatchEvent(new MouseEvent("mousedown",Object.assign({buttons:1},base)));' +
+  '      document.dispatchEvent(new MouseEvent("mouseup",Object.assign({buttons:0},base)));' +
+  '      tela.dispatchEvent(new MouseEvent("click",Object.assign({buttons:0},base)));' +
+  '      return t;' +
   '    }catch(e){}' +
   '  }' +
   '  return "";' +
   '})()';
 
+// Seleção comum da página: some depois do copiar. Seleção dentro de campo de
+// texto é separada e fica como está — no campo de comando ele pode querer colar
+// por cima do que marcou.
+const DESMARCA_PAGINA = 'try{window.getSelection().removeAllRanges();}catch(e){} true';
+
 async function copia(wc) {
   let texto = '';
-  try { texto = await wc.executeJavaScript(LE_SELECAO_XTERM, true); } catch (e) {}
+  try { texto = await wc.executeJavaScript(COPIA_E_DESMARCA_XTERM, true); } catch (e) {}
   if (texto) {
     clipboard.writeText(String(texto));
     return;
   }
   wc.copy();
+  // Um instante para o copiar nativo ler a seleção antes de ela sumir.
+  setTimeout(() => { wc.executeJavaScript(DESMARCA_PAGINA, true).catch(() => {}); }, 60);
 }
 
 const EDICAO = {
