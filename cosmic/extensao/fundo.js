@@ -40,6 +40,16 @@ function leVideo() {
   };
 }
 
+// Roda no mundo da PÁGINA (world MAIN): o volume do player do YouTube, o mesmo
+// número da barra de volume (0 a 100). O `volume` do <video> já vem com a
+// normalização de loudness aplicada e muda de vídeo para vídeo; copiar esse
+// número para o painel fazia o YouTube de lá normalizar de novo por cima.
+function leVolumeYoutube() {
+  const p = document.getElementById('movie_player');
+  if (!p || typeof p.getVolume !== 'function') return null;
+  return { volume: p.getVolume(), mudo: typeof p.isMuted === 'function' ? p.isMuted() : false };
+}
+
 function pausaVideo(pausar) {
   const v = document.querySelector('video');
   if (!v) return false;
@@ -65,6 +75,15 @@ async function relata() {
       estado = r && r.result;
     } catch (e) {}
     if (!estado) continue;
+    if (/youtube\.com/.test(aba.url || '')) {
+      try {
+        const [yv] = await chrome.scripting.executeScript({ target: { tabId: aba.id }, func: leVolumeYoutube, world: 'MAIN' });
+        if (yv && yv.result) {
+          estado.volumeYoutube = yv.result.volume;
+          estado.mudoYoutube = !!yv.result.mudo;
+        }
+      } catch (e) {}
+    }
     lista.push(Object.assign({
       aba: aba.id,
       janela: aba.windowId,

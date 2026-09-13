@@ -880,24 +880,41 @@
     // antes do vídeo monta outro DOM em cima. Então o que entra na página é um
     // vigia: repõe o `<style>` e o volume enquanto o vídeo não estabiliza, e se
     // desliga sozinho depois de um minuto para não ficar rodando à toa.
+    // Volume pelo PLAYER (`setVolume`, 0 a 100), não pelo `<video>.volume`: o
+    // YouTube aplica a normalização de loudness no elemento, e forçar o número
+    // do elemento brigava com ela a cada segundo — o volume ficava variando.
+    // O alvo mora em `window.__ricepanelVol`, que `aplicaVolume` atualiza.
+    //
+    // O vigia não desiste mais depois de um minuto: com cookie, anúncio ou live
+    // demorando, o vídeo ficava parado esperando um clique. Enquanto a placa
+    // existe, vídeo pausado leva play. Recusa de play vai para o log.
     const script =
       '(function(){' +
       '  var css=' + JSON.stringify(SO_O_VIDEO) + ';' +
-      '  var vol=' + (v.volume != null ? v.volume.toFixed(3) : 'null') + ';' +
+      '  if(window.__ricepanelVol===undefined) window.__ricepanelVol=' + (v.volume != null ? v.volume.toFixed(3) : 'null') + ';' +
+      '  var avisou="";' +
       '  function poe(){' +
       '    var e=document.getElementById("ricepanel-so-o-video");' +
       '    if(!e){ e=document.createElement("style"); e.id="ricepanel-so-o-video";' +
       '            (document.head||document.documentElement).appendChild(e); }' +
       '    if(e.textContent!==css) e.textContent=css;' +
-      '    var v=document.querySelector("video");' +
-      '    if(v){ v.muted=false; if(vol!==null) v.volume=vol; if(v.paused) v.play().catch(function(){}); }' +
       '    var p=document.getElementById("movie_player");' +
+      '    var v=document.querySelector("video");' +
+      '    var vol=window.__ricepanelVol;' +
+      '    if(p&&typeof p.setVolume==="function"){' +
+      '      try{ if(p.isMuted&&p.isMuted()) p.unMute();' +
+      '           if(vol!==null){ var alvo=Math.round(vol*100); if(p.getVolume()!==alvo) p.setVolume(alvo); } }catch(err){}' +
+      '    } else if(v){ v.muted=false; if(vol!==null) v.volume=vol; }' +
       '    if(p&&p.setPlaybackQualityRange){ try{p.setPlaybackQualityRange("hd720","hd720");}catch(err){} }' +
+      '    if(v&&v.paused&&!v.ended){' +
+      '      try{ if(p&&typeof p.playVideo==="function") p.playVideo(); }catch(err){}' +
+      '      v.play().catch(function(err){ var m="ricepanel: play recusado — "+err.name+" "+err.message;' +
+      '        if(m!==avisou){ avisou=m; console.log(m); } });' +
+      '    }' +
       '  }' +
       '  poe();' +
       '  if(window.__ricepanelVigia) clearInterval(window.__ricepanelVigia);' +
-      '  window.__ricepanelVigia=setInterval(poe,1000);' +
-      '  setTimeout(function(){ clearInterval(window.__ricepanelVigia); }, 60000);' +
+      '  window.__ricepanelVigia=setInterval(poe,1500);' +
       '  return true;})()';
 
     const injeta = () => {
@@ -908,6 +925,10 @@
       try { quadro.setAudioMuted(false); } catch (e) {}
       injeta();
     }, { once: true });
+    // O que o vigia da página reporta (play recusado) chega ao mirante.log.
+    quadro.addEventListener('console-message', (e) => {
+      if (/^ricepanel:/.test(String(e.message || ''))) window.api.diag('video: ' + String(e.message).slice(10, 200));
+    });
     quadro.addEventListener('did-finish-load', injeta);
 
     // Cookies primeiro, página depois: carregar antes é entrar deslogado e
@@ -986,9 +1007,9 @@
     if (!quadro || !v || v.volume == null) return;
     if (volumeAplicado != null && Math.abs(volumeAplicado - v.volume) < 0.02) return;
     volumeAplicado = v.volume;
+    // Só muda o alvo do vigia: quem aplica é ele, pelo `setVolume` do player.
     try {
-      quadro.executeJavaScript(
-        'var a=document.querySelector("video"); if(a){a.volume=' + v.volume.toFixed(3) + ';} true;');
+      quadro.executeJavaScript('window.__ricepanelVol=' + v.volume.toFixed(3) + '; true;');
     } catch (e) {}
   }
 

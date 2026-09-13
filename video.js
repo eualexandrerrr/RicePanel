@@ -462,7 +462,10 @@ function olhaPelaPonte() {
   const id = idDaUrlYoutube(aba.url);
   const drm = !id && /^https:\/\/globoplay\.globo\.com\//.test(aba.url || '');
   if (!id && !drm) { limpa(); return estado; }
-  if (aba.volume != null) ultimoVolume = aba.volume;
+  // Volume do PLAYER do YouTube (0 a 100, o da barra), não o do <video>, que
+  // já vem normalizado. Extensão antiga sem esse campo: vale o do elemento.
+  if (aba.volumeYoutube != null) ultimoVolume = aba.mudoYoutube ? 0 : Math.max(0, Math.min(1, aba.volumeYoutube / 100));
+  else if (aba.volume != null) ultimoVolume = aba.volume;
 
   const antes = estado.id || estado.titulo;
   estado = {
