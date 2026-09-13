@@ -817,6 +817,85 @@
   // resultado possível.
   const elVideo = $('wVideo');
   let videoMontado = '';          // id + site do que está na placa agora
+
+  // ---- janelinha flutuante fora do Mirante: arrastar e redimensionar ----
+  // Arrasta pela barra do título (o vídeo em si é uma webview, que engole o
+  // mouse); redimensiona pelo puxador do canto de cima à esquerda, com o canto
+  // de baixo à direita parado. Posição e largura moram em variáveis CSS na
+  // própria placa e ficam guardadas; no Mirante o CSS nem as lê.
+  const PIP_CHAVE = 'videoPip';
+  const PIP_MIN_W = 260;
+
+  function lePip() {
+    try { return JSON.parse(localStorage.getItem(PIP_CHAVE)) || null; } catch (e) { return null; }
+  }
+
+  function aplicaPip(p) {
+    if (!p) return;
+    elVideo.style.setProperty('--pip-r', Math.round(p.r) + 'px');
+    elVideo.style.setProperty('--pip-b', Math.round(p.b) + 'px');
+    elVideo.style.setProperty('--pip-w', Math.round(p.w) + 'px');
+  }
+
+  function flutuando() {
+    return document.body.classList.contains('com-video') && !document.body.classList.contains('em-mirante');
+  }
+
+  function garantePuxador() {
+    if (elVideo.querySelector('.pip-puxador')) return;
+    const s = document.createElement('span');
+    s.className = 'pip-puxador';
+    s.title = 'Arraste para mudar o tamanho';
+    elVideo.appendChild(s);
+  }
+
+  aplicaPip(lePip());
+
+  elVideo.addEventListener('pointerdown', (e) => {
+    if (!flutuando() || e.button !== 0) return;
+    const puxador = e.target.closest('.pip-puxador');
+    const barra = !puxador && e.target.closest('.video-pe');
+    if (!puxador && !barra) return;
+    if (barra && e.target.closest('button')) return;   // o botão do espelho segue clicável
+    e.preventDefault();
+
+    const caixa = elVideo.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const extraAltura = caixa.height - caixa.width * 9 / 16;   // a barra do título
+    const ini = { x: e.clientX, y: e.clientY, r: vw - caixa.right, b: vh - caixa.bottom, w: caixa.width, h: caixa.height };
+    let ultimo = { r: ini.r, b: ini.b, w: ini.w };
+
+    elVideo.setPointerCapture(e.pointerId);
+    elVideo.classList.add('arrastando');
+
+    const move = (ev) => {
+      const dx = ev.clientX - ini.x;
+      const dy = ev.clientY - ini.y;
+      if (puxador) {
+        // Cresce para cima e para a esquerda; não passa da borda da tela.
+        const maxW = Math.min(vw - ini.r - 8, (vh - ini.b - 8 - extraAltura) * 16 / 9);
+        ultimo = { r: ini.r, b: ini.b, w: Math.max(PIP_MIN_W, Math.min(maxW, ini.w - dx)) };
+      } else {
+        ultimo = {
+          r: Math.max(0, Math.min(vw - ini.w, ini.r - dx)),
+          b: Math.max(0, Math.min(vh - ini.h, ini.b - dy)),
+          w: ini.w
+        };
+      }
+      aplicaPip(ultimo);
+    };
+    const solta = () => {
+      elVideo.removeEventListener('pointermove', move);
+      elVideo.removeEventListener('pointerup', solta);
+      elVideo.removeEventListener('pointercancel', solta);
+      elVideo.classList.remove('arrastando');
+      try { localStorage.setItem(PIP_CHAVE, JSON.stringify(ultimo)); } catch (err) {}
+    };
+    elVideo.addEventListener('pointermove', move);
+    elVideo.addEventListener('pointerup', solta);
+    elVideo.addEventListener('pointercancel', solta);
+  });
   let volumeAplicado = null;      // último volume mandado para o player
 
   function desmontaVideo() {
@@ -864,6 +943,14 @@
       'ytd-comments, tp-yt-app-drawer, ytd-mini-guide-renderer,',
       'ytd-watch-metadata, #related, .ytp-chrome-top, .ytp-gradient-top,',
       'ytd-merch-shelf-renderer { display: none !important; }',
+      // Controles do player por cima do vídeo: barra de progresso e volume,
+      // dicas, sobreposição de pausa, cards e marca d'água. Na parede ninguém
+      // mexe neles, e aparecendo a cada movimento do mouse só tampam a imagem.
+      '.ytp-chrome-bottom, .ytp-gradient-bottom, .ytp-chrome-controls, .ytp-bezel,',
+      '.ytp-bezel-text-wrapper, .ytp-tooltip, .ytp-pause-overlay, .ytp-ce-element,',
+      '.ytp-cards-teaser, .ytp-paid-content-overlay, .ytp-watermark,',
+      '.ytp-overlay-bottom-right, .ytp-iv-player-content { display: none !important; }',
+      '.html5-video-player, .html5-video-player * { cursor: none !important; }',
       'html, body { overflow: hidden !important; background: #000 !important; }',
       'ytd-app, #content, ytd-page-manager, ytd-watch-flexy { background: #000 !important; }',
       '#primary, #primary-inner, #player, #player-container,',
@@ -1063,12 +1150,14 @@
 
     if (v.site === 'youtube') {
       montaYoutube(v);
+      garantePuxador();
       videoMontado = assinatura;
       // A aba fica em silêncio enquanto a parede toca.
       window.api.videoPausaNavegador().catch(() => {});
       return;
     }
     montaDrm(v);
+    garantePuxador();
     videoMontado = assinatura;
   }
 

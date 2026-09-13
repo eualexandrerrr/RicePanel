@@ -1624,15 +1624,29 @@
       display: block; position: fixed; inset: 0; z-index: 18;
       visibility: hidden; pointer-events: none; overflow: hidden;
     }
+    /* Posição e largura vêm de variáveis que o arrastar grava (mirante.js); sem
+       elas, o canto de baixo à direita. */
     body.com-video:not(.em-mirante) #wVideo {
       visibility: visible; pointer-events: auto;
-      position: fixed; right: 18px; bottom: 64px; z-index: 18;
-      width: min(440px, 46vw); margin: 0;
+      position: fixed; right: var(--pip-r, 18px); bottom: var(--pip-b, 64px); z-index: 18;
+      width: var(--pip-w, min(440px, 46vw)); margin: 0;
       border-radius: 16px;
       box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6);
     }
     body.com-video:not(.em-mirante) #wVideo .video-quadro { max-height: none; }
-    body.com-video:not(.em-mirante) #wVideo .video-pe { padding: 6px 12px 8px; }
+    body.com-video:not(.em-mirante) #wVideo .video-pe { padding: 6px 12px 8px; cursor: move; user-select: none; }
+    /* Puxador de tamanho: só na janelinha, no canto de cima à esquerda. */
+    .pip-puxador { display: none; }
+    body.com-video:not(.em-mirante) #wVideo .pip-puxador {
+      display: block; position: absolute; left: 0; top: 0; z-index: 6;
+      width: 26px; height: 26px; cursor: nwse-resize;
+      background: linear-gradient(135deg, rgba(205, 214, 244, 0.6) 0 22%, transparent 22%);
+    }
+    /* Durante o gesto, uma película transparente cobre o vídeo: sem ela o
+       ponteiro cai dentro da webview e a janela para de acompanhar o mouse. */
+    #wVideo.arrastando .video-quadro::after {
+      content: ''; position: absolute; inset: 0; z-index: 5;
+    }
     .video-titulo {
       font-size: 13.5px; color: var(--text); min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
