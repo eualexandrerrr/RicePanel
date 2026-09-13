@@ -970,29 +970,51 @@
       .then(() => { elVideoChave.disabled = false; });
   });
 
+  // Quem tem o som agora: true = a aba do Chrome (ele está olhando para ela),
+  // false = a parede, null = ainda não decidido. O comando para a extensão só
+  // sai na troca: a aba mutada continua "tocando", e mandar a cada tique
+  // repetiria o mutar de 2 em 2 s.
+  let chromeComSom = null;
+
   function pintaVideo(v) {
     if (v && 'ligado' in v) pintaChave(v.ligado);
-    if (!v || !v.site || v.janelaVisivel) {
-      // Ele voltou para a janela: o painel devolve o vídeo e sai da frente.
-      if (videoMontado && /^youtube/.test(videoMontado)) window.api.videoTocaNavegador().catch(() => {});
+    if (!v || !v.site) {
+      // Acabou o vídeo ou a chave desligou: o painel sai da frente e devolve o
+      // play à aba, se foi ele quem pausou.
+      if (videoMontado && /^youtube/.test(videoMontado) && chromeComSom === false) window.api.videoTocaNavegador().catch(() => {});
+      chromeComSom = null;
       paraEspelho();
       desmontaVideo();
       return;
     }
 
     const assinatura = v.site + ':' + v.id;
-    if (assinatura === videoMontado) { aplicaVolume(v); return; }
-    volumeAplicado = null;
+    // O player nasce assim que o vídeo toca no Chrome, mesmo com ele olhando
+    // para a aba (mudo, pip.js): montar só na hora em que ele saía do Chrome
+    // custava carregar a página, os cookies e chegar ao ao vivo — segundos de
+    // atraso bem na troca.
 
-    if (v.site === 'youtube') {
-      montaYoutube(v);
+    if (assinatura !== videoMontado) {
+      volumeAplicado = null;
+      if (v.site === 'youtube') montaYoutube(v); else montaDrm(v);
       videoMontado = assinatura;
-      // A aba fica em silêncio enquanto a parede toca.
-      window.api.videoPausaNavegador().catch(() => {});
-      return;
+    } else {
+      aplicaVolume(v);
     }
-    montaDrm(v);
-    videoMontado = assinatura;
+    if (v.site !== 'youtube') return;
+
+    // Voltar para o Chrome não interrompe a parede (13/09/2026): os dois tocam
+    // juntos, e o som é da aba — a janela do player fica muda (pip.js). Saindo
+    // da aba de novo, o painel pausa o Chrome e o som volta para a parede.
+    if (v.janelaVisivel) {
+      if (chromeComSom !== true) {
+        chromeComSom = true;
+        window.api.videoTocaNavegador().catch(() => {});
+      }
+    } else if (chromeComSom !== false) {
+      chromeComSom = false;
+      window.api.videoPausaNavegador().catch(() => {});
+    }
   }
 
   window.api.onVideo(pintaVideo);
@@ -1071,6 +1093,19 @@
     return 'Ao vivo' + (min && min !== "0'" ? ' · ' + min : '');
   }
 
+  // Placar no mesmo idioma da contagem: uma célula por time, número grande e a
+  // sigla embaixo, "×" no meio. Quem ganha fica aceso, quem perde apaga; no
+  // empate os dois acesos. É a leitura de dois metros que o "0–0" solto não dava.
+  function placarGrande(j, terminou) {
+    const c = j.casa.placar, f = j.fora.placar;
+    const celula = (t, perde) => '<span class="cr' + (perde ? ' perde' : '') + '">' +
+      '<b class="num">' + t.placar + '</b><i>' + esc(t.sigla || String(t.nome || '').slice(0, 3)) + '</i></span>';
+    return '<span class="conta-regressiva jogo-placar-vivo' + (terminou ? ' encerrado' : '') +
+      '" role="status" aria-label="Placar: ' + esc(j.casa.nome) + ' ' + c + ', ' + esc(j.fora.nome) + ' ' + f + '">' +
+      celula(j.casa, c < f) + '<span class="cr vs"><b>×</b></span>' + celula(j.fora, f < c) +
+    '</span>';
+  }
+
   function pintaJogo(d) {
     const j = d && d.jogo;
     if (!j) { elJogo.hidden = true; jogoAtual = null; return; }
@@ -1101,11 +1136,13 @@
       '<span class="jogo-ident">' +
         '<span class="jogo-camp">' + esc(j.competicao) + (j.fase ? ' · ' + esc(j.fase) : '') + '</span>' +
         '<span class="jogo-times">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span>' +
-        '<span class="jogo-quando">' + esc(rolando ? aoVivo(j) : terminou ? 'Fim de jogo' : quandoDoJogo(quando)) +
-          (j.local ? ' · ' + esc(j.local) : '') + '</span>' +
+        (rolando
+          ? '<span class="jogo-quando ao-vivo"><i class="ponto-vivo" aria-hidden="true"></i>' + esc(aoVivo(j)) + '</span>'
+          : '<span class="jogo-quando">' + esc(terminou ? 'Fim de jogo' : quandoDoJogo(quando)) +
+            (j.local ? ' · ' + esc(j.local) : '') + '</span>') +
       '</span>' +
       ((rolando || terminou) && temPlacar
-        ? '<span class="jogo-placar">' + j.casa.placar + '–' + j.fora.placar + '</span>'
+        ? placarGrande(j, terminou)
         : (!rolando && !terminou
           ? '<span class="conta-regressiva jogo-conta" id="wJogoConta" role="timer" aria-label="Contagem regressiva para o jogo"></span>'
           : '<span></span>')) +

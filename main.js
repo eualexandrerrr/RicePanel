@@ -386,7 +386,12 @@ function createWindow() {
   // Na Estação o vídeo é do painel nativo: dois vigias pausariam a mesma aba.
   // No Linux o vídeo lê MPRIS, PipeWire e hyprctl; no Windows, a extensão ponte
   // do Chrome (ponte.js). Nos dois só na página do Mirante.
-  if (!ESTACAO && (process.platform === 'linux' || process.platform === 'win32')) video.iniciar(deps);
+  if (!ESTACAO && (process.platform === 'linux' || process.platform === 'win32')) {
+    // Mudança vinda da extensão vai para a tela e para o player na hora.
+    video.iniciar(Object.assign({}, deps, {
+      aoMudar: () => { empurra('video-update', video.atual()); empurraPip(); }
+    }));
+  }
   dev.iniciar({ log, empurra, getWindow: () => mainWindow });
   vidro.iniciar({ app, log, empurra });
 

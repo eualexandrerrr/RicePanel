@@ -92,6 +92,7 @@ function arquivoChave() {
 // reiniciado esquecia que a pausa era dele: a aba ficava parada no Chrome, nada
 // tocava, e o vídeo nunca mais vinha para a parede.
 let pendenteRetomar = null;      // { aba, url } lido do disco na subida
+let ultimoDiagChrome = '';
 
 function leChave() {
   try {
@@ -467,8 +468,12 @@ function olhaPelaPonte() {
   if (pendenteRetomar && abas.length) {
     const alvo = abas.find(a => a.aba === pendenteRetomar.aba) ||
       abas.find(a => pendenteRetomar.url && a.url === pendenteRetomar.url);
-    if (alvo && !alvo.tocando && ponte.envia({ tipo: 'retomar', aba: alvo.aba })) {
-      log('retomando no Chrome a aba que o painel pausou antes de reiniciar: ' + (alvo.titulo || alvo.url));
+    if (alvo) {
+      // Pausa de versão antiga: dá play. Muda de versão nova: tira o mudo (e a
+      // extensão volta a live para o ao vivo).
+      if (!alvo.tocando) ponte.envia({ tipo: 'retomar', aba: alvo.aba });
+      ponte.envia({ tipo: 'desmutar', aba: alvo.aba });
+      log('devolvendo ao Chrome a aba que o painel tinha assumido antes de reiniciar: ' + (alvo.titulo || alvo.url));
     }
     pendenteRetomar = null;
     gravaChave(null);
@@ -484,6 +489,16 @@ function olhaPelaPonte() {
     pausadoPeloPainel = false;
     limpa();
     return estado;
+  }
+
+  // O que a extensão consegue ler de dentro do player do YouTube no Chrome:
+  // se a API responde, mudo na aba e quanto a live está atrás do ao vivo. Vai
+  // para o log quando muda — é o que mede o atraso do Chrome sem palpite.
+  const diagChrome = 'api=' + (aba.apiYoutube || '?') + ' muda=' + !!aba.mudaNoChrome +
+    (aba.aoVivoYoutube ? ' ao-vivo atraso=' + (aba.atrasoAoVivo != null ? aba.atrasoAoVivo + 's' : '?') + ' borda=' + aba.naBordaYoutube : '');
+  if (diagChrome.replace(/atraso=\d+s/, 'atraso=' + Math.round((aba.atrasoAoVivo || 0) / 5) * 5) !== ultimoDiagChrome) {
+    ultimoDiagChrome = diagChrome.replace(/atraso=\d+s/, 'atraso=' + Math.round((aba.atrasoAoVivo || 0) / 5) * 5);
+    log('chrome: ' + diagChrome);
   }
 
   const id = idDaUrlYoutube(aba.url);
@@ -585,10 +600,12 @@ async function olha() {
 // tempo é o pior resultado possível dessa funcionalidade.
 async function pausaNavegador() {
   if (WIN) {
-    if (estado.aba == null || !ponte || !ponte.envia({ tipo: 'pausar', aba: estado.aba })) return { ok: false };
-    estado.tocando = false;
+    // Muta, não pausa: a aba segue no ao vivo e o som vem da parede. Pausar uma
+    // live deixava o Chrome minutos atrás (retomava do ponto parado, pelo DVR).
+    if (estado.aba == null || !ponte || !ponte.envia({ tipo: 'mutar', aba: estado.aba })) return { ok: false };
     pausadoPeloPainel = true;
     gravaChave({ aba: estado.aba, url: estado.url || '' });
+    log('mutando a aba no Chrome (o som vai para a parede)');
     return { ok: true };
   }
   if (!estado.player) return { ok: false };
@@ -600,9 +617,10 @@ async function pausaNavegador() {
 
 async function tocaNavegador() {
   if (WIN) {
-    if (estado.aba == null || !ponte || !ponte.envia({ tipo: 'retomar', aba: estado.aba })) return { ok: false };
+    if (estado.aba == null || !ponte || !ponte.envia({ tipo: 'desmutar', aba: estado.aba })) return { ok: false };
     pausadoPeloPainel = false;
     gravaChave(null);
+    log('desmutando a aba no Chrome (ele está olhando para ela)');
     return { ok: true };
   }
   if (!estado.player) return { ok: false };
@@ -616,6 +634,15 @@ function iniciar(d) {
   if (WIN) {
     ponte = require('./ponte');
     ponte.iniciar({ log: d.log });
+    // Lista nova da extensão (a extensão relata na hora em que a janela do
+    // Chrome ganha ou perde o foco): reavalia já e, se o que a tela mostra
+    // mudou, empurra sem esperar o tique.
+    ponte.aoMudar(async () => {
+      const antes = [estado.site, estado.id, estado.janelaVisivel, estado.tocando].join('|');
+      await olha();
+      const depois = [estado.site, estado.id, estado.janelaVisivel, estado.tocando].join('|');
+      if (antes !== depois && deps.aoMudar) deps.aoMudar();
+    });
   }
   leChave();
   log((ligado ? 'ligado' : 'desligado') + '; vigiando o navegador a cada ' + (INTERVALO_MS / 1000) + ' s');
@@ -631,7 +658,7 @@ function iniciar(d) {
 // Se a mensagem não chegar a tempo, a pausa gravada resolve na próxima subida.
 function devolveAoSair() {
   if (!WIN || !pausadoPeloPainel || estado.aba == null || !ponte) return;
-  ponte.envia({ tipo: 'retomar', aba: estado.aba });
+  ponte.envia({ tipo: 'desmutar', aba: estado.aba });
 }
 
 module.exports = {

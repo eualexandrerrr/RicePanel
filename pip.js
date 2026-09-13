@@ -12,6 +12,16 @@ const elQuadro = document.getElementById('quadro');
 const elTitulo = document.getElementById('titulo');
 let montado = '';               // id do vídeo que está tocando
 let volumeAplicado = null;
+// Mudo por dois motivos: o volume ainda não foi confirmado (o YouTube começa
+// em 100%), ou ele está olhando a aba do Chrome, que toca junto e tem o som.
+let somLiberado = false;
+let chromeNaFrente = false;
+
+function aplicaMudo() {
+  const wv = elQuadro.querySelector('webview');
+  if (!wv) return;
+  try { wv.setAudioMuted(chromeNaFrente || !somLiberado); } catch (e) {}
+}
 
 // O que fica da página do YouTube é só o vídeo: sem cabeçalho, sugestões,
 // comentários, e sem os controles do player por cima da imagem.
@@ -62,6 +72,15 @@ function roteiro(volume) {
     '             if(confirmou>=2&&!window.__ricepanelSom){ window.__ricepanelSom=true; console.log("ricepanel: som-liberado "+alvo); } } }catch(err){}' +
     '    } else if(v){ if(vol!==null){ v.volume=vol; if(!window.__ricepanelSom){ window.__ricepanelSom=true; console.log("ricepanel: som-liberado "+Math.round(vol*100)); } } }' +
     '    if(p&&p.setPlaybackQualityRange){ try{p.setPlaybackQualityRange("hd720","hd720");}catch(err){} }' +
+    // Live colada na borda, pelo PLAYER do YouTube. Mexer no <video>.currentTime
+    // não serve: numa live do YouTube o `seekable` do elemento não é a janela
+    // real, o salto não pegava e se repetia a cada volta, engasgando o vídeo
+    // (medido: "pulou 3598 s" de 1,5 em 1,5 s). `seekToLiveHead` é o botão
+    // "AO VIVO" do próprio player; no máximo uma vez a cada 20 s.
+    '    try{ if(p&&typeof p.isAtLiveHead==="function"&&typeof p.seekToLiveHead==="function"){' +
+    '      var dados=p.getVideoData?p.getVideoData():null;' +
+    '      if(dados&&dados.isLive&&!p.isAtLiveHead()&&Date.now()-(window.__ricepanelBorda||0)>20000){' +
+    '        window.__ricepanelBorda=Date.now(); p.seekToLiveHead(); console.log("ricepanel: ao vivo — voltou para a borda"); } } }catch(err){}' +
     '    if(v&&v.paused&&!v.ended){' +
     '      try{ if(p&&typeof p.playVideo==="function") p.playVideo(); }catch(err){}' +
     '      v.play().catch(function(err){ var m="ricepanel: play recusado — "+err.name+" "+err.message;' +
@@ -77,11 +96,15 @@ function roteiro(volume) {
 function monta(v) {
   elQuadro.textContent = '';
   volumeAplicado = v.volume;
+  somLiberado = false;
   // Página normal do YouTube, não o /embed: o embed recusa origem file:// (erro
   // 153). O user-agent perde o carimbo do Electron: a sessão passa pela do
   // navegador de onde os cookies vieram.
+  // Live não leva posição: o tempo da aba do Chrome numa live é posição no DVR,
+  // e abrir ali deixava a parede atrás do ao vivo. Live é duração desconhecida.
+  const aoVivo = v.duracao == null;
   const inicio = Math.max(0, (v.posicao || 0) - 1);
-  const src = 'https://www.youtube.com/watch?v=' + encodeURIComponent(v.id) + '&t=' + inicio + 's';
+  const src = 'https://www.youtube.com/watch?v=' + encodeURIComponent(v.id) + (aoVivo ? '' : '&t=' + inicio + 's');
   const ua = navigator.userAgent.replace(/ (ricepanel|electron)\/\S+/gi, '');
   const wv = document.createElement('webview');
   wv.setAttribute('partition', 'persist:video-mirante');
@@ -98,7 +121,7 @@ function monta(v) {
   wv.addEventListener('console-message', (e) => {
     const msg = String(e.message || '');
     if (!/^ricepanel:/.test(msg)) return;
-    if (/som-liberado/.test(msg)) { try { wv.setAudioMuted(false); } catch (err) {} }
+    if (/som-liberado/.test(msg)) { somLiberado = true; aplicaMudo(); }
     window.pip.diag('video: ' + msg.slice(10, 200));
   });
 
@@ -121,6 +144,10 @@ window.pip.onVideo((v) => {
   document.body.classList.toggle('placa', !v || v.modo !== 'flutuante');
   if (!v || v.site !== 'youtube' || !v.id) return;   // o main esconde a janela
   elTitulo.textContent = v.titulo || 'Vídeo';
+  if (chromeNaFrente !== !!v.janelaVisivel) {
+    chromeNaFrente = !!v.janelaVisivel;
+    aplicaMudo();
+  }
   if (v.id !== montado) {
     montado = v.id;
     monta(v);

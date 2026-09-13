@@ -12,6 +12,25 @@
 //                      {tipo:'cookies', dominio, pedido}
 
 const net = require('net');
+const fs = require('fs');
+const path = require('path');
+
+// Versão que a extensão DEVERIA estar rodando: a do fundo.js em disco. O Chrome
+// não relê o service worker de extensão sem compactação nem reiniciando, então
+// o painel manda `recarregar` quando a extensão relata versão menor (ou nenhuma,
+// que é a de antes deste mecanismo — essa não sabe se recarregar e fica para o
+// clique no ↻).
+function versaoEmDisco() {
+  try {
+    const t = fs.readFileSync(path.join(__dirname, 'cosmic', 'extensao', 'fundo.js'), 'utf8');
+    const m = t.match(/const VERSAO_PONTE = (\d+);/);
+    return m ? Number(m[1]) : null;
+  } catch (e) {
+    return null;
+  }
+}
+let pediuRecarregarEm = 0;
+let avisouSemVersao = false;
 
 const CANO = '\\\\.\\pipe\\ricepanel-ponte';
 // Lista de abas mais velha que isto é de uma extensão que parou de relatar
@@ -24,6 +43,9 @@ let abas = [];
 let abasEm = 0;
 let seq = 0;
 let ultimoResumo = '';
+// Quem quer saber na hora que chegou lista nova (video.js): trocar de janela
+// não pode esperar o próximo tique de 2 s.
+let aoReceberAbas = null;
 const esperando = new Map();
 
 function log(msg) {
@@ -37,10 +59,20 @@ function trata(linha) {
   if (m.tipo === 'abas' && Array.isArray(m.abas)) {
     abas = m.abas;
     abasEm = Date.now();
+    const esperada = versaoEmDisco();
+    if (esperada != null && m.versao == null && !avisouSemVersao) {
+      avisouSemVersao = true;
+      log('extensão desatualizada e sem recarga automática: clique no ↻ do RicePanel ponte em chrome://extensions');
+    } else if (esperada != null && m.versao != null && m.versao < esperada && Date.now() - pediuRecarregarEm > 60000) {
+      pediuRecarregarEm = Date.now();
+      log('extensão na versão ' + m.versao + ', disco na ' + esperada + ': pedindo para recarregar');
+      envia({ tipo: 'recarregar' });
+    }
     // Só quando muda: quantas abas de vídeo existem e quantas tocam. É o que
     // responde "por que o vídeo não veio" sem palpite.
     const resumo = abas.length + ' aba(s) de vídeo, ' + abas.filter(a => a.tocando).length + ' tocando';
     if (resumo !== ultimoResumo) { ultimoResumo = resumo; log(resumo); }
+    if (aoReceberAbas) { try { aoReceberAbas(); } catch (e) {} }
     return;
   }
   if (m.tipo === 'cookies' && esperando.has(m.pedido)) {
@@ -113,4 +145,8 @@ function pedeCookies(dominio, ms) {
   });
 }
 
-module.exports = { iniciar, envia, abasAtuais, pedeCookies, conectada: () => !!conexao };
+module.exports = {
+  iniciar, envia, abasAtuais, pedeCookies,
+  conectada: () => !!conexao,
+  aoMudar: (cb) => { aoReceberAbas = cb; }
+};
