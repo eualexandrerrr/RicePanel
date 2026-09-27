@@ -15,7 +15,16 @@
 // ontem com o aviso de quando foi lida, em vez de célula vazia.
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+
+// Cópia que sobrevive à formatação: o userData some junto com o sistema, o
+// D:\Claude\.secrets fica (mesmo lugar do txadmin.env e do sentry.env).
+// Formato: AGENDA_ICAL_URL=https://calendar.google.com/...
+const AGENDA_ENV = [
+  path.join('D:', 'Claude', '.secrets', 'agenda.env'),
+  path.join(os.homedir(), '.config', 'mirante', 'agenda.env')
+];
 
 const INTERVALO_MS = 15 * 60 * 1000;   // varredura
 const JANELA_DIAS = 45;                // até onde expandir repetição
@@ -58,9 +67,28 @@ function leUrl() {
     }
   } catch (e) {}
   try {
-    return fs.readFileSync(arqUrlTexto(), 'utf8').trim();
-  } catch (e) {
-    return '';
+    const t = fs.readFileSync(arqUrlTexto(), 'utf8').trim();
+    if (t) return t;
+  } catch (e) {}
+  for (const arq of AGENDA_ENV) {
+    try {
+      const u = (fs.readFileSync(arq, 'utf8').match(/^\s*AGENDA_ICAL_URL\s*=\s*(.+)$/m) || [])[1];
+      if (u) {
+        log('endereço recuperado de ' + arq);
+        return u.trim();
+      }
+    } catch (e) {}
+  }
+  return '';
+}
+
+function gravaCopiaEnv(url) {
+  for (const arq of AGENDA_ENV) {
+    try {
+      if (!fs.existsSync(path.dirname(arq))) continue;
+      fs.writeFileSync(arq, url ? 'AGENDA_ICAL_URL=' + url + '\n' : '', { mode: 0o600 });
+      return;
+    } catch (e) {}
   }
 }
 
@@ -72,6 +100,7 @@ function leUrl() {
 // jeito. Ligar um keyring depois não quebra nada: a próxima gravação passa a
 // usar o .bin e o .txt é apagado.
 function gravaUrl(url) {
+  gravaCopiaEnv(url);
   if (!url) {
     try { fs.unlinkSync(arqUrl()); } catch (e) {}
     try { fs.unlinkSync(arqUrlTexto()); } catch (e) {}

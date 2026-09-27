@@ -16,6 +16,7 @@ const sentry = require('./sentry');
 const discord = require('./discord-notas');
 const sistema = require('./sistema');
 const agenda = require('./agenda');
+const tarefas = require('./tarefas');
 const flamengo = require('./flamengo');
 const video = require('./video');
 const dev = require('./dev');
@@ -381,6 +382,8 @@ function createWindow() {
   sentry.iniciar(deps);
   discord.iniciar(deps);
   agenda.iniciar(deps);
+  tarefas.aoMudar(() => empurra('agenda-update', Object.assign(agenda.atual(), { tarefas: tarefas.atual() })));
+  tarefas.iniciar(deps);
   // O jogo ao vivo empurra o placar na hora, sem esperar o tique lento de 60 s.
   flamengo.iniciar(Object.assign({}, deps, { empurra }));
   // Na Estação o vídeo é do painel nativo: dois vigias pausariam a mesma aba.
@@ -389,7 +392,7 @@ function createWindow() {
   if (!ESTACAO && (process.platform === 'linux' || process.platform === 'win32')) {
     // Mudança vinda da extensão vai para a tela e para o player na hora.
     video.iniciar(Object.assign({}, deps, {
-      aoMudar: () => { empurra('video-update', video.atual()); empurraPip(); }
+      aoMudar: () => { empurra('video-update', retratoVideo()); empurraPip(); }
     }));
   }
   dev.iniciar({ log, empurra, getWindow: () => mainWindow });
@@ -485,7 +488,7 @@ async function tique() {
     empurra('sistema-update', { retrato, hypr, musica });
     // O vídeo tem leitura própria (MPRIS + hyprctl) e cadência de 2 s igual à
     // deste tique; aqui só vai o retrato mais recente para a tela.
-    empurra('video-update', video.atual());
+    empurra('video-update', retratoVideo());
     empurraPip();
   } catch (e) {
     log('tique de sistema falhou: ' + e.message);
@@ -549,7 +552,7 @@ ipcMain.handle('musica-comando', async (e, verbo, player) => {
   return { ok: true };
 });
 
-ipcMain.handle('video-get', async () => video.atual());
+ipcMain.handle('video-get', async () => retratoVideo());
 
 // --- Player do vídeo em janela própria (pip.html) --------------------------
 //
@@ -584,9 +587,20 @@ function pipPadrao() {
   return { x: b.x + b.width - w - 18, y: b.y + b.height - h - 64, width: w, height: h };
 }
 
+let pipMudo = { id: '', mudo: false };
+
+function mudoDoPlayer(v) {
+  return !!(v.id && pipMudo.id === v.id && pipMudo.mudo);
+}
+
+function retratoVideo() {
+  const v = video.atual();
+  return Object.assign(v, { mudo: mudoDoPlayer(v) });
+}
+
 function empurraPip() {
   if (!pipWin || pipWin.isDestroyed() || !pipPronto) return;
-  try { pipWin.webContents.send('pip-video', Object.assign({ modo: pipModo }, video.atual())); } catch (e) {}
+  try { pipWin.webContents.send('pip-video', Object.assign({ modo: pipModo }, retratoVideo())); } catch (e) {}
 }
 
 function garantePip() {
@@ -654,7 +668,34 @@ ipcMain.on('pip-estado', (e, s) => {
   if (!w.isVisible()) w.showInactive();
   empurraPip();
 });
-ipcMain.handle('video-liga', async (e, valor) => { await video.liga(valor); return video.atual(); });
+ipcMain.handle('video-liga', async (e, valor) => { await video.liga(valor); return retratoVideo(); });
+
+// Botões do player (na barra da janela flutuante e no pé da placa do Mirante).
+// O mudo é do vídeo que está tocando: vídeo novo nasce com som.
+ipcMain.handle('video-mudo', async (e, valor) => {
+  const v = video.atual();
+  pipMudo = { id: v.id || '', mudo: valor == null ? !mudoDoPlayer(v) : !!valor };
+  log('player: ' + (pipMudo.mudo ? 'mudo' : 'com som'));
+  // O som é da aba do Chrome: o mudo do player é o mudo dela.
+  video.mudoNoChrome(pipMudo.mudo);
+  const r = retratoVideo();
+  empurra('video-update', r);
+  empurraPip();
+  return r;
+});
+ipcMain.handle('video-proximo', async () => video.proximo());
+ipcMain.handle('video-anterior', async () => video.anterior());
+ipcMain.handle('video-autoplay', async (e, valor) => video.autoplay(valor));
+ipcMain.handle('video-velocidade', async (e, valor) => video.velocidade(valor));
+ipcMain.handle('video-qualidade', async (e, valor) => video.qualidade(valor));
+ipcMain.handle('video-volume', async (e, delta) => video.volume(delta));
+ipcMain.handle('video-fecha', async () => {
+  const r = await video.fecha();
+  pipMudo = { id: '', mudo: false };
+  empurra('video-update', retratoVideo());
+  empurraPip();
+  return r;
+});
 ipcMain.handle('video-entra', async () => video.entraComAContaDele());
 ipcMain.handle('video-pausa-navegador', async () => video.pausaNavegador());
 ipcMain.handle('video-toca-navegador', async () => video.tocaNavegador());
@@ -662,8 +703,14 @@ ipcMain.handle('video-toca-navegador', async () => video.tocaNavegador());
 ipcMain.handle('flamengo-get', async () => flamengo.atual());
 ipcMain.handle('flamengo-refresh', async () => flamengo.forcar());
 
-ipcMain.handle('agenda-get', async () => agenda.atual());
-ipcMain.handle('agenda-refresh', async () => agenda.forcar());
+// A agenda leva as tarefas do Google Tarefas junto (tarefas.js): a placa é uma
+// só, e o "atrasado" só existe cruzando as duas.
+ipcMain.handle('agenda-get', async () => Object.assign(agenda.atual(), { tarefas: tarefas.atual() }));
+ipcMain.handle('agenda-refresh', async () => {
+  const [a] = await Promise.all([agenda.forcar(), tarefas.busca()]);
+  return Object.assign(a, { tarefas: tarefas.atual() });
+});
+ipcMain.handle('tarefa-concluir', async (e, lista, id) => tarefas.concluir(String(lista || ''), String(id || '')));
 ipcMain.handle('agenda-url-pista', async () => agenda.pistaUrl());
 ipcMain.handle('agenda-url-set', async (e, url) => {
   const r = await agenda.definirUrl(url);
@@ -1300,6 +1347,36 @@ ipcMain.handle('serv-local-sobe', async (e, indice) => {
     log('servidor local: falhou ao subir — ' + e.message);
     return { ok: false, error: e.message };
   }
+});
+
+// Desligar o local é matar: todo processo FX* da máquina, sem passar pelo
+// txAdmin. O cmd da bat vai junto — ela termina em `pause`, e com o console
+// escondido ninguém aperta a tecla, então ele ficaria vivo para sempre.
+ipcMain.handle('serv-local-mata', async () => {
+  if (process.platform !== 'win32') return { ok: false, error: 'só no Windows' };
+  const ps =
+    "$todos = @(Get-CimInstance Win32_Process);" +
+    "$fx = @($todos | Where-Object { $_.Name -like 'FX*' });" +
+    "$ids = @($fx | ForEach-Object { $_.ParentProcessId });" +
+    "$pais = @($todos | Where-Object { $_.Name -eq 'cmd.exe' -and $ids -contains $_.ProcessId });" +
+    "foreach ($p in $fx + $pais) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue };" +
+    "Start-Sleep -Milliseconds 500;" +
+    "$sobra = @(Get-Process | Where-Object { $_.Name -like 'FX*' }).Count;" +
+    "Write-Output ($fx.Count.ToString() + ' ' + $sobra)";
+  return await new Promise((resolve) => {
+    require('child_process').execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps],
+      { windowsHide: true, timeout: 20000 }, (err, stdout) => {
+        const [mortos, sobra] = String(stdout || '').trim().split(/\s+/).map(Number);
+        if (err && !Number.isFinite(mortos)) {
+          log('servidor local: falhou ao matar FX — ' + err.message);
+          return resolve({ ok: false, error: err.message });
+        }
+        log('servidor local: ' + mortos + ' processo(s) FX mortos, sobraram ' + sobra);
+        resolve(sobra > 0
+          ? { ok: false, error: sobra + ' processo(s) FX resistiram' }
+          : { ok: true, mortos: mortos || 0 });
+      });
+  });
 });
 
 // --- Trava do teclado ------------------------------------------------------

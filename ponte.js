@@ -8,7 +8,9 @@
 // Protocolo no pipe: uma mensagem JSON por linha, nos dois sentidos.
 //   extensão → painel  {tipo:'abas', abas:[...]}  a cada 2 s
 //                      {tipo:'cookies', pedido, cookies:[...]}
-//   painel → extensão  {tipo:'pausar'|'retomar', aba}
+//   painel → extensão  {tipo:'pausar'|'retomar'|'mutar'|'desmutar', aba}
+//                      {tipo:'proximo'|'anterior', aba}
+//                      {tipo:'autoplay', aba, valor}
 //                      {tipo:'cookies', dominio, pedido}
 
 const net = require('net');
@@ -20,10 +22,16 @@ const path = require('path');
 // o painel manda `recarregar` quando a extensão relata versão menor (ou nenhuma,
 // que é a de antes deste mecanismo — essa não sabe se recarregar e fica para o
 // clique no ↻).
+// A extensão mora em projeto próprio, ao lado deste: D:\Apps\desktop\RiceExtension,
+// fork do YouTube Enhancer. Vale a versão do BUILD que o Chrome carrega, não a
+// do código: durante o build a pasta dist some, e pedir recarga nessa hora fazia
+// o Chrome desligar a extensão (medido em 19/09/2026, motivo "reload").
+const ARQUIVO_PONTE = path.join(__dirname, '..', 'RiceExtension', 'dist', 'Chrome', 'src', 'pages', 'background', 'index.js');
+
 function versaoEmDisco() {
   try {
-    const t = fs.readFileSync(path.join(__dirname, 'cosmic', 'extensao', 'fundo.js'), 'utf8');
-    const m = t.match(/const VERSAO_PONTE = (\d+);/);
+    const t = fs.readFileSync(ARQUIVO_PONTE, 'utf8');
+    const m = t.match(/__ricepanelVersaoPonte\s*=\s*(\d+)/);
     return m ? Number(m[1]) : null;
   } catch (e) {
     return null;
@@ -62,7 +70,7 @@ function trata(linha) {
     const esperada = versaoEmDisco();
     if (esperada != null && m.versao == null && !avisouSemVersao) {
       avisouSemVersao = true;
-      log('extensão desatualizada e sem recarga automática: clique no ↻ do RicePanel ponte em chrome://extensions');
+      log('extensão desatualizada e sem recarga automática: clique no ↻ da RiceExtension em chrome://extensions');
     } else if (esperada != null && m.versao != null && m.versao < esperada && Date.now() - pediuRecarregarEm > 60000) {
       pediuRecarregarEm = Date.now();
       log('extensão na versão ' + m.versao + ', disco na ' + esperada + ': pedindo para recarregar');
@@ -148,5 +156,7 @@ function pedeCookies(dominio, ms) {
 module.exports = {
   iniciar, envia, abasAtuais, pedeCookies,
   conectada: () => !!conexao,
+  // Quando chegou a última lista: a posição do vídeo vale para esse instante.
+  abasEm: () => abasEm,
   aoMudar: (cb) => { aoReceberAbas = cb; }
 };

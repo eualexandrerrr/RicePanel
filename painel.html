@@ -803,16 +803,48 @@
     }
     .agenda-item.agora { border-left-color: var(--green); }
     .agenda-item.passou { opacity: 0.38; border-left-color: var(--overlay0); }
+    /* Hoje destacado: o rótulo do dia em amarelo e o filete das linhas de hoje
+       também. "Agora" continua verde por cima disso. */
+    .agenda-dia.hoje { color: var(--yellow); }
+    .agenda-item.de-hoje { border-left-color: var(--yellow); }
+    /* Tarefa atrasada (Google Tarefas, prazo passou e ninguém marcou): vermelha
+       e no topo até ser concluída. */
+    .agenda-dia.atrasadas { color: var(--red); }
+    .agenda-item.atrasada { border-left-color: var(--red); }
+    .agenda-item.tarefa { align-items: flex-start; }
+    .agenda-item.tarefa .agenda-hora { display: flex; align-items: center; min-height: 20px; }
+    .agenda-item.tarefa .agenda-texto { flex: 1; }
+    .agenda-local.atraso { color: var(--red); font-size: 12.5px; }
+    .agenda-item.feita { opacity: 0.45; }
+    .agenda-item.feita .agenda-titulo { text-decoration: line-through; }
+    /* Círculo de concluir, como no Google Tarefas: vazio, com o check no hover. */
+    .tarefa-conclui {
+      flex: none; width: 20px; height: 20px; margin: 0; padding: 0; cursor: pointer;
+      border-radius: 50%; border: 1.5px solid var(--overlay1); background: transparent;
+      position: relative; transition: border-color 150ms, background 150ms;
+    }
+    .agenda-item.atrasada .tarefa-conclui { border-color: var(--red); }
+    .tarefa-conclui:hover { border-color: var(--green); background: rgba(166, 227, 161, 0.14); }
+    .tarefa-conclui:hover::after {
+      content: '\2713'; position: absolute; inset: 0; display: grid; place-items: center;
+      color: var(--green); font-size: 13px;
+    }
+    .tarefa-conclui:disabled { opacity: 0.5; cursor: progress; }
+    .tarefa-ok { flex: none; width: 20px; text-align: center; color: var(--green); font-size: 15px; }
     .agenda-hora {
       flex: 0 0 50px;
       font-size: 15px; font-weight: 400; font-variant-numeric: tabular-nums;
       color: var(--text);
     }
     .agenda-texto { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    /* Até duas linhas: a coluna é estreita e o que fica depois das reticências
+       costuma ser justo a parte que diz o que fazer. */
     .agenda-titulo {
-      font-size: 15px; font-weight: 400; color: var(--text);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 15px; font-weight: 400; color: var(--text); line-height: 1.3;
+      overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+      overflow-wrap: anywhere;
     }
+    .dia-todo { font-size: 12px; letter-spacing: 0.02em; color: var(--subtext0); }
     .agenda-local {
       font-size: 12.5px; color: var(--subtext0);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1555,6 +1587,31 @@
     }
     .rodape .temp .serigrafia { flex: 0 0 26px; font-size: 10px; letter-spacing: 0.12em; }
 
+    /* ---------- resumo do dia entre os consoles (27/09/2026) ----------
+       Revoga em parte a regra de 08/09 ("a Estação é tela de trabalho"): ele
+       pediu para ver, também nos Servidores, tarefa pendente e o jogo. Fica na
+       barra do meio, abaixo da bancada, como segunda faixa — e só lá: no pé dos
+       outros modos a barra continua rasa. */
+    .resumo { display: none; }
+    body.faixa-no-meio #faixaMeio .resumo {
+      display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+      border-top: 1px solid #06070a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    #faixaMeio .resumo .celula { gap: 8px; padding: 11px 14px 12px; }
+    #faixaMeio .resumo .celula > :not(.cap) { margin: 0; }
+    .resumo-corpo { display: flex; flex-direction: column; gap: 5px; min-width: 0; width: 100%; }
+    .resumo-linha { display: flex; align-items: center; gap: 9px; min-width: 0; font-size: 13.5px; color: var(--text); }
+    .resumo-linha .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .resumo-linha .h { flex: none; font-variant-numeric: tabular-nums; color: var(--subtext0); font-size: 12.5px; }
+    .resumo-linha.atrasada .t { color: var(--red); }
+    .resumo-sub { font-size: 12px; color: var(--subtext0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .resumo-sub.quente { color: var(--yellow); }
+    .resumo-sub.vivo { color: var(--red); font-weight: 700; }
+    .resumo-calmo { font-size: 12.5px; color: var(--overlay1); }
+    #resumoTarefasCap.alerta { color: var(--red); }
+    .resumo .tarefa-conclui { width: 16px; height: 16px; border-width: 1.5px; }
+    .resumo .tarefa-conclui:hover::after { font-size: 11px; }
+
     /* ---------- prateleira ----------
        Canal rebaixado sob a bancada. O que mora aqui não é leitura de serviço:
        é coisa dele. Por isso o fundo é o sulco, e não a face do módulo.
@@ -1622,6 +1679,39 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .video-onde { margin-left: auto; flex: none; }
+    /* Mudo e fechar do player, no pé da placa: na placa a janela do vídeo não
+       recebe o mouse, então os botões moram aqui, fora dela. */
+    .video-acao {
+      flex: none; display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; padding: 0; border-radius: 7px; cursor: pointer;
+      color: var(--subtext0); background: rgba(24, 24, 37, 0.62);
+      border: 1px solid var(--vidro-aresta);
+      transition: color 150ms, border-color 150ms, background 150ms;
+    }
+    .video-acao svg { width: 15px; height: 15px; display: block; }
+    .video-acao:hover { color: var(--text); border-color: rgba(205, 214, 244, 0.28); }
+    .video-acao.on { color: var(--peach, #fab387); border-color: rgba(250, 179, 135, 0.45); }
+    .video-acao.fecha:hover { color: var(--red, #f38ba8); border-color: rgba(243, 139, 168, 0.45); }
+    .video-acao:disabled { opacity: 0.5; cursor: progress; }
+    .video-acao[hidden], .video-sel[hidden] { display: none; }
+    .video-sel {
+      flex: none; appearance: none; cursor: pointer; height: 28px; padding: 0 10px;
+      border-radius: 7px; border: 1px solid var(--vidro-aresta);
+      background: rgba(24, 24, 37, 0.62); color: var(--subtext0);
+      font: 700 12px 'Archivo Narrow', sans-serif; letter-spacing: 0.04em;
+      transition: color 150ms, border-color 150ms;
+    }
+    .video-sel:hover { color: var(--text); border-color: rgba(205, 214, 244, 0.28); }
+    .video-sel.fixo { color: var(--mauve); border-color: rgba(203, 166, 247, 0.45); }
+    .video-sel:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    .video-sel option { background: #1e1e2e; color: #cdd6f4; }
+    .video-divisa { flex: none; width: 1px; height: 16px; background: var(--vidro-aresta); }
+    /* Leitura do volume, entre o menos e o mais: o número do player do Chrome. */
+    .video-volume {
+      flex: none; min-width: 38px; margin: 0 -4px; text-align: center;
+      font: 700 12px 'Archivo Narrow', sans-serif; color: var(--subtext0);
+      font-variant-numeric: tabular-nums;
+    }
     /* Serviço com DRM não toca aqui dentro: a placa vira aviso, não moldura
        preta fingindo que carregou. */
     .video-drm {
@@ -2318,6 +2408,26 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <path d="M4 9.1v.1M6.4 9.1v.1M8.8 9.1v.1M11.2 9.1v.1"/>
         <path d="M5.2 10.9h5.6"/>
       </g>
+      <g id="ic-anterior" fill="currentColor"><path d="M4 3h1.6v10H4zM13 3.4v9.2L6.6 8z"/></g>
+      <g id="ic-proximo" fill="currentColor"><path d="M10.4 3H12v10h-1.6zM3 3.4v9.2L9.4 8z"/></g>
+      <g id="ic-auto" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.8 8a5.2 5.2 0 0 1 8.9-3.6M13.2 8a5.2 5.2 0 0 1-8.9 3.6"/>
+        <path d="M12 1.9v2.7H9.3M4 14.1v-2.7h2.7"/>
+      </g>
+      <g id="ic-som" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.5 6h2.2l3.3-2.7v9.4L4.7 10H2.5z"/>
+        <path d="M10.5 5.6a3.4 3.4 0 0 1 0 4.8M12.4 3.8a6 6 0 0 1 0 8.4"/>
+      </g>
+      <g id="ic-mudo" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.5 6h2.2l3.3-2.7v9.4L4.7 10H2.5z"/>
+        <path d="M10.6 6.2l3.6 3.6M14.2 6.2l-3.6 3.6"/>
+      </g>
+      <g id="ic-menos" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M3.5 8h9"/>
+      </g>
+      <g id="ic-mais" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M3.5 8h9M8 3.5v9"/>
+      </g>
       <g id="ic-video" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <rect x="1.75" y="2.75" width="12.5" height="9" rx="1.6"/>
         <path d="M6.6 5.4v3.7l3.2-1.85z" fill="currentColor" stroke="none"/>
@@ -2819,6 +2929,23 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </span>
       </div>
     </div>
+    <!-- Resumo do dia, só entre os consoles (tela Servidores): tarefa pendente,
+         próximo compromisso e próximo jogo, que antes só o Mirante mostrava.
+         Quem desenha é o mirante.js, dono desses dados. -->
+    <div class="resumo" id="resumoServ" aria-label="Resumo do dia">
+      <div class="celula resumo-tarefas">
+        <span class="serigrafia cap" id="resumoTarefasCap">Tarefas</span>
+        <div class="resumo-corpo" id="resumoTarefas"></div>
+      </div>
+      <div class="celula resumo-agenda">
+        <span class="serigrafia cap">Próximo</span>
+        <div class="resumo-corpo" id="resumoAgenda"></div>
+      </div>
+      <div class="celula resumo-jogo">
+        <span class="serigrafia cap">Flamengo</span>
+        <div class="resumo-corpo" id="resumoJogo"></div>
+      </div>
+    </div>
   </div>
 
   <div id="maintStatus"></div>
@@ -2897,9 +3024,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <p>
         Vai <b>desligar</b> <b id="desligaNome">—</b> em <b id="desligaHost">—</b>.<br><br>
         <span id="desligaGente"></span>
-        <span class="miudo">Desligado é diferente de reiniciado: o servidor <b>não volta sozinho</b> —
+        <span class="miudo" id="desligaComo">Desligado é diferente de reiniciado: o servidor <b>não volta sozinho</b> —
         alguém precisa subir de novo pelo txAdmin. O painel aperta o botão de desligar do próprio
         txAdmin e confere o diálogo que ele abrir. Se não for de desligamento, cancela sozinho.</span>
+        <span class="miudo" id="desligaMata" hidden>O painel <b>mata todo processo FX</b> desta máquina,
+        sem passar pelo txAdmin, e o cmd da bat junto. Para voltar, use o Ligar.</span>
       </p>
       <div class="acoes-caixa">
         <button id="desligaCancel" class="btn btn-fantasma">Cancelar</button>
@@ -2961,6 +3090,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="acoes-caixa">
         <button id="authCancel" class="btn btn-fantasma">Cancelar</button>
         <button id="authOk" class="btn btn-firme">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Concluir tarefa do Google Tarefas pela agenda: sempre com confirmação,
+       o toque no círculo é fácil de dar sem querer num painel de parede. -->
+  <div id="tarefaModal" class="cortina">
+    <div class="caixa">
+      <h2>Marcar como feita?</h2>
+      <p><b id="tarefaNome"></b><br><br>
+        <span class="miudo" id="tarefaNota">Ela sai do painel e fica concluída no Google Tarefas.</span></p>
+      <div class="acoes-caixa">
+        <button id="tarefaCancel" class="btn btn-fantasma">Cancelar</button>
+        <button id="tarefaOk" class="btn btn-firme">Marcar como feita</button>
       </div>
     </div>
   </div>

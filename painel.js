@@ -206,8 +206,10 @@ function pintaServidores() {
     selo.textContent = local ? 'Local' : 'Produção';
     selo.className = 'selo ' + (local ? 'local' : 'remoto');
     // O selo já diz remoto/local; repetir "Servidor remoto" ao lado só
-    // espremia o cabeçalho e quebrava em duas linhas.
-    document.getElementById('nome' + i).textContent = '';
+    // espremia o cabeçalho e quebrava em duas linhas. Embaixo, com mais de um
+    // local cadastrado, o nome curto diz qual foi o último a subir.
+    document.getElementById('nome' + i).textContent =
+      local && catalogo.locais.length > 1 ? nomeCurto(s.nome) : '';
     const dest = document.getElementById('dest' + i);
     dest.textContent = s.host + ':' + s.porta;
     dest.className = 'destino' + (local ? '' : ' remoto');
@@ -226,12 +228,19 @@ function listaDoGrupo(grupo) {
   return grupo === 'producao' ? catalogo.producao : catalogo.locais;
 }
 
+function nomeCurto(nome) {
+  return String(nome).replace(/\s*role\s*play$/i, '') || nome;
+}
+
 function pintaEscolha(i) {
   const caixa = document.getElementById('escolha' + i);
   if (!caixa) return;
   const grupo = GRUPO_DA_TELA[i];
   const lista = listaDoGrupo(grupo);
-  const mostra = lista.length > 1;
+  // Locais não ganham chave: só um fica no ar por vez e todos respondem na
+  // mesma porta, então trocar a chave não mudava a tela. Qual sobe é o Ligar
+  // que pergunta.
+  const mostra = grupo === 'producao' && lista.length > 1;
   caixa.hidden = !mostra;
   caixa.textContent = '';
   if (!mostra) return;
@@ -241,7 +250,7 @@ function pintaEscolha(i) {
     b.className = 'chave-local' + (ativo ? ' on' : '');
     // Nome curto na chave ("Michigan", "FiveM"): o cabeçalho divide a linha com
     // endereço, estado, zoom e botões. O nome inteiro fica na dica.
-    b.textContent = String(s.nome).replace(/\s*role\s*play$/i, '') || s.nome;
+    b.textContent = nomeCurto(s.nome);
     b.title = 'Mostrar ' + s.nome + ' (' + (s.host || 'localhost') + ':' + s.porta + ')';
     b.setAttribute('aria-pressed', String(ativo));
     b.addEventListener('click', () => escolheServidor(i, j));
@@ -1192,6 +1201,35 @@ document.querySelectorAll('[data-recarrega]').forEach(b => {
   });
 });
 
+// O txAdmin abre o diálogo dele ("Restarting server — Are you sure?") e o
+// painel leva ~1 s para conferir o texto e clicar no Continue. Esse segundo de
+// diálogo na tela não é pergunta nenhuma: o painel já perguntou, com o modal
+// dele. A folha esconde o diálogo e o véu enquanto o roteiro trabalha e sai
+// logo depois — `click()` funciona em elemento escondido, e o roteiro segue
+// conferindo o texto do mesmo jeito.
+const CSS_SEM_DIALOGO_TX = [
+  '[role="alertdialog"], [role="dialog"] { visibility: hidden !important; }',
+  // O véu do Radix é irmão do diálogo, sem role nenhum: ele é quem escurece a
+  // tela inteira. Vai pelo pai no portal e pelo `inset-0` da classe.
+  'body > div:has([role="alertdialog"]), body > div:has([role="dialog"]) { visibility: hidden !important; }',
+  '[data-state="open"][class*="inset-0"] { visibility: hidden !important; }'
+].join(' ');
+
+async function semDialogoTx(wv, roteiro) {
+  let chave = null;
+  try { chave = await wv.insertCSS(CSS_SEM_DIALOGO_TX); } catch (e) {}
+  try {
+    return await wv.executeJavaScript(roteiro, false);
+  } finally {
+    // O Radix fecha o diálogo com animação de saída: tirar a folha no mesmo
+    // instante do clique mostrava o fim do sumiço. Meio segundo cobre isso.
+    await new Promise(r => setTimeout(r, 600));
+    // A folha sai sempre: diálogo que sobrou (roteiro errou o botão) tem de
+    // ficar à vista, senão a tela fica travada por um véu invisível.
+    if (chave) { try { await wv.removeInsertedCSS(chave); } catch (e) {} }
+  }
+}
+
 // Reiniciar derruba jogador de verdade: modal antes, e o painel ainda confere o
 // diálogo que o txAdmin abrir. Se o diálogo não falar em reiniciar, cancela.
 const religaModal = document.getElementById('religaModal');
@@ -1209,7 +1247,7 @@ document.querySelectorAll('[data-religa]').forEach(b => {
     document.getElementById('religaGente').innerHTML = gente > 0
       ? '<b style="color:var(--vermelho)">Tem ' + gente + ' jogador(es) online agora.</b><br><br>'
       : '';
-    abre(religaModal);
+    abreSobreTela(religaModal, i);
   });
 });
 
@@ -1224,7 +1262,7 @@ document.getElementById('religaOk').addEventListener('click', async () => {
   est.textContent = 'pedindo reinício';
   est.classList.remove('ruim');
   let r = null;
-  try { r = await document.getElementById('wv' + i).executeJavaScript(ROTEIRO_RELIGA, false); } catch (e) {}
+  try { r = await semDialogoTx(document.getElementById('wv' + i), ROTEIRO_RELIGA); } catch (e) {}
   if (!r || !r.ok) {
     est.textContent = (r && r.motivo) || 'não deu para reiniciar';
     est.classList.add('ruim');
@@ -1283,7 +1321,10 @@ document.querySelectorAll('[data-desliga]').forEach(b => {
     document.getElementById('desligaGente').innerHTML = gente > 0
       ? '<b style="color:var(--vermelho)">Tem ' + gente + ' jogador(es) online agora.</b><br><br>'
       : '';
-    abre(desligaModal);
+    // Local não passa pelo txAdmin: desligar é matar todo processo FX.
+    document.getElementById('desligaComo').hidden = i === 1;
+    document.getElementById('desligaMata').hidden = i !== 1;
+    abreSobreTela(desligaModal, i);
   });
 });
 
@@ -1298,6 +1339,20 @@ document.getElementById('desligaOk').addEventListener('click', async () => {
   est.textContent = 'pedindo desligamento';
   est.classList.remove('ruim');
   let r = null;
+  if (i === 1) {
+    est.textContent = 'matando os processos FX';
+    try { r = await window.api.servLocalMata(); } catch (e) {}
+    if (!r || !r.ok) {
+      est.textContent = (r && r.error) || 'não deu para matar os processos FX';
+      est.classList.add('ruim');
+      return;
+    }
+    subindo = null;
+    est.textContent = r.mortos ? r.mortos + ' processo(s) FX mortos' : 'nenhum processo FX rodando';
+    setTimeout(() => { est.textContent = ''; }, 10000);
+    bateNoTx(1);
+    return;
+  }
   try { r = await document.getElementById('wv' + i).executeJavaScript(ROTEIRO_DESLIGA, false); } catch (e) {}
   if (!r || !r.ok) {
     est.textContent = (r && r.motivo) || 'não deu para desligar';
@@ -1442,7 +1497,28 @@ document.querySelectorAll('[data-retenta]').forEach(b => {
 // --- modal dos servidores ---
 const servModal = document.getElementById('servModal');
 function abre(el) { el.classList.add('on'); }
-function fecha(el) { el.classList.remove('on'); }
+function fecha(el) {
+  el.classList.remove('on');
+  const caixa = el.querySelector('.caixa');
+  if (caixa) caixa.removeAttribute('style');
+}
+
+// Aviso que é de um servidor abre em cima do console dele, não no meio da
+// janela: com os dois consoles empilhados, o do meio parece ser dos dois.
+function abreSobreTela(el, i) {
+  const tela = document.getElementById('wv' + i).closest('.tela');
+  const caixa = el.querySelector('.caixa');
+  abre(el);
+  if (!tela || !caixa) return;
+  const r = tela.getBoundingClientRect();
+  Object.assign(caixa.style, {
+    position: 'absolute',
+    left: (r.left + r.width / 2) + 'px',
+    top: (r.top + r.height / 2) + 'px',
+    transform: 'translate(-50%, -50%)',
+    width: Math.min(470, r.width - 24) + 'px'
+  });
+}
 
 // Cadastro: duas listas, uma linha por servidor. Os campos são criados pelo DOM
 // e o valor entra por `.value`, nunca por innerHTML — nome e caminho vêm de

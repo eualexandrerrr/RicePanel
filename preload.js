@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('api', {
   musicaComando: (verbo, player) => ipcRenderer.invoke('musica-comando', verbo, player),
 
   servLocalSobe: (indice) => ipcRenderer.invoke('serv-local-sobe', indice),
+  servLocalMata: () => ipcRenderer.invoke('serv-local-mata'),
   escolheArquivo: (tipo) => ipcRenderer.invoke('escolhe-arquivo', tipo),
   servLocalLog: () => ipcRenderer.invoke('serv-local-log'),
   pipEstado: (estado) => ipcRenderer.send('pip-estado', estado),
@@ -29,6 +30,15 @@ contextBridge.exposeInMainWorld('api', {
   videoEntra: () => ipcRenderer.invoke('video-entra'),
   videoPausaNavegador: () => ipcRenderer.invoke('video-pausa-navegador'),
   videoTocaNavegador: () => ipcRenderer.invoke('video-toca-navegador'),
+  videoMudo: (valor) => ipcRenderer.invoke('video-mudo', valor),
+  videoFecha: () => ipcRenderer.invoke('video-fecha'),
+  videoProximo: () => ipcRenderer.invoke('video-proximo'),
+  videoAnterior: () => ipcRenderer.invoke('video-anterior'),
+  videoAutoplay: (valor) => ipcRenderer.invoke('video-autoplay', valor),
+  videoVelocidade: (valor) => ipcRenderer.invoke('video-velocidade', valor),
+  videoQualidade: (valor) => ipcRenderer.invoke('video-qualidade', valor),
+  // Volume do player do YouTube na aba do Chrome, em passos (delta -100 a 100).
+  videoVolume: (delta) => ipcRenderer.invoke('video-volume', delta),
   onVideo: (cb) => ipcRenderer.on('video-update', (e, d) => cb(d)),
 
   flamengoGet: () => ipcRenderer.invoke('flamengo-get'),
@@ -39,6 +49,9 @@ contextBridge.exposeInMainWorld('api', {
   agendaRefresh: () => ipcRenderer.invoke('agenda-refresh'),
   agendaUrlPista: () => ipcRenderer.invoke('agenda-url-pista'),
   agendaUrlSet: (url) => ipcRenderer.invoke('agenda-url-set', url),
+  // Google Tarefas: concluir pela agenda do Mirante.
+  tarefaConcluir: (lista, id) => ipcRenderer.invoke('tarefa-concluir', lista, id),
+  onAgenda: (cb) => ipcRenderer.on('agenda-update', (e, d) => cb(d)),
 
   // modo Dev: emulador e bundler
   devProjetos: () => ipcRenderer.invoke('dev-projetos'),

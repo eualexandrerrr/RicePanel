@@ -2,17 +2,17 @@
 #
 # Sem administrador: a chave fica em HKCU. O manifesto do host precisa de
 # caminho absoluto, então é gerado aqui, em %LOCALAPPDATA%\RicePanel, apontando
-# para a host.bat deste repositório. O ID da extensão sai de cosmic\extensao\id.txt
-# (fixo, porque o manifest.json da extensão leva a "key").
+# para a host.bat deste repositório. O ID da extensão sai do id.txt da
+# RiceExtension, projeto ao lado deste (fixo: o manifest.json leva a "key").
 #
 # A extensão em si é carregada no Chrome à mão, uma vez:
 #   chrome://extensions > Modo do desenvolvedor > Carregar sem compactação >
-#   <repositório>\cosmic\extensao
+#   D:\Apps\desktop\RiceExtension\dist\Chrome  (depois de `npm run build` lá)
 $ErrorActionPreference = 'Stop'
 
 $nome = 'br.com.eualexandre.ricepanel'
 $raiz = Split-Path -Parent $PSScriptRoot
-$id = (Get-Content (Join-Path $raiz 'cosmic\extensao\id.txt') -Raw).Trim()
+$id = (Get-Content (Join-Path (Split-Path -Parent $raiz) 'RiceExtension\id.txt') -Raw).Trim()
 if ($id -notmatch '^[a-p]{32}$') { throw "ID de extensão inválido em id.txt: $id" }
 
 $pasta = Join-Path $env:LOCALAPPDATA 'RicePanel'

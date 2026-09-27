@@ -22,7 +22,40 @@
       cursor: move; user-select: none;
     }
     #titulo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #onde { margin-left: auto; flex: none; color: #a6adc8; letter-spacing: 0.14em; text-transform: uppercase; font-size: 10.5px; }
+    #onde { margin-left: auto; margin-right: 4px; flex: none; color: #a6adc8; letter-spacing: 0.14em; text-transform: uppercase; font-size: 10.5px; }
+    /* Mudo e fechar na barra: fora da área de arrasto, senão o Windows
+       engole o clique como começo de arrasto. */
+    .acao {
+      -webkit-app-region: no-drag;
+      flex: none; display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 22px; padding: 0; border-radius: 5px; cursor: pointer;
+      color: #a6adc8; background: transparent; border: 1px solid transparent;
+    }
+    .acao svg { width: 14px; height: 14px; display: block; }
+    .acao:hover { color: #cdd6f4; background: #313244; }
+    .acao.on { color: #fab387; }
+    .acao[hidden], .sel[hidden] { display: none; }
+    /* Velocidade e qualidade: mudam a configuração da RiceExtension no Chrome.
+       Em lilás quando o valor está fixado lá. */
+    .sel {
+      -webkit-app-region: no-drag;
+      flex: none; appearance: none; cursor: pointer;
+      height: 22px; padding: 0 7px; border-radius: 5px;
+      font: 700 11px 'Archivo Narrow', 'Segoe UI', sans-serif; letter-spacing: 0.04em;
+      color: #a6adc8; background: #313244; border: 1px solid transparent;
+    }
+    .sel:hover { color: #cdd6f4; background: #45475a; }
+    .sel.fixo { color: #cba6f7; border-color: rgba(203, 166, 247, 0.45); }
+    .sel:focus-visible { outline: 2px solid #89b4fa; outline-offset: 1px; }
+    .sel option { background: #1e1e2e; color: #cdd6f4; }
+    .divisa { flex: none; width: 1px; height: 14px; background: #45475a; margin: 0 2px; }
+    /* Leitura do volume do player do Chrome, entre o menos e o mais. */
+    #volume {
+      flex: none; min-width: 34px; text-align: center;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.02em; color: #a6adc8;
+      font-variant-numeric: tabular-nums; margin: 0 -4px;
+    }
+    .acao.fecha:hover { color: #1e1e2e; background: #f38ba8; }
     #quadro { position: absolute; left: 0; right: 0; top: 30px; bottom: 0; background: #000; }
     #quadro webview { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
     /* Na placa do Mirante não há barra: o título já está no pé da placa. */
@@ -31,7 +64,61 @@
   </style>
 </head>
 <body class="placa">
-  <div id="barra"><span id="titulo">Vídeo</span><span id="onde">YouTube</span></div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <g id="ic-som" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.5 6h2.2l3.3-2.7v9.4L4.7 10H2.5z"/>
+        <path d="M10.5 5.6a3.4 3.4 0 0 1 0 4.8M12.4 3.8a6 6 0 0 1 0 8.4"/>
+      </g>
+      <g id="ic-mudo" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.5 6h2.2l3.3-2.7v9.4L4.7 10H2.5z"/>
+        <path d="M10.6 6.2l3.6 3.6M14.2 6.2l-3.6 3.6"/>
+      </g>
+      <g id="ic-anterior" fill="currentColor"><path d="M4 3h1.6v10H4zM13 3.4v9.2L6.6 8z"/></g>
+      <g id="ic-proximo" fill="currentColor"><path d="M10.4 3H12v10h-1.6zM3 3.4v9.2L9.4 8z"/></g>
+      <g id="ic-auto" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.8 8a5.2 5.2 0 0 1 8.9-3.6M13.2 8a5.2 5.2 0 0 1-8.9 3.6"/>
+        <path d="M12 1.9v2.7H9.3M4 14.1v-2.7h2.7"/>
+      </g>
+      <g id="ic-menos" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M3.5 8h9"/>
+      </g>
+      <g id="ic-mais" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M3.5 8h9M8 3.5v9"/>
+      </g>
+      <g id="ic-x" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <path d="M4 4l8 8M12 4l-8 8"/>
+      </g>
+    </defs>
+  </svg>
+  <div id="barra">
+    <span id="titulo">Vídeo</span><span id="onde">YouTube</span>
+    <button class="acao" id="anterior" type="button" title="Anterior (depois de 5 s, volta ao começo)" aria-label="Anterior">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-anterior"/></svg>
+    </button>
+    <button class="acao" id="proximo" type="button" title="Próximo" aria-label="Próximo">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-proximo"/></svg>
+    </button>
+    <button class="acao" id="auto" type="button" title="Reprodução automática" aria-label="Reprodução automática" aria-pressed="false" hidden>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-auto"/></svg>
+    </button>
+    <select class="sel" id="velocidade" aria-label="Velocidade"></select>
+    <select class="sel" id="qualidade" aria-label="Qualidade" hidden></select>
+    <span class="divisa" aria-hidden="true"></span>
+    <button class="acao" id="volmenos" type="button" title="Abaixar o volume" aria-label="Abaixar o volume">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-menos"/></svg>
+    </button>
+    <span id="volume" title="Volume do player no Chrome">--</span>
+    <button class="acao" id="volmais" type="button" title="Aumentar o volume" aria-label="Aumentar o volume">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-mais"/></svg>
+    </button>
+    <button class="acao" id="mudo" type="button" title="Deixar o player mudo" aria-label="Deixar o player mudo" aria-pressed="false">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-som"/></svg>
+    </button>
+    <button class="acao fecha" id="fecha" type="button" title="Fechar o vídeo (pausa a aba no Chrome)" aria-label="Fechar o vídeo">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-x"/></svg>
+    </button>
+  </div>
   <div id="quadro"></div>
   <script src="pip.js"></script>
 </body>

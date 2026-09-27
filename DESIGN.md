@@ -171,6 +171,16 @@ que o texto está legível. Só as duas zonas de LUZ a usam.
 - A opacidade da janela **não é cravada**: quem abre a fresta é o `inactive_opacity` do desktop
   (0,90, no menu do Meta+O). Assim o painel obedece o mesmo slider que o resto dos apps.
 
+#### Resumo do dia entre os consoles (27/09/2026)
+
+Revoga em parte a regra de 08/09 que tirou "coisa dele" da Estação. O Alexandre pediu para ver,
+também na tela Servidores, **tarefa pendente, próximo compromisso e próximo jogo do Flamengo**.
+Isso entra na barra do meio como **segunda faixa**, abaixo da bancada, e só lá: no pé dos outros
+modos a barra continua rasa. São três células no mesmo idioma da bancada, com rótulo gravado,
+sulco entre elas e uma linha de leitura mais uma de apoio. Tarefa atrasada acende o rótulo em
+vermelho ("Tarefas · 1 atrasada"). O círculo conclui com o mesmo modal de confirmação da agenda.
+Quem desenha é o `mirante.js`, dono desses dados, mesmo com o Mirante adormecido.
+
 #### O rodapé também é do idioma da travessa (08/09/2026)
 
 No Mirante o rodapé deixa de ser ilha e vira dois grupos de pílula soltos, com os mesmos valores do

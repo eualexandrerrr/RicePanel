@@ -495,6 +495,7 @@ function olhaPelaPonte() {
   // se a API responde, mudo na aba e quanto a live está atrás do ao vivo. Vai
   // para o log quando muda — é o que mede o atraso do Chrome sem palpite.
   const diagChrome = 'api=' + (aba.apiYoutube || '?') + ' muda=' + !!aba.mudaNoChrome +
+    (aba.barraRice ? ' barra=' + aba.barraRice : '') +
     (aba.aoVivoYoutube ? ' ao-vivo atraso=' + (aba.atrasoAoVivo != null ? aba.atrasoAoVivo + 's' : '?') + ' borda=' + aba.naBordaYoutube : '');
   if (diagChrome.replace(/atraso=\d+s/, 'atraso=' + Math.round((aba.atrasoAoVivo || 0) / 5) * 5) !== ultimoDiagChrome) {
     ultimoDiagChrome = diagChrome.replace(/atraso=\d+s/, 'atraso=' + Math.round((aba.atrasoAoVivo || 0) / 5) * 5);
@@ -515,13 +516,31 @@ function olhaPelaPonte() {
     id,
     titulo: aba.titulo || '',
     posicao: aba.posicao != null ? Math.round(aba.posicao) : null,
+    // Posição sem arredondar e o instante em que a extensão a leu: é o relógio
+    // que a parede segue (pip.js). Arredondada, errava meio segundo à toa.
+    posicaoExata: aba.posicao != null ? Number(aba.posicao) : null,
+    posicaoEm: ponte ? ponte.abasEm() : 0,
     duracao: aba.duracao != null ? Math.round(aba.duracao) : null,
     tocando: !!aba.tocando,
     janelaVisivel: abaAVista(aba),
     player: '',
     aba: aba.aba,
     url: aba.url || '',
-    volume: ultimoVolume
+    volume: ultimoVolume,
+    // Da extensão 5 em diante: interruptor de reprodução automática do player
+    // (null quando o vídeo não tem) e se há vídeo anterior na playlist.
+    autoplay: aba.autoplayYoutube == null ? null : !!aba.autoplayYoutube,
+    temAnterior: !!aba.temAnterior,
+    // Da extensão 8: velocidade e qualidade do player do Chrome, e o que está
+    // fixado nas configurações da RiceExtension (null = não fixado).
+    // Numa live o próprio YouTube mexe na taxa (0,95× a 1,05×) para alcançar o
+    // ao vivo. Isso não é escolha dele: aparecia como "0,95×" no seletor e a
+    // parede copiava. Perto de 1× numa live, vale 1×.
+    velocidade: aba.velocidadeYoutube == null ? null
+      : (aba.duracao == null && Math.abs(Number(aba.velocidadeYoutube) - 1) <= 0.1 ? 1 : Number(aba.velocidadeYoutube)),
+    qualidade: aba.qualidadeYoutube || null,
+    qualidades: Array.isArray(aba.qualidadesYoutube) ? aba.qualidadesYoutube : [],
+    fixo: aba.configRice || null
   };
   if (antes !== (id || estado.titulo)) {
     log('achou ' + estado.site + ' pela ponte: ' + estado.titulo + (id ? ' (' + id + ')' : '') +
@@ -530,7 +549,28 @@ function olhaPelaPonte() {
   }
   // Ele voltou para a aba: o que o painel pausou deixa de ser dele.
   if (estado.janelaVisivel) pausadoPeloPainel = false;
+  // Aba muda sem ele ter pedido (sobra das versões que mutavam na troca de
+  // janela): devolve o som, sem mexer na posição da live.
+  const querMudo = mudoPedido.id === id && mudoPedido.mudo;
+  if (!!aba.mudaNoChrome !== querMudo && Date.now() - mudoConferidoEm > 4000) {
+    mudoConferidoEm = Date.now();
+    ponte.envia({ tipo: querMudo ? 'mutar' : 'desmutar', aba: aba.aba, semBorda: true });
+    log((querMudo ? 'mutando' : 'devolvendo o som à') + ' aba do Chrome (mudo pedido: ' + querMudo + ')');
+  }
   return estado;
+}
+
+// Mudo do player = mudo da aba do Chrome, que é quem tem o som. Vale para o
+// vídeo em que foi pedido: vídeo novo nasce com som.
+let mudoPedido = { id: '', mudo: false };
+let mudoConferidoEm = 0;
+
+function mudoNoChrome(valor) {
+  mudoPedido = { id: estado.id || '', mudo: !!valor };
+  mudoConferidoEm = 0;
+  if (!WIN || !ponte || estado.aba == null) return { ok: false };
+  mudoConferidoEm = Date.now();
+  return { ok: !!ponte.envia({ tipo: valor ? 'mutar' : 'desmutar', aba: estado.aba, semBorda: true }) };
 }
 
 // Atalho de desenvolvimento: `RICEPANEL_VIDEO_FAKE=drm` (ou `youtube:<id>`)
@@ -599,6 +639,10 @@ async function olha() {
 // Pausa a aba do navegador quando o painel assume o vídeo: dois áudios ao mesmo
 // tempo é o pior resultado possível dessa funcionalidade.
 async function pausaNavegador() {
+  // Windows: o som é SEMPRE da aba do Chrome (21/09/2026); a parede toca muda,
+  // sincronizada. Mutar a aba a cada saída do Chrome trocava o som de lado, e
+  // cada troca soava como volume diferente e vídeo voltando.
+  if (WIN) return { ok: true };
   if (WIN) {
     // Muta, não pausa: a aba segue no ao vivo e o som vem da parede. Pausar uma
     // live deixava o Chrome minutos atrás (retomava do ponto parado, pelo DVR).
@@ -616,6 +660,7 @@ async function pausaNavegador() {
 }
 
 async function tocaNavegador() {
+  if (WIN) return { ok: true };
   if (WIN) {
     if (estado.aba == null || !ponte || !ponte.envia({ tipo: 'desmutar', aba: estado.aba })) return { ok: false };
     pausadoPeloPainel = false;
@@ -654,6 +699,56 @@ function iniciar(d) {
   passo();
 }
 
+// Fechar pelo X do player: o vídeo sai da parede e a aba do Chrome para de vez
+// (pausa, e o mudo que o painel pôs sai). Até a extensão relatar a pausa, o
+// vídeo fica dispensado para não voltar à parede no tique seguinte; a
+// dispensa cai sozinha quando o estado muda.
+let dispensado = '';
+
+function chaveDoEstado() {
+  return estado.id || estado.titulo || '';
+}
+
+async function fecha() {
+  const chave = chaveDoEstado();
+  if (!chave) return { ok: false };
+  dispensado = chave;
+  if (WIN) {
+    if (ponte && estado.aba != null) {
+      const aba = estado.aba;
+      // Pausa antes de tirar o mudo: o desmutar da extensão ainda leva a live
+      // para a borda, e isso pode dar play. A segunda pausa segura esse caso.
+      ponte.envia({ tipo: 'pausar', aba });
+      ponte.envia({ tipo: 'desmutar', aba });
+      setTimeout(() => { try { ponte.envia({ tipo: 'pausar', aba }); } catch (e) {} }, 700);
+    }
+  } else if (estado.player) {
+    await roda('playerctl', ['-p', estado.player, 'pause']);
+  }
+  pausadoPeloPainel = false;
+  gravaChave(null);
+  log('fechado pelo player: ' + (estado.titulo || chave));
+  return { ok: true };
+}
+
+// Anterior, próximo e reprodução automática agem na aba do Chrome: ela é a
+// fonte do vídeo, e a parede segue o id novo quando a aba troca.
+function comandoNaAba(tipo, extra) {
+  if (!WIN || !ponte || estado.aba == null) return { ok: false, error: 'sem aba do Chrome' };
+  const ok = ponte.envia(Object.assign({ tipo, aba: estado.aba }, extra || {}));
+  log(tipo + (extra && 'valor' in extra ? ' ' + extra.valor : '') + (ok ? '' : ' — extensão fora'));
+  return { ok: !!ok };
+}
+
+function atual() {
+  if (dispensado && chaveDoEstado() !== dispensado) dispensado = '';
+  if (dispensado) {
+    return { ligado, site: '', id: '', titulo: '', posicao: null, duracao: null,
+      tocando: false, janelaVisivel: true, player: '', aba: null, volume: ultimoVolume };
+  }
+  return Object.assign({ ligado }, estado);
+}
+
 // Painel saindo com a aba pausada por ele: devolve o play antes de ir embora.
 // Se a mensagem não chegar a tempo, a pausa gravada resolve na próxima subida.
 function devolveAoSair() {
@@ -664,7 +759,17 @@ function devolveAoSair() {
 module.exports = {
   iniciar,
   devolveAoSair,
-  atual: () => Object.assign({ ligado }, estado),
+  atual,
+  fecha,
+  proximo: () => comandoNaAba('proximo'),
+  anterior: () => comandoNaAba('anterior'),
+  autoplay: (valor) => comandoNaAba('autoplay', { valor: !!valor }),
+  velocidade: (valor) => comandoNaAba('velocidade', { valor: Number(valor) || 1 }),
+  qualidade: (valor) => comandoNaAba('qualidade', { valor: String(valor || 'auto') }),
+  // Volume em passos: quem soma é a extensão, sobre o volume que o player do
+  // YouTube tem agora. Somar aqui erraria sempre que ele mexesse no Chrome.
+  volume: (delta) => comandoNaAba('volume', { delta: Math.max(-100, Math.min(100, Number(delta) || 0)) }),
+  mudoNoChrome,
   ligado: () => ligado,
   liga,
   entraComAContaDele,

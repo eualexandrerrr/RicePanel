@@ -404,7 +404,91 @@
     }
   }
 
+  // Tarefas do Google Tarefas (tarefas.js) entram na mesma lista (27/09/2026):
+  //  - atrasada: prazo antes de hoje e não concluída — sobe para o topo, em
+  //    vermelho, com há quantos dias, e só sai quando ele marca como feita;
+  //  - do dia: vai no bloco de Hoje com o botão de concluir;
+  //  - futura: no dia dela, como compromisso.
+  // A API só guarda a data do prazo, então tarefa não tem hora: mostra "tarefa".
+  // Evento e tarefa com o mesmo título no mesmo dia (o lembrete que existe nos
+  // dois) viram uma linha só — a da tarefa, que sabe se foi feita.
+  function tituloBase(t) {
+    return String(t || '').trim().toLowerCase();
+  }
+
+  function inicioDoDia(d) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  }
+
+  // Tarefa não tem hora (a API só guarda a data): no lugar da hora vai o
+  // círculo de concluir, como no Google Tarefas, alinhado com os horários dos
+  // eventos. O atraso vira segunda linha, em vermelho, por extenso.
+  function linhaTarefa(t, extra) {
+    const cls = 'agenda-item tarefa' + (t.feita ? ' feita' : '') + (extra ? ' ' + extra : '');
+    const marca = t.feita
+      ? '<span class="tarefa-ok" aria-label="Feita">✓</span>'
+      : '<button class="tarefa-conclui" type="button" data-lista="' + esc(t.lista) + '" data-id="' + esc(t.id) +
+        '" title="Marcar como feita" aria-label="Marcar como feita"></button>';
+    let sub = '';
+    if (extra === 'atrasada') {
+      const dias = Math.round((inicioDoDia(new Date()) - inicioDoDia(new Date(t.dia))) / 86400000);
+      sub = '<span class="agenda-local atraso">' + (dias === 1 ? 'atrasada desde ontem' : 'atrasada há ' + dias + ' dias') + '</span>';
+    }
+    return '<div class="' + cls + '">' +
+      '<span class="agenda-hora">' + marca + '</span>' +
+      '<span class="agenda-texto"><span class="agenda-titulo">' + esc(t.titulo) + '</span>' + sub + '</span>' +
+      '</div>';
+  }
+
+  // O círculo só abre a confirmação; quem conclui é o botão do modal. Toque
+  // sem querer num painel de parede não pode riscar tarefa (27/09/2026).
+  const tarefaModal = $('tarefaModal');
+  const tarefaOk = $('tarefaOk');
+  let tarefaAlvo = null;
+
+  function fechaTarefaModal() {
+    tarefaModal.classList.remove('on');
+    tarefaAlvo = null;
+  }
+
+  // Delegado no documento: o mesmo círculo existe na agenda do Mirante e no
+  // resumo entre os consoles.
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.tarefa-conclui');
+    if (!b || b.disabled) return;
+    const t = ((agendaEstado.tarefas || {}).tarefas || []).find(x => x.id === b.dataset.id);
+    tarefaAlvo = { lista: b.dataset.lista, id: b.dataset.id };
+    $('tarefaNome').textContent = t ? t.titulo : 'esta tarefa';
+    $('tarefaNota').textContent = 'Ela sai do painel e fica concluída no Google Tarefas.';
+    tarefaOk.disabled = false;
+    tarefaModal.classList.add('on');
+    tarefaOk.focus();
+  });
+
+  $('tarefaCancel').addEventListener('click', fechaTarefaModal);
+  tarefaModal.addEventListener('click', (e) => { if (e.target === tarefaModal) fechaTarefaModal(); });
+
+  tarefaOk.addEventListener('click', async () => {
+    if (!tarefaAlvo) return;
+    const alvo = tarefaAlvo;
+    tarefaOk.disabled = true;
+    let r = null;
+    try { r = await window.api.tarefaConcluir(alvo.lista, alvo.id); } catch (err) {}
+    if (r && r.ok) {
+      const t = ((agendaEstado.tarefas || {}).tarefas || []).find(x => x.id === alvo.id);
+      if (t) t.feita = true;
+      fechaTarefaModal();
+      pintaAgenda();
+      pintaResumo();
+      return;
+    }
+    // Falhou: o modal fica aberto, com o motivo, para tentar de novo.
+    tarefaOk.disabled = false;
+    $('tarefaNota').textContent = 'Não deu para marcar' + (r && r.error ? ' (' + r.error + ')' : '') + '. Tente de novo.';
+  });
+
   function pintaAgenda() {
+    pintaResumo();
     const ev = agendaEstado.eventos || [];
     diasComEvento = new Set(ev.map(e => chaveDia(new Date(e.inicio))));
     pintaMes();
@@ -417,7 +501,13 @@
       pintaAgendaVazia('Sem calendário ligado — abra o ajuste e cole o endereço iCal.');
       return;
     }
-    if (!ev.length) {
+    const hojeIni = inicioDoDia(new Date());
+    const tarefas = ((agendaEstado.tarefas || {}).tarefas || []).filter(t => t.dia);
+    const atrasadas = tarefas.filter(t => !t.feita && inicioDoDia(new Date(t.dia)) < hojeIni)
+      .sort((a, b) => new Date(a.dia) - new Date(b.dia));
+    const doDia = tarefas.filter(t => inicioDoDia(new Date(t.dia)) >= hojeIni);
+    const chavesTarefa = new Set(doDia.map(t => chaveDia(new Date(t.dia)) + '|' + tituloBase(t.titulo)));
+    if (!ev.length && !atrasadas.length && !doDia.length) {
       // Vazio é estado de calma, não de erro.
       pintaAgendaVazia('Nada marcado pelos próximos dias.');
       return;
@@ -426,21 +516,40 @@
 
     const agora = Date.now();
     let html = '';
+    if (atrasadas.length) {
+      html += '<div class="agenda-dia atrasadas">Atrasadas · ' + atrasadas.length + '</div>';
+      for (const t of atrasadas) html += linhaTarefa(t, 'atrasada');
+    }
+
+    // Eventos e tarefas do dia em diante numa linha do tempo só; tarefa vai no
+    // começo do dia dela (não tem hora).
+    const itens = ev
+      .filter(e => !chavesTarefa.has(chaveDia(new Date(e.inicio)) + '|' + tituloBase(e.titulo)))
+      .map(e => ({ tipo: 'evento', quando: new Date(e.inicio).getTime(), e }))
+      .concat(doDia.map(t => ({ tipo: 'tarefa', quando: inicioDoDia(new Date(t.dia)) - 1, t })))
+      .sort((a, b) => a.quando - b.quando);
+
     let diaAberto = '';
     // Só os quinze primeiros: a lista rola dentro de uma coluna estreita, e
     // compromisso de daqui a um mês não é o que ele consulta de relance.
-    for (const e of ev.slice(0, 15)) {
-      const ini = new Date(e.inicio);
-      const fim = e.fim ? new Date(e.fim) : null;
+    for (const it of itens.slice(0, 15)) {
+      const ini = new Date(it.tipo === 'evento' ? it.e.inicio : it.t.dia);
       const chave = chaveDia(ini);
+      const ehHoje = inicioDoDia(ini) === hojeIni;
       if (chave !== diaAberto) {
         diaAberto = chave;
-        html += '<div class="agenda-dia">' + esc(rotuloDoDia(ini)) + '</div>';
+        html += '<div class="agenda-dia' + (ehHoje ? ' hoje' : '') + '">' + esc(rotuloDoDia(ini)) + '</div>';
       }
+      if (it.tipo === 'tarefa') {
+        html += linhaTarefa(it.t, ehHoje ? 'de-hoje' : '');
+        continue;
+      }
+      const e = it.e;
+      const fim = e.fim ? new Date(e.fim) : null;
       const acabou = fim ? fim.getTime() < agora : ini.getTime() + 3600000 < agora;
       const rolando = ini.getTime() <= agora && !acabou;
-      const cls = 'agenda-item' + (rolando ? ' agora' : acabou ? ' passou' : '');
-      const hora = e.diaInteiro ? 'dia' : doisDig(ini.getHours()) + ':' + doisDig(ini.getMinutes());
+      const cls = 'agenda-item' + (rolando ? ' agora' : acabou ? ' passou' : ehHoje ? ' de-hoje' : '');
+      const hora = e.diaInteiro ? '<span class="dia-todo">dia todo</span>' : doisDig(ini.getHours()) + ':' + doisDig(ini.getMinutes());
       html += '<div class="' + cls + '">' +
         '<span class="agenda-hora">' + hora + '</span>' +
         '<span class="agenda-texto">' +
@@ -841,7 +950,50 @@
       '<span class="video-pe">' +
         '<span class="video-titulo">' + esc(v.titulo || 'Vídeo') + '</span>' +
         '<span class="rotulo video-onde">YouTube</span>' +
+        '<button class="video-acao" id="wVideoAnterior" type="button" title="Anterior (depois de 5 s, volta ao começo)" aria-label="Anterior">' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-anterior"/></svg></button>' +
+        '<button class="video-acao" id="wVideoProximo" type="button" title="Próximo" aria-label="Próximo">' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-proximo"/></svg></button>' +
+        '<button class="video-acao" id="wVideoAuto" type="button" aria-label="Reprodução automática" hidden>' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-auto"/></svg></button>' +
+        '<select class="video-sel" id="wVideoVel" aria-label="Velocidade"></select>' +
+        '<select class="video-sel" id="wVideoQual" aria-label="Qualidade" hidden></select>' +
+        '<span class="video-divisa" aria-hidden="true"></span>' +
+        '<button class="video-acao" id="wVideoVolMenos" type="button" title="Abaixar o volume" aria-label="Abaixar o volume">' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-menos"/></svg></button>' +
+        '<span class="video-volume" id="wVideoVolume" title="Volume do player no Chrome">--</span>' +
+        '<button class="video-acao" id="wVideoVolMais" type="button" title="Aumentar o volume" aria-label="Aumentar o volume">' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-mais"/></svg></button>' +
+        '<button class="video-acao" id="wVideoMudo" type="button"></button>' +
+        '<button class="video-acao fecha" id="wVideoFecha" type="button" title="Fechar o vídeo (pausa a aba no Chrome)" aria-label="Fechar o vídeo">' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-x"/></svg></button>' +
       '</span>';
+    $('wVideoAnterior').addEventListener('click', () => { window.api.videoAnterior().catch(() => {}); });
+    $('wVideoProximo').addEventListener('click', () => { window.api.videoProximo().catch(() => {}); });
+    $('wVideoAuto').addEventListener('click', (e) => {
+      const b = e.currentTarget;
+      if (b.hidden) return;
+      const novo = b.getAttribute('aria-pressed') !== 'true';
+      pintaAuto({ autoplay: novo });
+      window.api.videoAutoplay(novo).catch(() => {});
+    });
+    $('wVideoVel').addEventListener('change', (e) => { window.api.videoVelocidade(Number(e.target.value)).catch(() => {}); e.target.blur(); });
+    $('wVideoQual').addEventListener('change', (e) => { window.api.videoQualidade(e.target.value).catch(() => {}); e.target.blur(); });
+    $('wVideoVolMenos').addEventListener('click', () => mexeVolume(-PASSO_VOLUME));
+    $('wVideoVolMais').addEventListener('click', () => mexeVolume(PASSO_VOLUME));
+    $('wVideoMudo').addEventListener('click', () => {
+      window.api.videoMudo().then(pintaMudo).catch(() => {});
+    });
+    $('wVideoFecha').addEventListener('click', (e) => {
+      e.currentTarget.disabled = true;
+      // Quem fecha quer silêncio: o fim do vídeo não devolve o som à aba.
+      chromeComSom = null;
+      window.api.videoFecha().catch(() => {});
+    });
+    pintaMudo(v);
+    pintaAuto(v);
+    pintaVelQual(v);
+    pintaVolume(v.volume);
     elVideo.hidden = false;
     document.body.classList.add('com-video');
     pintaMusica(ultimaMusica);
@@ -939,7 +1091,7 @@
   function aplicaVolume(v) {
     const quadro = $('wVideoQuadro');
     if (!quadro || !v || v.volume == null) return;
-    if (volumeAplicado != null && Math.abs(volumeAplicado - v.volume) < 0.02) return;
+    if (volumeAplicado != null && Math.abs(volumeAplicado - v.volume) < 0.002) return;
     volumeAplicado = v.volume;
     // Só muda o alvo do vigia: quem aplica é ele, pelo `setVolume` do player.
     try {
@@ -976,6 +1128,107 @@
   // repetiria o mutar de 2 em 2 s.
   let chromeComSom = null;
 
+  function pintaMudo(v) {
+    const b = $('wVideoMudo');
+    if (!b) return;
+    const mudo = !!(v && v.mudo);
+    b.classList.toggle('on', mudo);
+    b.setAttribute('aria-pressed', String(mudo));
+    b.title = mudo ? 'Tirar o mudo do player' : 'Deixar o player mudo';
+    b.setAttribute('aria-label', b.title);
+    b.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#' + (mudo ? 'ic-mudo' : 'ic-som') + '"/></svg>';
+  }
+
+  // Volume em passos, no pé da placa: quem soma é a RiceExtension, sobre o
+  // volume que o player do YouTube tem na aba naquele instante (0 a 100, o
+  // número da barra de lá). Somar aqui erraria assim que ele mexesse no Chrome.
+  // O som vem da janela do player (pip.html), que segue o mesmo volume no tique
+  // seguinte; a leitura aqui já muda no clique para o botão não parecer solto.
+  const PASSO_VOLUME = 0.5;
+  let volumeMostrado = null;
+  // Depois do clique a extensão ainda relata o volume velho por um tique; sem
+  // esta carência o número pulava para trás e voltava.
+  let volumeMexidoEm = 0;
+
+  // Meio ponto tem casa decimal; ponto inteiro não mostra ",0".
+  function textoVolume(pct) {
+    const n = Math.round(pct * 10) / 10;
+    return (Number.isInteger(n) ? String(n) : String(n).replace('.', ',')) + '%';
+  }
+
+  function pintaVolume(volume) {
+    if (volume != null && Date.now() - volumeMexidoEm > 1800) volumeMostrado = volume;
+    const el = $('wVideoVolume');
+    if (!el) return;
+    const txt = volumeMostrado == null ? '--' : textoVolume(volumeMostrado * 100);
+    el.textContent = txt;
+    el.title = 'Volume do player no Chrome' + (volumeMostrado == null ? '' : ': ' + txt);
+  }
+
+  function mexeVolume(delta) {
+    window.api.videoVolume(delta).catch(() => {});
+    volumeMexidoEm = Date.now();
+    if (volumeMostrado == null) return;
+    volumeMostrado = Math.max(0, Math.min(1, Math.round((volumeMostrado * 100 + delta) * 10) / 1000));
+    pintaVolume(null);
+  }
+
+  // Reprodução automática: o interruptor do player do Chrome, lido pela
+  // RiceExtension. Vídeo sem ele (playlist, live) esconde o botão.
+  function pintaAuto(v) {
+    const b = $('wVideoAuto');
+    if (!b) return;
+    const tem = v && v.autoplay != null;
+    b.hidden = !tem;
+    const on = !!(tem && v.autoplay);
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+    b.title = 'Reprodução automática: ' + (on ? 'ligada' : 'desligada');
+  }
+
+  // Velocidade e qualidade do player do Chrome. Mudar grava na configuração da
+  // RiceExtension; em lilás quando o valor está fixado lá.
+  const VELOCIDADES = [0.75, 1, 1.25, 1.5, 1.75, 2];
+  const NOME_QUALIDADE = {
+    auto: 'Auto', tiny: '144p', small: '240p', medium: '360p', large: '480p',
+    hd720: '720p', hd1080: '1080p', hd1440: '1440p', hd2160: '4K', hd2880: '5K', highres: '8K'
+  };
+
+  function preencheSel(sel, pares, atual) {
+    const chave = JSON.stringify([pares, atual]);
+    if (sel.dataset.chave === chave || document.activeElement === sel) return;
+    sel.dataset.chave = chave;
+    sel.textContent = '';
+    for (const [valor, rotulo] of pares) {
+      const o = document.createElement('option');
+      o.value = valor;
+      o.textContent = rotulo;
+      sel.appendChild(o);
+    }
+    sel.value = atual;
+  }
+
+  function pintaVelQual(v) {
+    const elVel = $('wVideoVel');
+    const elQual = $('wVideoQual');
+    if (!elVel || !elQual || !v) return;
+    const vel = v.velocidade != null ? v.velocidade : 1;
+    const nome = (x) => String(x).replace('.', ',') + '×';
+    const lista = VELOCIDADES.includes(vel) ? VELOCIDADES : VELOCIDADES.concat(vel).sort((a, b) => a - b);
+    preencheSel(elVel, lista.map(x => [String(x), nome(x)]), String(vel));
+    const velFixa = !!(v.fixo && v.fixo.velocidade != null);
+    elVel.classList.toggle('fixo', velFixa);
+    elVel.title = 'Velocidade: ' + nome(vel) + (velFixa ? ' (fixada na RiceExtension)' : '');
+    const qs = (v.qualidades || []).filter(q => NOME_QUALIDADE[q]);
+    elQual.hidden = !qs.length;
+    if (!qs.length) return;
+    const atual = v.qualidade && qs.includes(v.qualidade) ? v.qualidade : qs[0];
+    preencheSel(elQual, qs.map(q => [q, NOME_QUALIDADE[q]]), atual);
+    const qualFixa = !!(v.fixo && v.fixo.qualidade);
+    elQual.classList.toggle('fixo', qualFixa);
+    elQual.title = 'Qualidade no Chrome: ' + NOME_QUALIDADE[atual] + (qualFixa ? ' (fixada na RiceExtension)' : '');
+  }
+
   function pintaVideo(v) {
     if (v && 'ligado' in v) pintaChave(v.ligado);
     if (!v || !v.site) {
@@ -1000,6 +1253,11 @@
       videoMontado = assinatura;
     } else {
       aplicaVolume(v);
+      const bMudo = $('wVideoMudo');
+      if (bMudo && String(!!v.mudo) !== bMudo.getAttribute('aria-pressed')) pintaMudo(v);
+      pintaAuto(v);
+      pintaVelQual(v);
+      pintaVolume(v.volume);
     }
     if (v.site !== 'youtube') return;
 
@@ -1150,13 +1408,113 @@
       // até embaixo da contagem, sem cortar canal nenhum.
       tv;
     if (!rolando && !terminou) pintaContagemJogo();
+    pintaResumo();
   }
+
+  // -------------------------------------------- resumo na tela Servidores
+  // Entre os dois consoles: tarefa pendente (atrasada ou de hoje), o próximo
+  // compromisso e o próximo jogo. Desenha mesmo com o Mirante adormecido —
+  // é justamente quando ele está nos Servidores que isto aparece.
+  function restaCurto(ms) {
+    if (ms <= 0) return 'agora';
+    const m = Math.floor(ms / 60000);
+    const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mi = m % 60;
+    if (d) return 'em ' + d + 'd ' + h + 'h';
+    if (h) return 'em ' + h + 'h ' + doisDig(mi) + 'min';
+    return 'em ' + mi + ' min';
+  }
+
+  function pintaResumo() {
+    const elT = $('resumoTarefas'), elA = $('resumoAgenda'), elJ = $('resumoJogo');
+    if (!elT || !elA || !elJ) return;
+    const agora = Date.now();
+    const hojeIni = inicioDoDia(new Date());
+
+    const pend = ((agendaEstado.tarefas || {}).tarefas || [])
+      .filter(t => t.dia && !t.feita && inicioDoDia(new Date(t.dia)) <= hojeIni)
+      .sort((a, b) => new Date(a.dia) - new Date(b.dia));
+    const atrasadas = pend.filter(t => inicioDoDia(new Date(t.dia)) < hojeIni).length;
+    const cap = $('resumoTarefasCap');
+    cap.textContent = atrasadas ? 'Tarefas · ' + atrasadas + ' atrasada' + (atrasadas > 1 ? 's' : '') : 'Tarefas';
+    cap.classList.toggle('alerta', atrasadas > 0);
+    // Nada atrasado nem para hoje: a próxima tarefa aparece em tom calmo, com o
+    // dia dela — "nada pendente" sozinho escondia a de amanhã.
+    const proxima = ((agendaEstado.tarefas || {}).tarefas || [])
+      .filter(t => t.dia && !t.feita && inicioDoDia(new Date(t.dia)) > hojeIni)
+      .sort((a, b) => new Date(a.dia) - new Date(b.dia))[0];
+    if (!pend.length && proxima) {
+      elT.innerHTML = '<div class="resumo-linha">' +
+        '<button class="tarefa-conclui" type="button" data-lista="' + esc(proxima.lista) + '" data-id="' + esc(proxima.id) +
+        '" title="Marcar como feita" aria-label="Marcar como feita"></button>' +
+        '<span class="t">' + esc(proxima.titulo) + '</span>' +
+        '<span class="h">' + esc(rotuloDoDia(new Date(proxima.dia)).toLowerCase()) + '</span></div>' +
+        '<span class="resumo-sub">Nada atrasado nem para hoje</span>';
+    } else if (!pend.length) {
+      elT.innerHTML = '<span class="resumo-calmo">Nada pendente</span>';
+    } else {
+      elT.innerHTML = pend.slice(0, 2).map(t => {
+        const atras = inicioDoDia(new Date(t.dia)) < hojeIni;
+        const dias = Math.round((hojeIni - inicioDoDia(new Date(t.dia))) / 86400000);
+        return '<div class="resumo-linha' + (atras ? ' atrasada' : '') + '">' +
+          '<button class="tarefa-conclui" type="button" data-lista="' + esc(t.lista) + '" data-id="' + esc(t.id) +
+          '" title="Marcar como feita" aria-label="Marcar como feita"></button>' +
+          '<span class="t">' + esc(t.titulo) + '</span>' +
+          '<span class="h">' + (atras ? (dias === 1 ? 'ontem' : 'há ' + dias + 'd') : 'hoje') + '</span></div>';
+      }).join('') + (pend.length > 2 ? '<span class="resumo-sub">e mais ' + (pend.length - 2) + '</span>' : '');
+    }
+
+    // O lembrete que também é tarefa já aparece na coluna de tarefas.
+    const titulosTarefa = new Set(((agendaEstado.tarefas || {}).tarefas || []).map(t => tituloBase(t.titulo)));
+    const prox = (agendaEstado.eventos || []).find(e => {
+      if (titulosTarefa.has(tituloBase(e.titulo))) return false;
+      const ini = new Date(e.inicio).getTime();
+      const fim = e.fim ? new Date(e.fim).getTime() : ini + 3600000;
+      return fim > agora;
+    });
+    if (!prox) {
+      elA.innerHTML = '<span class="resumo-calmo">Nada marcado</span>';
+    } else {
+      const ini = new Date(prox.inicio);
+      const rolando = ini.getTime() <= agora;
+      const hora = prox.diaInteiro ? 'dia todo' : doisDig(ini.getHours()) + ':' + doisDig(ini.getMinutes());
+      const dia = rotuloDoDia(ini);
+      elA.innerHTML = '<div class="resumo-linha"><span class="t">' + esc(prox.titulo) + '</span></div>' +
+        '<span class="resumo-sub' + (rolando || mesmoDia(ini, new Date()) ? ' quente' : '') + '">' +
+        (rolando ? 'Agora' : esc(dia) + ', ' + hora + (prox.diaInteiro ? '' : ' · ' + restaCurto(ini - agora))) + '</span>';
+    }
+
+    const j = jogoAtual;
+    if (!j) {
+      elJ.innerHTML = '<span class="resumo-calmo">Sem jogo marcado</span>';
+    } else {
+      const quando = new Date(j.quando);
+      const rolando = j.estado === 'in';
+      const terminou = j.estado === 'post';
+      const temPlacar = j.casa.placar != null && j.fora.placar != null;
+      const times = temPlacar && (rolando || terminou)
+        ? esc(j.casa.nome) + ' ' + j.casa.placar + ' × ' + j.fora.placar + ' ' + esc(j.fora.nome)
+        : esc(j.casa.nome) + ' × ' + esc(j.fora.nome);
+      const sub = rolando
+        ? '<span class="resumo-sub vivo">' + esc(aoVivo(j)) + '</span>'
+        : terminou
+          ? '<span class="resumo-sub">Fim de jogo · ' + esc(j.competicao) + '</span>'
+          : '<span class="resumo-sub' + (quando - agora < 24 * 3600e3 ? ' quente' : '') + '">' +
+            esc(quandoDoJogo(quando)) + ' · ' + restaCurto(quando - agora) + '</span>';
+      elJ.innerHTML = '<div class="resumo-linha"><span class="t">' + times + '</span></div>' + sub;
+    }
+  }
+
+  // Contagem em minutos e "agora" do compromisso: um tique por minuto basta.
+  setInterval(pintaResumo, 60000);
 
   // Resolução de minuto: um tique de 20 s basta para o número nunca ficar um
   // minuto inteiro atrasado.
   setInterval(() => { if (acordado) pintaContagemJogo(); }, 20000);
 
   window.api.onFlamengo(pintaJogo);
+  // Tarefas chegam depois da agenda (Apps Script leva uns segundos) e mudam
+  // quando ele conclui pelo celular: o main empurra, sem esperar os 5 min.
+  window.api.onAgenda((a) => { agendaEstado = a; pintaAgenda(); });
   window.api.flamengoGet().then(pintaJogo).catch(() => {});
 
   // ---------------------------------------------------------------- vidro
