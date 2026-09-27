@@ -94,6 +94,7 @@ public static class Som {
     }
     public static bool Mudo() { bool m; Saida().GetMute(out m); return m; }
     public static void Muta() { var g = Guid.Empty; Saida().SetMute(true, ref g); }
+    public static void Desmuta() { var g = Guid.Empty; Saida().SetMute(false, ref g); }
 }
 '@
 
@@ -104,8 +105,14 @@ function Anota([string]$t) {
     if ($Log) { try { Add-Content -Path $Log -Value ((Get-Date).ToString('s') + ' ' + $t) -Encoding UTF8 } catch {} }
 }
 
+# O som volta quando ele volta (27/09/2026): mudo so enquanto a tela esta
+# apagada. Se ja estava mudo antes, continua mudo — nao foi o painel que mutou.
+$mutei = $false
 if (-not $SemMudo) {
-    try { [Som]::Muta(); Anota ('mudo=' + [Som]::Mudo()) } catch { Anota ('mudo=falhou ' + $_.Exception.Message) }
+    try {
+        if (-not [Som]::Mudo()) { [Som]::Muta(); $mutei = $true }
+        Anota ('mudo=' + [Som]::Mudo() + ($(if ($mutei) { '' } else { ' (ja estava)' })))
+    } catch { Anota ('mudo=falhou ' + $_.Exception.Message) }
 }
 
 Start-Sleep -Milliseconds ([Math]::Max(0, [Math]::Min(5000, $AtrasoMs)))
@@ -120,6 +127,16 @@ Anota 'ok'
 $fim = (Get-Date).AddSeconds([Math]::Max(0, $GuardaS))
 while ((Get-Date) -lt $fim) {
     Start-Sleep -Milliseconds 2000
-    if ([Telas]::UltimaEntrada() -ne $entrada) { Anota 'acordou por mouse/teclado'; break }
+    if ([Telas]::UltimaEntrada() -ne $entrada) { break }
     [Telas]::Dorme()
+}
+# Passada a guarda, a tela fica por conta do Windows, mas o script segue
+# esperando ele voltar (por ate 12 h) so para devolver o som.
+$limite = (Get-Date).AddHours(12)
+while ([Telas]::UltimaEntrada() -eq $entrada -and (Get-Date) -lt $limite) {
+    Start-Sleep -Milliseconds 1000
+}
+Anota 'acordou por mouse/teclado'
+if ($mutei) {
+    try { [Som]::Desmuta(); Anota ('som de volta, mudo=' + [Som]::Mudo()) } catch { Anota ('desmutar falhou ' + $_.Exception.Message) }
 }
