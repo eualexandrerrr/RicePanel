@@ -1556,10 +1556,22 @@ const TELAS_PS1 = path.join(__dirname, 'telas-dormir.ps1');
 
 ipcMain.handle('telas-dormir', async () => {
   if (process.platform === 'win32') {
+    // Vídeo tocando (aba do Chrome e player da parede) pede "tela ligada" ao
+    // Windows e acendia o monitor segundos depois (27/09/2026). Quem apaga a
+    // tela saiu da frente: o vídeo para, igual ao X do player.
+    try {
+      if (video.atual().site) {
+        await video.fecha();
+        empurra('video-update', retratoVideo());
+        empurraPip();
+        log('telas-dormir: vídeo pausado antes de apagar');
+      }
+    } catch (e) {}
     const out = await sistema.roda('powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', TELAS_PS1], 10000);
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', TELAS_PS1], 15000);
     const ok = /^ok/m.test(out);
-    log('telas-dormir: ' + (ok ? 'monitores apagados' : 'falhou'));
+    const mudo = (out.match(/^mudo=(.*)$/m) || [])[1];
+    log('telas-dormir: ' + (ok ? 'monitores apagados' : 'falhou') + (mudo ? ' | mudo ' + mudo.trim() : ''));
     return { ok };
   }
   const out = await lua("hl.dispatch(hl.dsp.dpms({ action = 'disable' })) return 'ok'");
