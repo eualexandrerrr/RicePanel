@@ -1575,8 +1575,11 @@ ipcMain.handle('telas-dormir', async () => {
       const { spawn } = require('child_process');
       const p = spawn('powershell.exe',
         ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', TELAS_PS1, '-Log', arqLog],
-        { detached: true, stdio: 'ignore', windowsHide: true });
-      p.unref();
+        // Sem `detached`: desanexado no Windows o PowerShell saía com código 0
+        // sem rodar nada (medido 27/09/2026). O painel fica de pé, então o
+        // filho normal vive os 90 s da guarda.
+        { stdio: 'ignore', windowsHide: true });
+      p.on('exit', (c) => log('telas-dormir: guarda terminou (código ' + c + ')'));
       log('telas-dormir: disparado (guarda de 90 s; resultado em ' + arqLog + ')');
       return { ok: true };
     } catch (e) {
