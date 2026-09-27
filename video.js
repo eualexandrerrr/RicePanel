@@ -718,8 +718,10 @@ async function fecha() {
       const aba = estado.aba;
       // Pausa antes de tirar o mudo: o desmutar da extensão ainda leva a live
       // para a borda, e isso pode dar play. A segunda pausa segura esse caso.
+      // `semBorda`: só o som. Sem isso a extensão levava a live para o ao vivo,
+      // e isso dá play — a live voltava a tocar entre as duas pausas.
       ponte.envia({ tipo: 'pausar', aba });
-      ponte.envia({ tipo: 'desmutar', aba });
+      ponte.envia({ tipo: 'desmutar', aba, semBorda: true });
       setTimeout(() => { try { ponte.envia({ tipo: 'pausar', aba }); } catch (e) {} }, 700);
     }
   } else if (estado.player) {

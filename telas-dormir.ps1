@@ -10,7 +10,7 @@
 # depois do primeiro SC_MONITORPOWER. O painel pausa o video antes de chamar
 # isto; a repeticao cobre quem soltar o pedido com atraso.
 
-param([int]$AtrasoMs = 1200, [switch]$SemMudo)
+param([int]$AtrasoMs = 1200, [switch]$SemMudo, [int]$GuardaS = 90, [string]$Log = '')
 
 $src = @'
 using System;
@@ -26,6 +26,20 @@ public static class Telas {
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wParam,
         IntPtr lParam, uint flags, uint ms, out IntPtr resultado);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+    [DllImport("user32.dll")]
+    private static extern bool GetLastInputInfo(ref LASTINPUTINFO i);
+
+    // Instante da ultima tecla ou mexida de mouse. SC_MONITORPOWER nao mexe
+    // nisto; so gente mexe.
+    public static uint UltimaEntrada() {
+        var i = new LASTINPUTINFO();
+        i.cbSize = (uint)Marshal.SizeOf(i);
+        GetLastInputInfo(ref i);
+        return i.dwTime;
+    }
 
     public static void Dorme() {
         IntPtr r;
@@ -85,14 +99,27 @@ public static class Som {
 
 Add-Type -TypeDefinition $src -Language CSharp
 
+function Anota([string]$t) {
+    Write-Output $t
+    if ($Log) { try { Add-Content -Path $Log -Value ((Get-Date).ToString('s') + ' ' + $t) -Encoding UTF8 } catch {} }
+}
+
 if (-not $SemMudo) {
-    try { [Som]::Muta(); Write-Output ('mudo=' + [Som]::Mudo()) } catch { Write-Output ('mudo=falhou ' + $_.Exception.Message) }
+    try { [Som]::Muta(); Anota ('mudo=' + [Som]::Mudo()) } catch { Anota ('mudo=falhou ' + $_.Exception.Message) }
 }
 
 Start-Sleep -Milliseconds ([Math]::Max(0, [Math]::Min(5000, $AtrasoMs)))
+
+# Guarda (27/09/2026): um apagar so nao bastava, algum programa acendia a tela
+# de novo segundos depois. Enquanto ninguem mexer no mouse nem no teclado, o
+# script reapaga de 2 em 2 s por ate $GuardaS segundos. Mexeu: ele sai na hora
+# e a tela fica acesa.
+$entrada = [Telas]::UltimaEntrada()
 [Telas]::Dorme()
-Start-Sleep -Milliseconds 2500
-[Telas]::Dorme()
-Start-Sleep -Milliseconds 2500
-[Telas]::Dorme()
-Write-Output 'ok'
+Anota 'ok'
+$fim = (Get-Date).AddSeconds([Math]::Max(0, $GuardaS))
+while ((Get-Date) -lt $fim) {
+    Start-Sleep -Milliseconds 2000
+    if ([Telas]::UltimaEntrada() -ne $entrada) { Anota 'acordou por mouse/teclado'; break }
+    [Telas]::Dorme()
+}

@@ -1567,12 +1567,22 @@ ipcMain.handle('telas-dormir', async () => {
         log('telas-dormir: vídeo pausado antes de apagar');
       }
     } catch (e) {}
-    const out = await sistema.roda('powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', TELAS_PS1], 15000);
-    const ok = /^ok/m.test(out);
-    const mudo = (out.match(/^mudo=(.*)$/m) || [])[1];
-    log('telas-dormir: ' + (ok ? 'monitores apagados' : 'falhou') + (mudo ? ' | mudo ' + mudo.trim() : ''));
-    return { ok };
+    // Solto e sem prazo: o script fica de guarda até 90 s reapagando a tela.
+    // Com prazo de 15 s o painel o matava antes do fim (PowerShell + compilar
+    // o C# já levam uns 5 s) e o "falhou" do log era isso.
+    const arqLog = path.join(app.getPath('userData'), 'telas-dormir.log');
+    try {
+      const { spawn } = require('child_process');
+      const p = spawn('powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', TELAS_PS1, '-Log', arqLog],
+        { detached: true, stdio: 'ignore', windowsHide: true });
+      p.unref();
+      log('telas-dormir: disparado (guarda de 90 s; resultado em ' + arqLog + ')');
+      return { ok: true };
+    } catch (e) {
+      log('telas-dormir: falhou ao disparar — ' + e.message);
+      return { ok: false };
+    }
   }
   const out = await lua("hl.dispatch(hl.dsp.dpms({ action = 'disable' })) return 'ok'");
   const ok = /ok/i.test(out) && !/error/i.test(out);
