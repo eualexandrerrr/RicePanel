@@ -1594,7 +1594,7 @@
        outros modos a barra continua rasa. */
     .resumo { display: none; }
     body.faixa-no-meio #faixaMeio .resumo {
-      display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+      display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 1.35fr);
       border-top: 1px solid #06070a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
     #faixaMeio .resumo .celula { gap: 8px; padding: 11px 14px 12px; }
@@ -1610,6 +1610,21 @@
     .resumo-calmo { font-size: 12.5px; color: var(--overlay1); }
     #resumoTarefasCap.alerta { color: var(--red); }
     .resumo .tarefa-conclui { width: 16px; height: 16px; border-width: 1.5px; }
+    /* Jogo no resumo: escudos à esquerda, texto no meio, contagem ou placar
+       à direita — a placa do Mirante em miniatura. */
+    .resumo-jogo-linha { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .resumo-escudos { gap: 5px; }
+    .resumo-escudos img { width: 28px; height: 28px; object-fit: contain; }
+    .resumo-escudos .jogo-versus { font-size: 11px; color: var(--overlay1); }
+    .resumo-jogo-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+    .resumo-camp { font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--subtext0);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .resumo-conta { flex: none; font-size: 17px; font-variant-numeric: tabular-nums; color: var(--text); }
+    .resumo-conta.quente { color: var(--yellow); }
+    .resumo-placar { flex: none; display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+    .resumo-placar b { font-size: 22px; font-weight: 400; color: var(--text); }
+    .resumo-placar i { font-style: normal; color: var(--overlay1); }
+    .resumo-placar.vivo b { color: var(--red); }
     .resumo .tarefa-conclui:hover::after { font-size: 11px; }
 
     /* ---------- prateleira ----------

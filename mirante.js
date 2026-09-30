@@ -1424,6 +1424,17 @@
     return 'em ' + mi + ' min';
   }
 
+  // "Hoje, 21:30" / "Amanhã, 16:00" / "qui, 8/10, 19:30": cabe na célula estreita.
+  function quandoCurto(d) {
+    const hoje = new Date();
+    const amanha = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
+    const hora = doisDig(d.getHours()) + ':' + doisDig(d.getMinutes());
+    if (mesmoDia(d, hoje)) return 'Hoje, ' + hora;
+    if (mesmoDia(d, amanha)) return 'Amanhã, ' + hora;
+    const sem = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.getDay()];
+    return sem + ', ' + d.getDate() + '/' + (d.getMonth() + 1) + ', ' + hora;
+  }
+
   function pintaResumo() {
     const elT = $('resumoTarefas'), elA = $('resumoAgenda'), elJ = $('resumoJogo');
     if (!elT || !elA || !elJ) return;
@@ -1500,7 +1511,21 @@
           ? '<span class="resumo-sub">Fim de jogo · ' + esc(j.competicao) + '</span>'
           : '<span class="resumo-sub' + (quando - agora < 24 * 3600e3 ? ' quente' : '') + '">' +
             esc(quandoDoJogo(quando)) + ' · ' + restaCurto(quando - agora) + '</span>';
-      elJ.innerHTML = '<div class="resumo-linha"><span class="t">' + times + '</span></div>' + sub;
+      // Escudos e placar/contagem, no idioma da placa do Mirante (30/09/2026):
+      // só o texto lia como mais uma linha de log entre os consoles.
+      const lado = rolando || terminou
+        ? (temPlacar
+          ? '<span class="resumo-placar' + (rolando ? ' vivo' : '') + '"><b>' + j.casa.placar + '</b><i>×</i><b>' + j.fora.placar + '</b></span>'
+          : '')
+        : '<span class="resumo-conta' + (quando - agora < 24 * 3600e3 ? ' quente' : '') + '">' + restaCurto(quando - agora).replace(/^em /, '') + '</span>';
+      elJ.innerHTML = '<div class="resumo-jogo-linha">' +
+        '<span class="jogo-escudos resumo-escudos">' + escudo(j.casa) + '<span class="jogo-versus">×</span>' + escudo(j.fora) + '</span>' +
+        '<span class="resumo-jogo-texto">' +
+          '<span class="resumo-camp">' + esc(j.competicao) + (j.fase ? ' · ' + esc(j.fase) : '') + '</span>' +
+          '<span class="resumo-linha"><span class="t">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span></span>' +
+          (rolando || terminou ? sub
+            : '<span class="resumo-sub' + (quando - agora < 24 * 3600e3 ? ' quente' : '') + '">' + esc(quandoCurto(quando)) + '</span>') +
+        '</span>' + lado + '</div>';
     }
   }
 
