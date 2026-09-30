@@ -1435,46 +1435,56 @@
     return sem + ', ' + d.getDate() + '/' + (d.getMonth() + 1) + ', ' + hora;
   }
 
+  // Cada célula do resumo tem a mesma anatomia das células de cima (30/09/2026):
+  // um DESTAQUE grande à esquerda — número, hora, contagem — e o texto de apoio
+  // ao lado. Lista de texto miúdo entre os consoles lia como mais log.
+  function celulaResumo(destaque, classeDestaque, corpo) {
+    return '<div class="resumo-bloco">' +
+      '<span class="resumo-destaque ' + (classeDestaque || '') + '">' + destaque + '</span>' +
+      '<span class="resumo-texto">' + corpo + '</span></div>';
+  }
+
+  function botaoConclui(t) {
+    return '<button class="tarefa-conclui" type="button" data-lista="' + esc(t.lista) + '" data-id="' + esc(t.id) +
+      '" title="Marcar como feita" aria-label="Marcar como feita"></button>';
+  }
+
   function pintaResumo() {
     const elT = $('resumoTarefas'), elA = $('resumoAgenda'), elJ = $('resumoJogo');
     if (!elT || !elA || !elJ) return;
     const agora = Date.now();
     const hojeIni = inicioDoDia(new Date());
+    const todas = ((agendaEstado.tarefas || {}).tarefas || []).filter(t => t.dia && !t.feita);
 
-    const pend = ((agendaEstado.tarefas || {}).tarefas || [])
-      .filter(t => t.dia && !t.feita && inicioDoDia(new Date(t.dia)) <= hojeIni)
+    // ------------------------------------------------------------ tarefas
+    const pend = todas.filter(t => inicioDoDia(new Date(t.dia)) <= hojeIni)
       .sort((a, b) => new Date(a.dia) - new Date(b.dia));
     const atrasadas = pend.filter(t => inicioDoDia(new Date(t.dia)) < hojeIni).length;
     const cap = $('resumoTarefasCap');
-    cap.textContent = atrasadas ? 'Tarefas · ' + atrasadas + ' atrasada' + (atrasadas > 1 ? 's' : '') : 'Tarefas';
+    cap.textContent = atrasadas ? 'Tarefas · atrasada' + (atrasadas > 1 ? 's' : '') : (pend.length ? 'Tarefas de hoje' : 'Tarefas');
     cap.classList.toggle('alerta', atrasadas > 0);
-    // Nada atrasado nem para hoje: a próxima tarefa aparece em tom calmo, com o
-    // dia dela — "nada pendente" sozinho escondia a de amanhã.
-    const proxima = ((agendaEstado.tarefas || {}).tarefas || [])
-      .filter(t => t.dia && !t.feita && inicioDoDia(new Date(t.dia)) > hojeIni)
-      .sort((a, b) => new Date(a.dia) - new Date(b.dia))[0];
-    if (!pend.length && proxima) {
-      elT.innerHTML = '<div class="resumo-linha">' +
-        '<button class="tarefa-conclui" type="button" data-lista="' + esc(proxima.lista) + '" data-id="' + esc(proxima.id) +
-        '" title="Marcar como feita" aria-label="Marcar como feita"></button>' +
-        '<span class="t">' + esc(proxima.titulo) + '</span>' +
-        '<span class="h">' + esc(rotuloDoDia(new Date(proxima.dia)).toLowerCase()) + '</span></div>' +
-        '<span class="resumo-sub">Nada atrasado nem para hoje</span>';
-    } else if (!pend.length) {
-      elT.innerHTML = '<span class="resumo-calmo">Nada pendente</span>';
+    if (pend.length) {
+      const t = pend[0];
+      const dias = Math.round((hojeIni - inicioDoDia(new Date(t.dia))) / 86400000);
+      const quando = dias > 0 ? (dias === 1 ? 'desde ontem' : 'há ' + dias + ' dias') : 'para hoje';
+      elT.innerHTML = celulaResumo(String(pend.length), atrasadas ? 'alerta' : 'hoje',
+        '<span class="resumo-titulo">' + esc(t.titulo) + '</span>' +
+        '<span class="resumo-sub' + (dias > 0 ? ' alerta' : '') + '">' + botaoConclui(t) + quando +
+          (pend.length > 1 ? ' · e mais ' + (pend.length - 1) : '') + '</span>');
     } else {
-      elT.innerHTML = pend.slice(0, 2).map(t => {
-        const atras = inicioDoDia(new Date(t.dia)) < hojeIni;
-        const dias = Math.round((hojeIni - inicioDoDia(new Date(t.dia))) / 86400000);
-        return '<div class="resumo-linha' + (atras ? ' atrasada' : '') + '">' +
-          '<button class="tarefa-conclui" type="button" data-lista="' + esc(t.lista) + '" data-id="' + esc(t.id) +
-          '" title="Marcar como feita" aria-label="Marcar como feita"></button>' +
-          '<span class="t">' + esc(t.titulo) + '</span>' +
-          '<span class="h">' + (atras ? (dias === 1 ? 'ontem' : 'há ' + dias + 'd') : 'hoje') + '</span></div>';
-      }).join('') + (pend.length > 2 ? '<span class="resumo-sub">e mais ' + (pend.length - 2) + '</span>' : '');
+      // Nada atrasado nem para hoje: a próxima aparece em tom calmo, com o dia.
+      const proxima = todas.filter(t => inicioDoDia(new Date(t.dia)) > hojeIni)
+        .sort((a, b) => new Date(a.dia) - new Date(b.dia))[0];
+      elT.innerHTML = proxima
+        ? celulaResumo('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.3l3 3 6-6.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>', 'ok',
+            '<span class="resumo-titulo calmo">Nada para hoje</span>' +
+            '<span class="resumo-sub">' + botaoConclui(proxima) + esc(rotuloDoDia(new Date(proxima.dia))) + ': ' + esc(proxima.titulo) + '</span>')
+        : celulaResumo('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.3l3 3 6-6.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>', 'ok',
+            '<span class="resumo-titulo calmo">Nada pendente</span>');
     }
 
-    // O lembrete que também é tarefa já aparece na coluna de tarefas.
+    // ------------------------------------------------------------ próximo
+    // O lembrete que também é tarefa já está na coluna de tarefas.
     const titulosTarefa = new Set(((agendaEstado.tarefas || {}).tarefas || []).map(t => tituloBase(t.titulo)));
     const prox = (agendaEstado.eventos || []).find(e => {
       if (titulosTarefa.has(tituloBase(e.titulo))) return false;
@@ -1483,52 +1493,50 @@
       return fim > agora;
     });
     if (!prox) {
-      elA.innerHTML = '<span class="resumo-calmo">Nada marcado</span>';
+      elA.innerHTML = celulaResumo('—', 'calmo', '<span class="resumo-titulo calmo">Nada marcado</span>');
     } else {
       const ini = new Date(prox.inicio);
       const rolando = ini.getTime() <= agora;
-      const hora = prox.diaInteiro ? 'dia todo' : doisDig(ini.getHours()) + ':' + doisDig(ini.getMinutes());
-      const dia = rotuloDoDia(ini);
-      elA.innerHTML = '<div class="resumo-linha"><span class="t">' + esc(prox.titulo) + '</span></div>' +
-        '<span class="resumo-sub' + (rolando || mesmoDia(ini, new Date()) ? ' quente' : '') + '">' +
-        (rolando ? 'Agora' : esc(dia) + ', ' + hora + (prox.diaInteiro ? '' : ' · ' + restaCurto(ini - agora))) + '</span>';
+      const ehHoje = mesmoDia(ini, new Date());
+      const destaque = rolando ? 'agora'
+        : prox.diaInteiro ? quandoCurto(ini).split(',')[0]
+        : doisDig(ini.getHours()) + ':' + doisDig(ini.getMinutes());
+      const sub = rolando ? 'acontecendo agora'
+        : (prox.diaInteiro ? 'dia todo' : rotuloDoDia(ini)) + (prox.diaInteiro ? ' · ' + rotuloDoDia(ini) : ' · ' + restaCurto(ini - agora));
+      elA.innerHTML = celulaResumo(esc(destaque), rolando ? 'vivo' : ehHoje ? 'hoje' : '',
+        '<span class="resumo-titulo">' + esc(prox.titulo) + '</span>' +
+        '<span class="resumo-sub' + (ehHoje || rolando ? ' quente' : '') + '">' + esc(sub) + '</span>');
     }
 
+    // ------------------------------------------------------------ jogo
     const j = jogoAtual;
     if (!j) {
-      elJ.innerHTML = '<span class="resumo-calmo">Sem jogo marcado</span>';
-    } else {
-      const quando = new Date(j.quando);
-      const rolando = j.estado === 'in';
-      const terminou = j.estado === 'post';
-      const temPlacar = j.casa.placar != null && j.fora.placar != null;
-      const times = temPlacar && (rolando || terminou)
-        ? esc(j.casa.nome) + ' ' + j.casa.placar + ' × ' + j.fora.placar + ' ' + esc(j.fora.nome)
-        : esc(j.casa.nome) + ' × ' + esc(j.fora.nome);
-      const sub = rolando
-        ? '<span class="resumo-sub vivo">' + esc(aoVivo(j)) + '</span>'
-        : terminou
-          ? '<span class="resumo-sub">Fim de jogo · ' + esc(j.competicao) + '</span>'
-          : '<span class="resumo-sub' + (quando - agora < 24 * 3600e3 ? ' quente' : '') + '">' +
-            esc(quandoDoJogo(quando)) + ' · ' + restaCurto(quando - agora) + '</span>';
-      // Escudos e placar/contagem, no idioma da placa do Mirante (30/09/2026):
-      // só o texto lia como mais uma linha de log entre os consoles.
-      const lado = rolando || terminou
-        ? (temPlacar
-          ? '<span class="resumo-placar' + (rolando ? ' vivo' : '') + '"><b>' + j.casa.placar + '</b><i>×</i><b>' + j.fora.placar + '</b></span>'
-          : '')
-        : '<span class="resumo-conta' + (quando - agora < 24 * 3600e3 ? ' quente' : '') + '">' + restaCurto(quando - agora).replace(/^em /, '') + '</span>';
-      elJ.innerHTML = '<div class="resumo-jogo-linha">' +
-        '<span class="jogo-escudos resumo-escudos">' + escudo(j.casa) + '<span class="jogo-versus">×</span>' + escudo(j.fora) + '</span>' +
-        '<span class="resumo-jogo-texto">' +
-          '<span class="resumo-camp">' + esc(j.competicao) + (j.fase ? ' · ' + esc(j.fase) : '') + '</span>' +
-          '<span class="resumo-linha"><span class="t">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span></span>' +
-          (rolando || terminou ? sub
-            : '<span class="resumo-sub' + (quando - agora < 24 * 3600e3 ? ' quente' : '') + '">' + esc(quandoCurto(quando)) +
-              // "Estádio" na frente só gasta a célula estreita: o nome basta.
-              (j.local ? ' · ' + esc(String(j.local).replace(/^est[aá]dio\s+/i, '')) : '') + '</span>') +
-        '</span>' + lado + '</div>';
+      elJ.innerHTML = celulaResumo('—', 'calmo', '<span class="resumo-titulo calmo">Sem jogo marcado</span>');
+      return;
     }
+    const quando = new Date(j.quando);
+    const rolando = j.estado === 'in';
+    const terminou = j.estado === 'post';
+    const temPlacar = j.casa.placar != null && j.fora.placar != null;
+    const perto = quando - agora < 24 * 3600e3;
+    const local = j.local ? String(j.local).replace(/^est[aá]dio\s+/i, '') : '';
+    const lado = (rolando || terminou)
+      ? (temPlacar
+        ? '<span class="resumo-placar' + (rolando ? ' vivo' : '') + '"><b>' + j.casa.placar + '</b><i>×</i><b>' + j.fora.placar + '</b></span>'
+        : '')
+      : '<span class="resumo-destaque conta' + (perto ? ' hoje' : '') + '">' + esc(restaCurto(quando - agora).replace(/^em /, '')) + '</span>';
+    const sub = rolando
+      ? '<span class="resumo-sub vivo">' + esc(aoVivo(j)) + '</span>'
+      : terminou
+        ? '<span class="resumo-sub">Fim de jogo</span>'
+        : '<span class="resumo-sub' + (perto ? ' quente' : '') + '">' + esc(quandoCurto(quando)) + '</span>';
+    elJ.innerHTML = '<div class="resumo-bloco jogo">' +
+      '<span class="resumo-escudos">' + escudo(j.casa) + escudo(j.fora) + '</span>' +
+      '<span class="resumo-texto">' +
+        '<span class="resumo-titulo">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span>' +
+        sub +
+        (local ? '<span class="resumo-sub local">' + esc(local) + '</span>' : '') +
+      '</span>' + lado + '</div>';
   }
 
   // Contagem em minutos e "agora" do compromisso: um tique por minuto basta.

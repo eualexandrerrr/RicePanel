@@ -1598,32 +1598,49 @@
       display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 1.35fr);
       border-top: 1px solid #06070a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
-    #faixaMeio .resumo .celula { gap: 8px; padding: 11px 14px 12px; }
+    #faixaMeio .resumo .celula { gap: 10px; padding: 12px 16px 14px; }
     #faixaMeio .resumo .celula > :not(.cap) { margin: 0; }
-    .resumo-corpo { display: flex; flex-direction: column; gap: 5px; min-width: 0; width: 100%; }
-    .resumo-linha { display: flex; align-items: center; gap: 9px; min-width: 0; font-size: 13.5px; color: var(--text); }
-    .resumo-linha .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .resumo-linha .h { flex: none; font-variant-numeric: tabular-nums; color: var(--subtext0); font-size: 12.5px; }
-    .resumo-linha.atrasada .t { color: var(--red); }
-    .resumo-sub { font-size: 12px; color: var(--subtext0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .resumo-corpo { min-width: 0; width: 100%; }
+    #resumoTarefasCap.alerta { color: var(--red); }
+
+    /* Anatomia de célula: destaque grande à esquerda, texto de apoio ao lado. */
+    .resumo-bloco { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .resumo-destaque {
+      flex: none; min-width: 34px;
+      font-size: 30px; font-weight: 300; line-height: 1; letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums; color: var(--text);
+    }
+    .resumo-destaque.alerta { color: var(--red); }
+    .resumo-destaque.hoje { color: var(--yellow); }
+    .resumo-destaque.vivo { color: var(--green); font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .resumo-destaque.calmo { color: var(--overlay1); }
+    .resumo-destaque.ok { color: var(--green); display: flex; }
+    .resumo-destaque.ok svg { width: 28px; height: 28px; }
+    .resumo-destaque.conta { font-size: 26px; min-width: 0; margin-left: auto; }
+    .resumo-texto { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+    .resumo-titulo {
+      font-size: 14px; line-height: 1.3; color: var(--text);
+      overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    }
+    .resumo-titulo.calmo { color: var(--subtext0); }
+    .resumo-sub {
+      display: flex; align-items: center; gap: 7px; min-width: 0;
+      font-size: 12px; color: var(--subtext0);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .resumo-sub.alerta { color: var(--red); }
     .resumo-sub.quente { color: var(--yellow); }
     .resumo-sub.vivo { color: var(--red); font-weight: 700; }
-    .resumo-calmo { font-size: 12.5px; color: var(--overlay1); }
-    #resumoTarefasCap.alerta { color: var(--red); }
-    .resumo .tarefa-conclui { width: 16px; height: 16px; border-width: 1.5px; }
-    /* Jogo no resumo: escudos à esquerda, texto no meio, contagem ou placar
-       à direita — a placa do Mirante em miniatura. */
-    .resumo-jogo-linha { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .resumo-escudos { gap: 5px; }
-    .resumo-escudos img { width: 28px; height: 28px; object-fit: contain; }
-    .resumo-escudos .jogo-versus { font-size: 11px; color: var(--overlay1); }
-    .resumo-jogo-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-    .resumo-camp { font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--subtext0);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .resumo-conta { flex: none; font-size: 17px; font-variant-numeric: tabular-nums; color: var(--text); }
-    .resumo-conta.quente { color: var(--yellow); }
-    .resumo-placar { flex: none; display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
-    .resumo-placar b { font-size: 22px; font-weight: 400; color: var(--text); }
+    .resumo-sub.local { color: var(--overlay1); }
+    .resumo .tarefa-conclui { width: 15px; height: 15px; border-width: 1.5px; flex: none; }
+    .resumo .tarefa-conclui:hover::after { font-size: 10px; }
+
+    /* Jogo: escudos sobrepostos de leve, como selo de confronto. */
+    .resumo-escudos { flex: none; display: flex; align-items: center; }
+    .resumo-escudos img { width: 34px; height: 34px; object-fit: contain; }
+    .resumo-escudos img + img { margin-left: -6px; }
+    .resumo-placar { flex: none; margin-left: auto; display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+    .resumo-placar b { font-size: 28px; font-weight: 300; color: var(--text); }
     .resumo-placar i { font-style: normal; color: var(--overlay1); }
     .resumo-placar.vivo b { color: var(--red); }
     .resumo .tarefa-conclui:hover::after { font-size: 11px; }
