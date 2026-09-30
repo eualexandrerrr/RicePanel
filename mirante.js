@@ -1524,7 +1524,9 @@
           '<span class="resumo-camp">' + esc(j.competicao) + (j.fase ? ' · ' + esc(j.fase) : '') + '</span>' +
           '<span class="resumo-linha"><span class="t">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span></span>' +
           (rolando || terminou ? sub
-            : '<span class="resumo-sub' + (quando - agora < 24 * 3600e3 ? ' quente' : '') + '">' + esc(quandoCurto(quando)) + '</span>') +
+            : '<span class="resumo-sub' + (quando - agora < 24 * 3600e3 ? ' quente' : '') + '">' + esc(quandoCurto(quando)) +
+              // "Estádio" na frente só gasta a célula estreita: o nome basta.
+              (j.local ? ' · ' + esc(String(j.local).replace(/^est[aá]dio\s+/i, '')) : '') + '</span>') +
         '</span>' + lado + '</div>';
     }
   }

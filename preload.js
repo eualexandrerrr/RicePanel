@@ -83,14 +83,6 @@ contextBridge.exposeInMainWorld('api', {
   // O main empurra a lista a cada varredura; nao precisa o renderer ficar pedindo.
   onSentry: (cb) => ipcRenderer.on('sentry-update', (e, payload) => cb(payload)),
 
-  // Discord
-  discordGet: () => ipcRenderer.invoke('discord-get'),
-  discordRefresh: () => ipcRenderer.invoke('discord-refresh'),
-  discordSeen: () => ipcRenderer.invoke('discord-seen'),
-  discordRecount: () => ipcRenderer.invoke('discord-recount'),
-  discordReagir: (id, emoji) => ipcRenderer.invoke('discord-reagir', id, emoji),
-  discordTopico: (id, nome, resposta) => ipcRenderer.invoke('discord-topico', id, nome, resposta),
-  onDiscord: (cb) => ipcRenderer.on('discord-update', (e, payload) => cb(payload)),
 
   // servidores (txAdmin)
   txCred: () => ipcRenderer.invoke('tx-cred'),

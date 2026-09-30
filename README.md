@@ -19,8 +19,7 @@ Spotify with controls, the next Flamengo match and the countdown to GTA VI.
 
 **Estação** — the work page. Two txAdmin consoles side by side (remote and
 local), with an error detector that warns by notification; a column of Expo
-projects with the Android emulator; and a monitor for quota, Sentry and Discord
-notes.
+projects with the Android emulator; and a monitor for quota and Sentry.
 
 Since September 2026 the **Mirante runs natively on COSMIC**: a Rust and
 libcosmic app in [`cosmic/`](cosmic/README.md), drawn on a layer surface below
@@ -105,7 +104,6 @@ No configuration lives in the repository. What is yours lives in
 | File | What |
 |---|---|
 | `servidores.json` | host and port of the two txAdmin consoles |
-| `discord-notas.json` | guild, channel and path to txAdmin's `config.json` |
 | `agenda-url.txt` or `agenda-url.bin` | the iCal secret address, encrypted when there is a keyring |
 
 Without those files the panel comes up all the same, with the matching modules

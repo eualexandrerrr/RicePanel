@@ -26,7 +26,7 @@ por causa de um cliente reclamando.
 ## Positioning
 
 Não é dashboard de time nem produto para vender: é um painel pessoal, de um usuário só, que junta
-serviços que normalmente não se falam (Sentry, Discord, txAdmin, cota do Claude Code) porque quem
+serviços que normalmente não se falam (Sentry, txAdmin, cota do Claude Code, agenda) porque quem
 usa é a mesma pessoa em todos eles.
 
 ## Operating Context
@@ -45,15 +45,12 @@ usa é a mesma pessoa em todos eles.
 1. O que os servidores estão cuspindo (console remoto `IP-DO-SERVIDOR:40120` e local `localhost:40120`)
 2. Quanto sobrou da cota do Claude Code (sessão 5h, semana 7d, por modelo)
 3. Se tem erro novo no Sentry
-4. Anotações pendentes do Discord (não entrou no que ele checa primeiro)
 
 **Dados que o painel tem hoje:**
 - Cota do Claude Code: percentual e horário de reset por limite.
 - Sentry: issues não resolvidas de todos os projetos da org, nível, contagem de eventos e usuários,
   quando aconteceu por último. Ação de resolver escreve na API.
-- Discord: total de mensagens do canal de anotações e quantas estão sem reação. **Regra do produto:
-  mensagem sem reação = pendência.** O texto das mensagens não chega (bot sem Message Content
-  Intent) — hoje só autor, hora e link.
+- (As Anotações do Discord saíram do painel em 30/09/2026, a pedido dele: só o Sentry fica.)
 - Temperaturas de CPU/GPU (LibreHardwareMonitor na porta 8085), relógio, limpeza de cache do Windows
   e troca de credencial do Claude Code entre assinatura Max e API/gateway.
 

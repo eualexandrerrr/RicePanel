@@ -19,8 +19,7 @@ Spotify com controles, o próximo jogo do Flamengo e a contagem para o GTA VI.
 
 **Estação** — a página de trabalho. Dois consoles do txAdmin lado a lado
 (remoto e local), com detector de erro que avisa por notificação; uma coluna de
-projetos Expo com emulador Android; e um monitor de cotas, Sentry e anotações
-do Discord.
+projetos Expo com emulador Android; e um monitor de cotas e Sentry.
 
 Desde setembro de 2026 o **Mirante roda nativo no COSMIC**: um app em Rust com
 libcosmic, em [`cosmic/`](cosmic/README.md), desenhado numa layer surface abaixo
@@ -105,7 +104,6 @@ Nada de configuração fica no repositório. O que é seu mora em
 | Arquivo | O quê |
 |---|---|
 | `servidores.json` | host e porta dos dois consoles do txAdmin |
-| `discord-notas.json` | guild, canal e caminho do `config.json` do txAdmin |
 | `agenda-url.txt` ou `agenda-url.bin` | endereço secreto do iCal, cifrado quando há keyring |
 
 Sem esses arquivos o painel sobe igual, com os módulos correspondentes

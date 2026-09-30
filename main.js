@@ -13,7 +13,6 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const sentry = require('./sentry');
-const discord = require('./discord-notas');
 const sistema = require('./sistema');
 const agenda = require('./agenda');
 const tarefas = require('./tarefas');
@@ -380,7 +379,6 @@ function createWindow() {
 
   const deps = { app, safeStorage, Notification, shell, session, log, getWindow: () => mainWindow };
   sentry.iniciar(deps);
-  discord.iniciar(deps);
   agenda.iniciar(deps);
   tarefas.aoMudar(() => empurra('agenda-update', Object.assign(agenda.atual(), { tarefas: tarefas.atual() })));
   tarefas.iniciar(deps);
@@ -956,31 +954,6 @@ ipcMain.handle('sentry-detalhe', async (e, id) => {
 ipcMain.on('sentry-open', (e, url) => {
   // So abre link do proprio Sentry: evita virar abridor generico de URL.
   if (typeof url === 'string' && /^https:\/\/[a-z0-9.-]*sentry\.io\//i.test(url)) shell.openExternal(url);
-});
-
-// --- Discord ---------------------------------------------------------------
-ipcMain.handle('discord-get', async () => discord.atual());
-ipcMain.handle('discord-refresh', async () => { await discord.forcar(); return discord.atual(); });
-ipcMain.handle('discord-seen', async () => discord.marcarVistos());
-ipcMain.handle('discord-recount', async () => discord.recontar());
-ipcMain.handle('discord-topico', async (e, id, nome, resposta) => {
-  try {
-    return await discord.criarTopico(id, nome, resposta);
-  } catch (err) {
-    log('discord-topico ERRO: ' + err.message);
-    return { ok: false, error: err.message };
-  }
-});
-ipcMain.handle('discord-reagir', async (e, id, emoji) => {
-  // Lista fechada: o renderer nao escolhe emoji arbitrario para mandar na URL.
-  const permitidos = ['\u{1F44D}', '❌', '✅'];
-  if (permitidos.indexOf(emoji) < 0) return { ok: false, error: 'emoji nao permitido' };
-  try {
-    return await discord.reagir(id, emoji);
-  } catch (err) {
-    log('discord-reagir ERRO: ' + err.message);
-    return { ok: false, error: err.message };
-  }
 });
 
 // --- txAdmin ---------------------------------------------------------------
@@ -1609,7 +1582,7 @@ ipcMain.on('abrir-url', (e, url) => {
   const servs = cat.producao.concat(cat.locais.map(l => ({ host: 'localhost', porta: l.porta })));
   const doTx = servs.some(s =>
     url.startsWith('http://' + s.host + ':' + s.porta + '/'));
-  if (/^https:\/\/(discord\.com|[a-z0-9.-]*sentry\.io)\//i.test(url) || doTx) shell.openExternal(url);
+  if (/^https:\/\/[a-z0-9.-]*sentry\.io\//i.test(url) || doTx) shell.openExternal(url);
 });
 
 ipcMain.on('close-app', () => {
