@@ -85,6 +85,12 @@
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; }
+    /* Windows: a janela é opaca (janela transparente lá é desenhada pela CPU e
+       deixava tudo lento), então o papel de parede vem pintado pela página —
+       a cópia nítida que o vidro.js gera do mesmo arquivo do Windows. */
+    body.papel-proprio {
+      background: var(--papel-nitido) center / 100% 100% no-repeat fixed, #11111b !important;
+    }
 
     body {
       font-family: 'Archivo', 'Segoe UI', sans-serif;

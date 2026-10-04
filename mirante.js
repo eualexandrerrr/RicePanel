@@ -1562,6 +1562,10 @@
     const tem = !!(v && v.fundo);
     document.documentElement.style.setProperty('--vidro-fundo', tem ? 'url("' + v.fundo + '")' : 'none');
     document.body.classList.toggle('tem-vidro', tem);
+    // Windows: janela opaca, o papel de parede é pintado aqui (04/10/2026).
+    const nitido = !!(v && v.nitido);
+    document.documentElement.style.setProperty('--papel-nitido', nitido ? 'url("' + v.nitido + '")' : 'none');
+    document.body.classList.toggle('papel-proprio', nitido);
   }
 
   window.api.onVidro(pintaVidro);
