@@ -1082,7 +1082,39 @@ function limpaProducao(s) {
   const host = limpaTexto(s && s.host).replace(/^https?:\/\//i, '').replace(/[:/].*$/, '');
   if (!/^[a-z0-9.\-]+$/i.test(host)) throw new Error('endereço inválido: ' + host);
   if (HOST_LOCAL.test(host)) throw new Error('produção não aponta para esta máquina (' + host + '): cadastre em Local');
-  return { nome: limpaTexto(s.nome, 40) || host, host, porta: limpaPorta(s.porta) };
+  const p = { nome: limpaTexto(s.nome, 40) || host, host, porta: limpaPorta(s.porta) };
+  // Porta do jogo (30120, 30121…): é a do info.json e a que os jogadores usam.
+  // O painel fala com o txAdmin; esta fica no cadastro para quem precisar.
+  if (s.jogo != null && s.jogo !== '') p.jogo = limpaPorta(s.jogo);
+  return p;
+}
+
+// Logo do servidor: o `myLogo.png` da pasta dele (04/10/2026). Produção e
+// local se casam pelo nome ("MichiganRoleplay", "VisaoRoleplay"); a pasta sai
+// da BAT do local cadastrado com esse nome, ou de D:\<Nome> como reserva.
+function chaveNome(n) {
+  return String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+function logoDoServidor(nome, locais) {
+  const chave = chaveNome(nome);
+  if (!chave) return '';
+  const raizes = [];
+  const l = (locais || []).find(x => chaveNome(x.nome) === chave);
+  if (l && l.batch) raizes.push(path.dirname(l.batch));
+  if (l && l.cwd) raizes.push(l.cwd);
+  if (process.platform === 'win32') raizes.push(path.join('D:\\', String(nome).replace(/[^\w.-]/g, '')));
+  for (const raiz of raizes) {
+    const candidatos = [path.join(raiz, 'myLogo.png')];
+    try {
+      for (const d of fs.readdirSync(raiz, { withFileTypes: true })) {
+        if (d.isDirectory()) candidatos.push(path.join(raiz, d.name, 'myLogo.png'));
+      }
+    } catch (e) {}
+    const achou = candidatos.find(c => { try { return fs.statSync(c).isFile(); } catch (e) { return false; } });
+    if (achou) return 'file:///' + achou.replace(/\\/g, '/');
+  }
+  return '';
 }
 
 // Um local sobe de dois jeitos. O cadastro do dia a dia é a BAT mais o PROFILE
@@ -1177,9 +1209,9 @@ function lerServidores() {
   const p = cat.producao[cat.ativo.producao];
   const l = cat.locais[cat.ativo.local];
   return [
-    p ? { nome: p.nome, host: p.host, porta: p.porta }
+    p ? { nome: p.nome, host: p.host, porta: p.porta, logo: logoDoServidor(p.nome, cat.locais) }
       : { nome: 'Sem produção cadastrada', host: 'sem-cadastro.invalid', porta: 40120 },
-    l ? { nome: l.nome, host: 'localhost', porta: l.porta, podeSubir: temReceita(l) }
+    l ? { nome: l.nome, host: 'localhost', porta: l.porta, podeSubir: temReceita(l), logo: logoDoServidor(l.nome, cat.locais) }
       : { nome: 'Sem servidor local', host: 'localhost', porta: 40120, podeSubir: false }
   ];
 }
@@ -1189,7 +1221,10 @@ function respostaServidores() {
   return {
     ok: true,
     servidores: lerServidores(),
-    catalogo: Object.assign({}, cat, { locais: cat.locais.map(l => Object.assign({ podeSubir: temReceita(l) }, l)) })
+    catalogo: Object.assign({}, cat, {
+      producao: cat.producao.map(p => Object.assign({ logo: logoDoServidor(p.nome, cat.locais) }, p)),
+      locais: cat.locais.map(l => Object.assign({ podeSubir: temReceita(l), logo: logoDoServidor(l.nome, cat.locais) }, l))
+    })
   };
 }
 

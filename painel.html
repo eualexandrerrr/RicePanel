@@ -1598,6 +1598,11 @@
       display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 1.35fr);
       border-top: 1px solid #06070a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
+    /* Logo do servidor (myLogo.png da pasta dele) no cabeçalho e nas chaves. */
+    .logo-serv { width: 26px; height: 26px; object-fit: contain; border-radius: 6px; flex: none; }
+    .logo-serv[hidden] { display: none; }
+    .chave-local { display: inline-flex; align-items: center; gap: 6px; }
+    .chave-logo { width: 16px; height: 16px; object-fit: contain; border-radius: 3px; }
     #faixaMeio .resumo .celula { gap: 10px; padding: 12px 16px 14px; }
     #faixaMeio .resumo .celula > :not(.cap) { margin: 0; }
     .resumo-corpo { min-width: 0; width: 100%; }
@@ -2647,6 +2652,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="tela">
       <header>
         <span class="selo" id="selo0"></span>
+        <img class="logo-serv" id="logo0" alt="" hidden>
         <span class="serigrafia" id="nome0"></span>
         <span class="destino" id="dest0"></span>
         <span class="escolha-local" id="escolha0" hidden></span>
@@ -2696,6 +2702,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="tela">
       <header>
         <span class="selo" id="selo1"></span>
+        <img class="logo-serv" id="logo1" alt="" hidden>
         <span class="serigrafia" id="nome1"></span>
         <span class="destino" id="dest1"></span>
         <span class="escolha-local" id="escolha1" hidden></span>

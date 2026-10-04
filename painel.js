@@ -206,8 +206,16 @@ function pintaServidores() {
     // O selo já diz remoto/local; repetir "Servidor remoto" ao lado só
     // espremia o cabeçalho e quebrava em duas linhas. Embaixo, com mais de um
     // local cadastrado, o nome curto diz qual foi o último a subir.
+    // Em cima, com mais de um servidor de produção, o nome também aparece: a
+    // tela precisa dizer de qual servidor é o console (04/10/2026).
     document.getElementById('nome' + i).textContent =
-      local && catalogo.locais.length > 1 ? nomeCurto(s.nome) : '';
+      (local ? catalogo.locais.length > 1 : catalogo.producao.length > 1) ? nomeCurto(s.nome) : '';
+    // O myLogo.png da pasta do servidor, quando existe.
+    const logo = document.getElementById('logo' + i);
+    if (logo) {
+      logo.hidden = !s.logo;
+      if (s.logo && logo.getAttribute('src') !== s.logo) logo.setAttribute('src', s.logo);
+    }
     const dest = document.getElementById('dest' + i);
     dest.textContent = s.host + ':' + s.porta;
     dest.className = 'destino' + (local ? '' : ' remoto');
@@ -248,7 +256,15 @@ function pintaEscolha(i) {
     b.className = 'chave-local' + (ativo ? ' on' : '');
     // Nome curto na chave ("Michigan", "FiveM"): o cabeçalho divide a linha com
     // endereço, estado, zoom e botões. O nome inteiro fica na dica.
-    b.textContent = nomeCurto(s.nome);
+    b.textContent = '';
+    if (s.logo) {
+      const img = document.createElement('img');
+      img.src = s.logo;
+      img.alt = '';
+      img.className = 'chave-logo';
+      b.appendChild(img);
+    }
+    b.appendChild(document.createTextNode(nomeCurto(s.nome)));
     b.title = 'Mostrar ' + s.nome + ' (' + (s.host || 'localhost') + ':' + s.porta + ')';
     b.setAttribute('aria-pressed', String(ativo));
     b.addEventListener('click', () => escolheServidor(i, j));
