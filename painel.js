@@ -109,6 +109,24 @@ function trocaModo(modo) {
   if (window.mirante) window.mirante.acorda(noMirante);
 }
 
+// Produção em cima ou embaixo: a escolha fica no localStorage do painel, que
+// vive no userData e sobrevive a reiniciar o painel e o PC.
+const inverteServ = document.getElementById('inverteServ');
+function pintaInversao(embaixo) {
+  document.body.classList.toggle('producao-embaixo', embaixo);
+  inverteServ.setAttribute('aria-pressed', String(embaixo));
+  document.getElementById('inverteRot').textContent = embaixo ? 'Produção embaixo' : 'Produção em cima';
+  inverteServ.title = (embaixo ? 'Produção embaixo' : 'Produção em cima') + ' — clique para inverter';
+}
+let producaoEmbaixo = false;
+try { producaoEmbaixo = localStorage.getItem('producaoEmbaixo') === '1'; } catch (e) {}
+pintaInversao(producaoEmbaixo);
+inverteServ.addEventListener('click', () => {
+  producaoEmbaixo = !producaoEmbaixo;
+  try { localStorage.setItem('producaoEmbaixo', producaoEmbaixo ? '1' : '0'); } catch (e) {}
+  pintaInversao(producaoEmbaixo);
+});
+
 // A barra de estado é uma só. No barramento Servidores ela se muda para entre
 // os dois terminais (que é onde ele olha); nos outros volta para o pé do app.
 function posicionaBarra(modo) {

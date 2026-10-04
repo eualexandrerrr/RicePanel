@@ -1093,6 +1093,15 @@
     /* ---------- servidores ---------- */
     #modoServidores { grid-template-rows: 1fr auto 1fr; gap: 14px; padding: 10px 12px 12px; }
     #modoServidores > * { min-width: 0; }
+    /* Produção em cima ou embaixo (04/10/2026): só a ORDEM visual troca. Os
+       webviews não saem do lugar no documento, então nenhum console recarrega
+       nem perde o login ao alternar. */
+    body.producao-embaixo #modoServidores > .tela:first-child { order: 3; }
+    body.producao-embaixo #modoServidores > #faixaMeio { order: 2; }
+    body.producao-embaixo #modoServidores > .tela:last-child { order: 1; }
+    #inverteServ { display: none; }
+    body.faixa-no-meio #inverteServ { display: inline-flex; }
+    body.producao-embaixo #inverteServ { border-color: var(--ambar); color: var(--ambar); }
     #faixaMeio:empty { display: none; }
     /* Ilha de vidro, igual às placas do Mirante. O conteúdo de dentro é do
        txAdmin e é opaco -- o papel de parede aparece na divisa entre as duas
@@ -2517,6 +2526,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <button class="tecla" data-modo="monitor"><span class="marcador" id="marcadorMonitor"></span>Monitor</button>
     </span>
     <span class="vao"></span>
+    <button class="botao" id="inverteServ" aria-pressed="false" title="Produção em cima — clique para pôr embaixo" aria-label="Alternar produção em cima ou embaixo">
+      <svg viewBox="0 0 16 16"><path d="M5 2.5v11M5 2.5 2.5 5M5 2.5 7.5 5M11 13.5v-11M11 13.5 8.5 11M11 13.5l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rot" id="inverteRot">Produção em cima</span>
+    </button>
     <button class="botao" id="ajusteServ" title="Configurar os servidores" aria-label="Configurar os servidores"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
     <button class="botao" id="closeBtn" title="Fechar o painel" aria-label="Fechar o painel">
       <svg viewBox="0 0 16 16"><use href="#ic-x"/></svg>
