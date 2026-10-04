@@ -420,8 +420,14 @@ const CSS_SO_CONSOLE = [
 //
 // O aside é `hidden xl:flex` no txAdmin: em 1080px de painel ele nunca apareceria
 // sozinho, nem sem o `display:none` que o painel injeta.
+//
+// São DUAS barras com a classe `tx-sidebar` no txAdmin 8 (04/10/2026): a da
+// esquerda (`lg:flex`) é o menu — Dashboard, Live Console, Resources, Server
+// Log, CFG Editor, cartão do servidor e próximo restart; a da direita
+// (`xl:flex`) é a lista de jogadores. O seletor antigo pegava as duas e
+// empilhava o menu por cima da lista. Agora cada uma tem a sua folha.
 const CSS_LISTA_JOGADORES = [
-  'aside.tx-sidebar {',
+  'aside.tx-sidebar.xl\\:flex {',
   '  display: flex !important;',
   '  position: fixed !important;',
   '  top: 0 !important; right: 0 !important;',
@@ -437,6 +443,26 @@ const CSS_LISTA_JOGADORES = [
   '}'
 ].join(' ');
 
+// O menu do txAdmin, aberto pelo botão Menu do cabeçalho: entra pela esquerda,
+// por cima do log, pelo mesmo motivo da lista (o xterm refaz tudo se a largura
+// mudar).
+const CSS_MENU_TX = [
+  'aside.tx-sidebar.lg\\:flex {',
+  '  display: flex !important;',
+  '  position: fixed !important;',
+  '  top: 0 !important; left: 0 !important;',
+  '  width: 300px !important; max-width: 60vw !important;',
+  '  height: 100vh !important;',
+  '  z-index: 40 !important;',
+  '  padding: 10px !important; gap: 10px !important;',
+  '  overflow-y: auto !important;',
+  '  background: #16181c;',
+  '  background: hsl(var(--background, 224 10% 8%)) !important;',
+  '  border-right: 1px solid hsl(var(--border, 224 10% 20%)) !important;',
+  '  box-shadow: 14px 0 28px rgba(0, 0, 0, 0.5) !important;',
+  '}'
+].join(' ');
+
 // O X mora DENTRO do webview, e não no painel: elemento do painel posto por
 // cima do <webview> não aparece — o guest compõe acima do documento hospedeiro,
 // e o botão ficava desenhado atrás do console. Dentro do guest ele é irmão da
@@ -445,32 +471,38 @@ const CSS_LISTA_JOGADORES = [
 // O clique volta pelo console do webview, que o painel escuta em
 // 'console-message'. É o único canal de mão dupla que existe sem um preload
 // próprio para a página do txAdmin.
-const ROTEIRO_X_LISTA =
-  '(() => {' +
-    'const barra = document.querySelector("aside.tx-sidebar");' +
-    'if (!barra) return "sem barra";' +
-    'if (document.getElementById("mesa-fecha")) return "ja tinha";' +
+// `tipo` é 'lista' (direita) ou 'menu' (esquerda); o X fica no canto de cima
+// da barra que ele fecha.
+function roteiroX(tipo) {
+  // Na lista o ✕ vai no canto esquerdo dela: no direito ficava em cima do
+  // número de jogadores do cartão do txAdmin.
+  const lado = tipo === 'menu' ? 'left:264px' : 'right:284px';
+  return '(() => {' +
+    'if (!document.querySelector("aside.tx-sidebar")) return "sem barra";' +
+    'if (document.getElementById("mesa-fecha-' + tipo + '")) return "ja tinha";' +
     'const b = document.createElement("button");' +
-    'b.id = "mesa-fecha";' +
+    'b.id = "mesa-fecha-' + tipo + '";' +
     'b.type = "button";' +
-    'b.title = "Fechar a lista";' +
+    'b.title = "Fechar";' +
     'b.textContent = "✕";' +
-    'b.setAttribute("style", "position:fixed;top:10px;right:10px;z-index:60;' +
+    'b.setAttribute("style", "position:fixed;top:10px;' + lado + ';z-index:60;' +
       'width:26px;height:26px;line-height:1;padding:0;border-radius:6px;' +
       'border:1px solid rgba(255,255,255,0.18);background:rgba(20,22,26,0.95);' +
       'color:#d8dde5;font-size:13px;cursor:pointer;display:flex;' +
       'align-items:center;justify-content:center");' +
-    'b.addEventListener("click", () => console.log("mesa:fechar-lista"));' +
+    'b.addEventListener("click", () => console.log("mesa:fechar-' + tipo + '"));' +
     'document.body.appendChild(b);' +
     'return "posto";' +
   '})()';
+}
 
-const ROTEIRO_TIRA_X =
-  '(() => {' +
-    'const b = document.getElementById("mesa-fecha");' +
+function roteiroTiraX(tipo) {
+  return '(() => {' +
+    'const b = document.getElementById("mesa-fecha-' + tipo + '");' +
     'if (b) b.remove();' +
     'return "ok";' +
   '})()';
+}
 
 // Uma por console. A chave devolvida pelo insertCSS é o que permite tirar o CSS
 // depois; guardar só um booleano deixaria a folha grudada para sempre.
@@ -478,28 +510,51 @@ const listaJog = [
   { aberta: false, chave: null },
   { aberta: false, chave: null }
 ];
+const menuTx = [
+  { aberta: false, chave: null },
+  { aberta: false, chave: null }
+];
+const LADOS = {
+  lista: { estado: listaJog, css: CSS_LISTA_JOGADORES, botao: 'jogCaixa' },
+  menu: { estado: menuTx, css: CSS_MENU_TX, botao: 'menuTx' }
+};
 
-async function pintaLista(i) {
+async function pintaLado(i, tipo) {
+  const lado = LADOS[tipo];
   const wv = document.getElementById('wv' + i);
-  const caixa = document.getElementById('jogCaixa' + i);
-  const est = listaJog[i];
-  if (caixa) caixa.classList.toggle('aberta', est.aberta);
+  const botao = document.getElementById(lado.botao + i);
+  const est = lado.estado[i];
+  if (botao) {
+    botao.classList.toggle('aberta', est.aberta);
+    botao.setAttribute('aria-pressed', String(est.aberta));
+  }
 
   if (!wv) return;
   try {
     if (est.aberta) {
-      if (!est.chave) est.chave = await wv.insertCSS(CSS_LISTA_JOGADORES);
-      await wv.executeJavaScript(ROTEIRO_X_LISTA, false);
+      if (!est.chave) est.chave = await wv.insertCSS(lado.css);
+      await wv.executeJavaScript(roteiroX(tipo), false);
     } else if (est.chave) {
       await wv.removeInsertedCSS(est.chave);
       est.chave = null;
-      await wv.executeJavaScript(ROTEIRO_TIRA_X, false);
+      await wv.executeJavaScript(roteiroTiraX(tipo), false);
     }
   } catch (e) {
     // Webview recarregando no meio do clique: a folha volta sozinha no dom-ready.
     est.chave = null;
   }
 }
+
+function pintaLista(i) { return pintaLado(i, 'lista'); }
+
+function alternaMenu(i) {
+  menuTx[i].aberta = !menuTx[i].aberta;
+  pintaLado(i, 'menu');
+}
+
+document.querySelectorAll('[data-menu-tx]').forEach(b => {
+  b.addEventListener('click', () => alternaMenu(Number(b.dataset.menuTx)));
+});
 
 function alternaLista(i) {
   // A chave NÃO se perde aqui: ela é o que o removeInsertedCSS pede para tirar a
@@ -1115,6 +1170,10 @@ const ROTEIRO_FATIA = `
   // console.log e o painel fecha a lista pelo caminho normal.
   wv.addEventListener('console-message', (e) => {
     const msg = String((e && (e.message || e.args)) || '');
+    if (msg.indexOf('mesa:fechar-menu') >= 0) {
+      if (menuTx[i].aberta) alternaMenu(i);
+      return;
+    }
     if (msg.indexOf('mesa:fechar-lista') < 0) return;
     if (!listaJog[i].aberta) return;
     window.api.diag('lista ' + i + ': fechada pelo X');
@@ -1125,7 +1184,9 @@ const ROTEIRO_FATIA = `
     try { await wv.insertCSS(CSS_SO_CONSOLE); } catch (e) {}
     // Recarregou com a lista aberta: a folha some junto com o documento.
     listaJog[i].chave = null;
+    menuTx[i].chave = null;
     if (listaJog[i].aberta) { try { await pintaLista(i); } catch (e) {} }
+    if (menuTx[i].aberta) { try { await pintaLado(i, 'menu'); } catch (e) {} }
     // Duas frentes: o CSS pega o que é DOM (barra de comando, histórico) e o
     // roteiro pega o canvas do log, que é o que importa.
     try {

@@ -1242,6 +1242,7 @@
     .cab-linha .vao { flex: 1; }
     .cab-linha .destino { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
     .cab-acoes { gap: 7px; }
+    .botao-menu-tx.aberta { border-color: var(--ambar); color: var(--ambar); }
     .sem-sinal {
       position: absolute; left: 0; right: 0; bottom: 0; top: 0; z-index: 1;
       display: flex; align-items: center; justify-content: center;
@@ -2673,6 +2674,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </span>
         </div>
         <div class="cab-linha cab-acoes">
+          <button class="botao botao-menu-tx" id="menuTx0" data-menu-tx="0" aria-pressed="false" title="Abrir o menu do txAdmin: Dashboard, Resources, Server Log, CFG Editor, estado do servidor e próximo restart" aria-label="Abrir o menu do txAdmin do servidor de cima">
+            <svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="rot">Menu</span>
+          </button>
           <span class="zoom">
             <button class="botao" data-zoom="0" data-passo="-1" title="Diminuir a letra do console" aria-label="Diminuir a letra do console"><span class="rot">A−</span></button>
             <button class="zoom-nivel" id="zoomNivel0" title="Voltar os dois consoles para 100%">100%</button>
@@ -2727,6 +2731,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </span>
         </div>
         <div class="cab-linha cab-acoes">
+          <button class="botao botao-menu-tx" id="menuTx1" data-menu-tx="1" aria-pressed="false" title="Abrir o menu do txAdmin: Dashboard, Resources, Server Log, CFG Editor, estado do servidor e próximo restart" aria-label="Abrir o menu do txAdmin do servidor de baixo">
+            <svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="rot">Menu</span>
+          </button>
           <span class="zoom">
             <button class="botao" data-zoom="1" data-passo="-1" title="Diminuir a letra do console" aria-label="Diminuir a letra do console"><span class="rot">A−</span></button>
             <button class="zoom-nivel" id="zoomNivel1" title="Voltar os dois consoles para 100%">100%</button>
