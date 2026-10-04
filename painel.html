@@ -1142,7 +1142,6 @@
     .chave-local:hover { color: var(--leitura); background: rgba(255, 255, 255, 0.05); }
     .chave-local.on { background: #2a3b4d; color: #9fd0ff; box-shadow: inset 0 0 0 1px #3d5a75; }
     .tela .estado.ruim { color: var(--vermelho); }
-    .tela .medidas { margin-left: auto; display: flex; align-items: center; gap: 7px; }
     /* Estado do servidor: pílula com LED. A etiqueta miúda e quadrada sumia no
        meio dos botões; o ponto aceso dá o estado antes da palavra ser lida —
        e a palavra continua lá, porque estado nunca pode ser só cor. */
@@ -1234,6 +1233,15 @@
        quer dizer "aqui nao tem aparelho", nao "aqui deu erro". */
     .tela { position: relative; }
     .tela > header { position: relative; z-index: 2; }
+    /* Duas linhas (04/10/2026): com o logo e as chaves de produção a linha
+       única estourava — "NO AR" quebrava e os botões da direita sumiam. Em
+       cima, quem é o servidor e como ele está; embaixo, o que dá para fazer. */
+    .tela > header { flex-direction: column; align-items: stretch; gap: 7px; padding: 9px 12px 8px; }
+    .cab-linha { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .cab-linha > * { flex: none; }
+    .cab-linha .vao { flex: 1; }
+    .cab-linha .destino { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+    .cab-acoes { gap: 7px; }
     .sem-sinal {
       position: absolute; left: 0; right: 0; bottom: 0; top: 0; z-index: 1;
       display: flex; align-items: center; justify-content: center;
@@ -2651,21 +2659,27 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <section class="modo on" id="modoServidores">
     <div class="tela">
       <header>
-        <span class="selo" id="selo0"></span>
-        <img class="logo-serv" id="logo0" alt="" hidden>
-        <span class="serigrafia" id="nome0"></span>
-        <span class="destino" id="dest0"></span>
-        <span class="escolha-local" id="escolha0" hidden></span>
-        <span class="estado" id="est0"></span>
-        <span class="medidas">
+        <div class="cab-linha cab-id">
+          <span class="selo" id="selo0"></span>
+          <img class="logo-serv" id="logo0" alt="" hidden>
+          <span class="serigrafia" id="nome0"></span>
+          <span class="destino" id="dest0"></span>
+          <span class="escolha-local" id="escolha0" hidden></span>
+          <span class="vao"></span>
+          <span class="estado" id="est0"></span>
           <span class="pastilha" id="sv0"></span>
+          <span class="jogadores" id="jogCaixa0" style="display:none" role="button" tabindex="0" title="Abrir a lista de jogadores do txAdmin" aria-label="Abrir a lista de jogadores do servidor de cima">
+          <span class="n" id="jog0">0</span><span class="rot">online</span>
+        </span>
+        </div>
+        <div class="cab-linha cab-acoes">
           <span class="zoom">
             <button class="botao" data-zoom="0" data-passo="-1" title="Diminuir a letra do console" aria-label="Diminuir a letra do console"><span class="rot">A−</span></button>
             <button class="zoom-nivel" id="zoomNivel0" title="Voltar os dois consoles para 100%">100%</button>
             <button class="botao" data-zoom="0" data-passo="1" title="Aumentar a letra do console" aria-label="Aumentar a letra do console"><span class="rot">A+</span></button>
           </span>
-        </span>
-        <span class="grupo-quente">
+          <span class="vao"></span>
+          <span class="grupo-quente">
           <button class="botao acao-quente" data-liga="0" title="LIGAR o servidor" aria-label="Ligar o servidor" hidden>
             <svg viewBox="0 0 16 16"><use href="#ic-power"/></svg><span class="rot">Ligar</span>
           </button>
@@ -2676,11 +2690,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg><span class="rot">Reiniciar</span>
           </button>
         </span>
-        <button class="botao" data-recarrega="0" title="Recarregar esta tela" aria-label="Recarregar a tela de cima"><svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg></button>
-        <button class="botao" data-abre="0" title="Abrir no navegador" aria-label="Abrir a tela de cima no navegador"><svg viewBox="0 0 16 16"><use href="#ic-sai"/></svg></button>
-        <span class="jogadores" id="jogCaixa0" style="display:none" role="button" tabindex="0" title="Abrir a lista de jogadores do txAdmin" aria-label="Abrir a lista de jogadores do servidor de cima">
-          <span class="n" id="jog0">0</span><span class="rot">online</span>
-        </span>
+          <button class="botao" data-recarrega="0" title="Recarregar esta tela" aria-label="Recarregar a tela de cima"><svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg></button>
+          <button class="botao" data-abre="0" title="Abrir no navegador" aria-label="Abrir a tela de cima no navegador"><svg viewBox="0 0 16 16"><use href="#ic-sai"/></svg></button>
+        </div>
       </header>
       <webview id="wv0" partition="persist:txadmin-remoto"></webview>
       <div class="sem-sinal" id="off0" hidden>
@@ -2701,21 +2713,27 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     <div class="tela">
       <header>
-        <span class="selo" id="selo1"></span>
-        <img class="logo-serv" id="logo1" alt="" hidden>
-        <span class="serigrafia" id="nome1"></span>
-        <span class="destino" id="dest1"></span>
-        <span class="escolha-local" id="escolha1" hidden></span>
-        <span class="estado" id="est1"></span>
-        <span class="medidas">
+        <div class="cab-linha cab-id">
+          <span class="selo" id="selo1"></span>
+          <img class="logo-serv" id="logo1" alt="" hidden>
+          <span class="serigrafia" id="nome1"></span>
+          <span class="destino" id="dest1"></span>
+          <span class="escolha-local" id="escolha1" hidden></span>
+          <span class="vao"></span>
+          <span class="estado" id="est1"></span>
           <span class="pastilha" id="sv1"></span>
+          <span class="jogadores" id="jogCaixa1" style="display:none" role="button" tabindex="0" title="Abrir a lista de jogadores do txAdmin" aria-label="Abrir a lista de jogadores do servidor de baixo">
+          <span class="n" id="jog1">0</span><span class="rot">online</span>
+        </span>
+        </div>
+        <div class="cab-linha cab-acoes">
           <span class="zoom">
             <button class="botao" data-zoom="1" data-passo="-1" title="Diminuir a letra do console" aria-label="Diminuir a letra do console"><span class="rot">A−</span></button>
             <button class="zoom-nivel" id="zoomNivel1" title="Voltar os dois consoles para 100%">100%</button>
             <button class="botao" data-zoom="1" data-passo="1" title="Aumentar a letra do console" aria-label="Aumentar a letra do console"><span class="rot">A+</span></button>
           </span>
-        </span>
-        <span class="grupo-quente">
+          <span class="vao"></span>
+          <span class="grupo-quente">
           <button class="botao acao-quente" data-liga="1" title="LIGAR o servidor" aria-label="Ligar o servidor" hidden>
             <svg viewBox="0 0 16 16"><use href="#ic-power"/></svg><span class="rot">Ligar</span>
           </button>
@@ -2726,12 +2744,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg><span class="rot">Reiniciar</span>
           </button>
         </span>
-        <button class="botao" data-configura-local title="Configurar os servidores locais" aria-label="Configurar os servidores locais"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
-        <button class="botao" data-recarrega="1" title="Recarregar esta tela" aria-label="Recarregar a tela de baixo"><svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg></button>
-        <button class="botao" data-abre="1" title="Abrir no navegador" aria-label="Abrir a tela de baixo no navegador"><svg viewBox="0 0 16 16"><use href="#ic-sai"/></svg></button>
-        <span class="jogadores" id="jogCaixa1" style="display:none" role="button" tabindex="0" title="Abrir a lista de jogadores do txAdmin" aria-label="Abrir a lista de jogadores do servidor de baixo">
-          <span class="n" id="jog1">0</span><span class="rot">online</span>
-        </span>
+          <button class="botao" data-configura-local title="Configurar os servidores locais" aria-label="Configurar os servidores locais"><svg viewBox="0 0 16 16"><use href="#ic-ajuste"/></svg></button>
+          <button class="botao" data-recarrega="1" title="Recarregar esta tela" aria-label="Recarregar a tela de baixo"><svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg></button>
+          <button class="botao" data-abre="1" title="Abrir no navegador" aria-label="Abrir a tela de baixo no navegador"><svg viewBox="0 0 16 16"><use href="#ic-sai"/></svg></button>
+        </div>
       </header>
       <webview id="wv1" partition="persist:txadmin-local"></webview>
       <div class="sem-sinal" id="off1" hidden>
