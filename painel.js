@@ -283,11 +283,18 @@ function pintaEscolha(i) {
       b.appendChild(img);
     }
     b.appendChild(document.createTextNode(nomeCurto(s.nome)));
+    // Jogadores online de cada servidor, sempre, mesmo do que não está na tela.
+    const n = document.createElement('span');
+    n.className = 'chave-n';
+    n.dataset.chave = 'producao:' + s.nome;
+    b.appendChild(n);
     b.title = 'Mostrar ' + s.nome + ' (' + (s.host || 'localhost') + ':' + s.porta + ')';
     b.setAttribute('aria-pressed', String(ativo));
     b.addEventListener('click', () => escolheServidor(i, j));
     caixa.appendChild(b);
   });
+  // Pode rodar no boot antes de `caiuEm` existir: sem contagem ainda, tudo bem.
+  try { pintaJogadoresServ(); } catch (e) {}
 }
 
 function aplicaRespostaServidores(r) {
@@ -855,14 +862,50 @@ async function leEstadoServidor(wv, i) {
   aplicaBotoesQuentes(i);
   sv.textContent = r.ligado === null ? '' : (r.ligado ? 'No ar' : 'Fora');
   sv.className = 'pastilha' + (r.ligado ? ' no-ar' : r.ligado === false ? ' fora' : '');
-  caixa.style.display = r.jogadores == null ? 'none' : 'flex';
-  if (r.jogadores != null) {
-    const vazio = r.jogadores === 0;
-    jog.textContent = r.jogadores;
-    jog.className = 'n' + (vazio ? ' vazio' : '');
-    caixa.classList.toggle('vazia', vazio);
-  }
+  // Com o dynamic.json respondendo, é ele que manda (mais fresco); o título do
+  // txAdmin fica de reserva para quando a porta do jogo não responde.
+  if (contagemDinamica(i) != null) { pintaJogadoresServ(); return; }
+  pintaContagem(i, r.jogadores);
 }
+
+function pintaContagem(i, n) {
+  const caixa = document.getElementById('jogCaixa' + i);
+  const jog = document.getElementById('jog' + i);
+  caixa.style.display = n == null ? 'none' : 'flex';
+  if (n == null) return;
+  const vazio = n === 0;
+  jog.textContent = n;
+  jog.className = 'n' + (vazio ? ' vazio' : '');
+  caixa.classList.toggle('vazia', vazio);
+}
+
+// Jogadores de cada servidor pelo dynamic.json, empurrados pelo main de 5 em
+// 5 s (05/10/2026).
+// `var`, não `let`: pintaEscolha chama a pintura antes desta linha rodar no boot.
+var jogadoresServ = {};
+
+function contagemDinamica(i) {
+  const s = servidores[i];
+  if (!s) return null;
+  const v = i === 1 ? jogadoresServ.local : jogadoresServ['producao:' + s.nome];
+  return v ? v.n : null;
+}
+
+function pintaJogadoresServ() {
+  [0, 1].forEach(i => {
+    const n = contagemDinamica(i);
+    if (n != null && caiuEm[i] === null) pintaContagem(i, n);
+  });
+  document.querySelectorAll('.chave-n').forEach(el => {
+    const v = jogadoresServ[el.dataset.chave];
+    el.textContent = v ? String(v.n) : '';
+    el.classList.toggle('vazio', !!v && v.n === 0);
+    el.hidden = !v;
+  });
+}
+
+window.api.onJogadores((d) => { jogadoresServ = d || {}; pintaJogadoresServ(); });
+window.api.jogadoresGet().then((d) => { jogadoresServ = d || {}; pintaJogadoresServ(); }).catch(() => {});
 
 let txCred = null;
 const credPronta = window.api.txCred().then(c => { txCred = c; return c; });

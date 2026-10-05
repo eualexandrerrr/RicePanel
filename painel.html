@@ -1627,6 +1627,14 @@
     .logo-serv[hidden] { display: none; }
     .chave-local { display: inline-flex; align-items: center; gap: 6px; }
     .chave-logo { width: 16px; height: 16px; object-fit: contain; border-radius: 3px; }
+    /* Jogadores online de cada servidor de produção, dentro da própria chave. */
+    .chave-n {
+      font-variant-numeric: tabular-nums; font-weight: 700; font-size: 11px;
+      padding: 1px 6px; border-radius: 8px; margin-left: 2px;
+      background: rgba(166, 227, 161, 0.16); color: var(--green);
+    }
+    .chave-n.vazio { background: rgba(255, 255, 255, 0.06); color: var(--serigrafia-fraca); }
+    .chave-n[hidden] { display: none; }
     #faixaMeio .resumo .celula { gap: 10px; padding: 12px 16px 14px; }
     #faixaMeio .resumo .celula > :not(.cap) { margin: 0; }
     .resumo-corpo { min-width: 0; width: 100%; }

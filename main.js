@@ -401,6 +401,7 @@ function createWindow() {
   }
   dev.iniciar({ log, empurra, getWindow: () => mainWindow });
   vidro.iniciar({ app, log, empurra });
+  vigiaJogadores();
 
   win.webContents.on('console-message', (e, nivel, msg, linha, fonte) => {
     if (nivel >= 2) log('renderer: ' + String(msg).slice(0, 200) + ' (' + fonte + ':' + linha + ')');
@@ -1253,6 +1254,64 @@ ipcMain.handle('serv-catalogo-set', async (e, novo) => {
     return { ok: false, error: err.message };
   }
 });
+
+// --- Jogadores online, direto do servidor de jogo (05/10/2026) --------------
+// A contagem vinha do título da aba do txAdmin, lida de 10 em 10 s, e só do
+// servidor que a tela mostrava. O FXServer responde `/dynamic.json` na porta do
+// jogo (30120, 30121…) com `clients` e `sv_maxclients` — uns 150 bytes, sem
+// login. Lido de 5 em 5 s para TODOS os servidores de produção e o local
+// ativo, com 3 s de prazo e nunca duas rodadas ao mesmo tempo.
+const JOGADORES_MS = 5000;
+let jogadoresAgora = {};
+let jogadoresRodando = false;
+
+async function leDinamico(url) {
+  const ctrl = new AbortController();
+  const prazo = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const n = Number(j.clients);
+    if (!Number.isFinite(n)) return null;
+    return { n, max: Number(j.sv_maxclients) || null };
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(prazo);
+  }
+}
+
+async function leJogadores() {
+  if (jogadoresRodando) return;
+  jogadoresRodando = true;
+  try {
+    const cat = lerCatalogo();
+    const alvos = cat.producao.map(p => ({ chave: 'producao:' + p.nome, url: 'http://' + p.host + ':' + (p.jogo || 30120) + '/dynamic.json' }));
+    const l = cat.locais[cat.ativo.local];
+    if (l) alvos.push({ chave: 'local', url: 'http://127.0.0.1:' + (l.jogo || 30120) + '/dynamic.json' });
+    const novo = {};
+    await Promise.all(alvos.map(async (a) => { novo[a.chave] = await leDinamico(a.url); }));
+    if (JSON.stringify(novo) !== JSON.stringify(jogadoresAgora)) {
+      jogadoresAgora = novo;
+      empurra('jogadores-update', novo);
+    }
+  } finally {
+    jogadoresRodando = false;
+  }
+}
+
+function vigiaJogadores() {
+  const passo = async () => {
+    // Painel escondido (Mirante nativo na frente, janela fechada) não pergunta.
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) await leJogadores();
+    const t = setTimeout(passo, JOGADORES_MS);
+    if (t.unref) t.unref();
+  };
+  passo();
+}
+
+ipcMain.handle('jogadores-get', async () => jogadoresAgora);
 
 // Trocar qual servidor a tela mostra. `grupo` é 'producao' ou 'local'.
 ipcMain.handle('serv-ativa', async (e, grupo, indice) => {

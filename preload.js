@@ -52,6 +52,9 @@ contextBridge.exposeInMainWorld('api', {
   // Google Tarefas: concluir pela agenda do Mirante.
   tarefaConcluir: (lista, id) => ipcRenderer.invoke('tarefa-concluir', lista, id),
   onAgenda: (cb) => ipcRenderer.on('agenda-update', (e, d) => cb(d)),
+  // Jogadores online de cada servidor, pelo dynamic.json (main.js).
+  jogadoresGet: () => ipcRenderer.invoke('jogadores-get'),
+  onJogadores: (cb) => ipcRenderer.on('jogadores-update', (e, d) => cb(d)),
 
   // modo Dev: emulador e bundler
   devProjetos: () => ipcRenderer.invoke('dev-projetos'),
