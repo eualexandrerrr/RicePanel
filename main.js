@@ -486,6 +486,12 @@ function empurra(canal, dados) {
 }
 
 async function tique() {
+  // Painel escondido (Mirante nativo na frente, janela fechada): ninguém vê o
+  // retrato da máquina, então não se lê nada. O vídeo segue no tique próprio.
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) {
+    empurraPip();
+    return;
+  }
   try {
     const [retrato, hypr, musica] = await Promise.all([
       sistema.retrato(), sistema.hyprland(), sistema.musica()

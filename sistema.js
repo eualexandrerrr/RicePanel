@@ -362,9 +362,19 @@ function temNvidiaNoHost() {
   return false;
 }
 
+// Leitura guardada por 6 s (05/10/2026): o tique é de 2 s e cada `nvidia-smi`
+// custa ~53 ms de processo novo. Temperatura e uso de GPU não mudam de verdade
+// em 2 s; 6 s corta três de cada quatro aberturas. (Um `nvidia-smi -lms` aberto
+// de vez ficaria órfão a cada vez que o painel é fechado à força.)
+const NVIDIA_VALIDADE_MS = 6000;
+let nvidiaCache = { em: 0, bruto: '' };
+
 async function lerGpusNvidia() {
   if (!temNvidiaNoHost()) return [];
-  const lidas = analisaNvidiaSmi(await roda('nvidia-smi', CONSULTA_NVIDIA, 3000));
+  if (Date.now() - nvidiaCache.em > NVIDIA_VALIDADE_MS) {
+    nvidiaCache = { em: Date.now(), bruto: await roda('nvidia-smi', CONSULTA_NVIDIA, 3000) };
+  }
+  const lidas = analisaNvidiaSmi(nvidiaCache.bruto);
   return lidas.map((g, i) => Object.assign({ chave: 'nvidia' + (g.indice || i), marca: 'NVIDIA' }, g));
 }
 
@@ -759,6 +769,9 @@ async function hyprland() {
 
 // O que está tocando. playerctl devolve código != 0 quando não há player.
 async function musica() {
+  // playerctl é do Linux (MPRIS). No Windows não existe, e tentar abrir a cada
+  // 2 s custava ~36 ms por tentativa à toa.
+  if (WIN) return null;
   const out = await roda('playerctl', [
     'metadata', '--format',
     '{{status}}{{artist}}{{title}}{{mpris:length}}{{position}}{{playerName}}'
