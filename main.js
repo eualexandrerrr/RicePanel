@@ -324,13 +324,7 @@ function createWindow() {
     // de criação — não dá para ligar e desligar depois —, então a janela nasce
     // transparente e quem pinta o fundo é o CSS: a Estação pinta a chapa opaca,
     // o Mirante não pinta nada.
-    //
-    // No Windows, NÃO (04/10/2026): janela transparente lá é janela "layered",
-    // desenhada pela CPU — cada quadro copia os 1080x1920 inteiros. Marcar
-    // texto no console, que repinta a cada movimento do mouse, ficava lento.
-    // Opaca, a página pinta o papel de parede ela mesma (vidro.js entrega a
-    // cópia nítida) e o desenho volta para a GPU.
-    transparent: process.platform !== 'win32',
+    transparent: true,
     hasShadow: false,
     resizable: true,
     // Painel de parede não sai do monitor dele (13/09/2026): no Windows, arrastar
@@ -343,7 +337,7 @@ function createWindow() {
     // o "Electron - 1 janela" voltava. 'toolbar' cria a janela com WS_EX_TOOLWINDOW, que nunca entra na barra
     // nem no Alt+Tab, que é o certo para um painel de widgets.
     type: process.platform === 'win32' ? 'toolbar' : undefined,
-    backgroundColor: process.platform === 'win32' ? '#11111b' : '#00000000',
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

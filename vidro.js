@@ -111,12 +111,6 @@ function destino() {
   return path.join(deps.app.getPath('userData'), 'vidro-fundo.jpg');
 }
 
-// Cópia NÍTIDA, no tamanho do monitor: no Windows a janela é opaca (ver
-// main.js) e é a própria página que pinta o papel de parede atrás de tudo.
-function destinoNitido() {
-  return path.join(deps.app.getPath('userData'), 'papel-nitido.jpg');
-}
-
 // Corta para o formato exato do monitor antes de desfocar: desfocar e depois
 // esticar deixa o grão do blur alongado, e a placa passa a mostrar um pedaço
 // que não é o que está atrás dela.
@@ -140,17 +134,6 @@ async function gera(alvo) {
   if (!fs.existsSync(saida)) {
     log('ffmpeg não gerou o fundo (' + String(out).trim().slice(0, 120) + ')');
     return false;
-  }
-  if (process.platform === 'win32') {
-    // Mesmo corte do desfocado, sem o blur: os dois casam pixel a pixel, e a
-    // placa continua mostrando o pedaço exato do papel que está atrás dela.
-    await roda('ffmpeg', [
-      '-y', '-loglevel', 'error',
-      '-i', alvo.arquivo,
-      '-vf', filtro.split(',').slice(0, 2).join(','),
-      '-q:v', '2',
-      destinoNitido()
-    ], 30000);
   }
   return true;
 }
@@ -195,11 +178,8 @@ function atual() {
   if (!estado.arquivo) return { fundo: null };
   try {
     const bruto = fs.readFileSync(estado.arquivo);
-    let nitido = null;
-    try { nitido = 'data:image/jpeg;base64,' + fs.readFileSync(destinoNitido()).toString('base64'); } catch (e) {}
     return {
       fundo: 'data:image/jpeg;base64,' + bruto.toString('base64'),
-      nitido: process.platform === 'win32' ? nitido : null,
       largura: estado.largura,
       altura: estado.altura
     };
