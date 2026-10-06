@@ -1415,7 +1415,9 @@ document.getElementById('religaOk').addEventListener('click', async () => {
   est.textContent = 'pedindo reinício';
   est.classList.remove('ruim');
   let r = null;
-  try { r = await semDialogoTx(document.getElementById('wv' + i), ROTEIRO_RELIGA); } catch (e) {}
+  let erro = '';
+  try { r = await semDialogoTx(document.getElementById('wv' + i), ROTEIRO_RELIGA); } catch (e) { erro = e.message; }
+  window.api.diag('reiniciar ' + (servidores[i] && servidores[i].nome) + ': ' + (r ? JSON.stringify(r) : 'sem retorno ' + erro));
   if (!r || !r.ok) {
     est.textContent = (r && r.motivo) || 'não deu para reiniciar';
     est.classList.add('ruim');
