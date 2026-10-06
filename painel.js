@@ -626,6 +626,9 @@ const ROTEIRO_RELIGA =
       'return p && String(p.getAttribute("d") || "").indexOf("M3 12a9 9 0 1 0") === 0;' +
     '});' +
     'if (!alvo) return { ok: false, motivo: "botão de reiniciar não encontrado" };' +
+    // Botão apagado no txAdmin (processo fora): click() não faz nada e o
+    // painel diria "reinício pedido" sem ter pedido.
+    'if (alvo.disabled) return { ok: false, motivo: "o txAdmin não deixa reiniciar agora" };' +
     'alvo.click();' +
     'await espera(900);' +
     'const cx = document.querySelector("[role=alertdialog], [role=dialog]");' +
@@ -739,6 +742,7 @@ const ROTEIRO_DESLIGA =
 // nem ele respondeu. Os botões quentes obedecem a isto.
 const estadoLigado = [null, null];
 const ultimoBotoes = ['', ''];
+const semLeituraDesde = [0, 0];
 // Só o servidor DESTA máquina sobe processo pelo painel; produção não. Sem pasta
 // e comando cadastrados no local ativo, o botão nem aparece com o txAdmin fora.
 function receitaDaTela(i) {
@@ -851,6 +855,19 @@ async function leEstadoServidor(wv, i) {
   const sv = document.getElementById('sv' + i);
   const caixa = document.getElementById('jogCaixa' + i);
   const jog = document.getElementById('jog' + i);
+  // txAdmin responde mas a página não mostra estado: o socket dela morreu numa
+  // queda de rede e não volta sozinho. Sem isso o Reiniciar ficava apagado até
+  // alguém recarregar a tela na mão. Recarrega uma vez por minuto, no máximo.
+  if (!r || r.ligado === null) {
+    if (!semLeituraDesde[i]) semLeituraDesde[i] = Date.now();
+    else if (Date.now() - semLeituraDesde[i] > 45000) {
+      semLeituraDesde[i] = Date.now();
+      window.api.diag('console ' + (i === 0 ? 'remoto' : 'local') + ': sem estado há 45 s, recarregando');
+      try { wv.reload(); } catch (e) {}
+    }
+  } else {
+    semLeituraDesde[i] = 0;
+  }
   if (!r) {
     sv.textContent = '';
     caixa.style.display = 'none';
