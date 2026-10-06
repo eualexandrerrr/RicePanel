@@ -209,17 +209,23 @@
       }, 'image/png');
     }
 
+    // `intervaloMs: 0` = fundo PARADO (06/10/2026): um quadro só, desenhado
+    // quando o JSON termina de carregar. Trocar o background-image a cada 2,5 s
+    // aparecia na tela como um pisca (o halo da aurora escurecia e voltava), e
+    // cada troca custava blur e PNG de novo.
+    const parado = !intervaloMs;
     function avanca() {
       const total = anim.totalFrames;
       const taxa = anim.frameRate;
       if (!total || !taxa) return;
-      quadro = (quadro + taxa * intervaloMs / 1000) % total;
+      quadro = parado ? Math.floor(total * 0.4) : (quadro + taxa * intervaloMs / 1000) % total;
       try { anim.goToAndStop(quadro, true); } catch (e) {}
       pinta();
     }
+    if (parado) { try { anim.addEventListener('DOMLoaded', avanca); } catch (e) {} }
 
     const controlada = {
-      play() { if (!relogio) { avanca(); relogio = setInterval(avanca, intervaloMs); } },
+      play() { if (!relogio) { avanca(); if (!parado) relogio = setInterval(avanca, intervaloMs); } },
       pause() { clearInterval(relogio); relogio = null; },
       destroy() { clearInterval(relogio); relogio = null; try { anim.destroy(); } catch (e) {} }
     };
@@ -1654,8 +1660,9 @@
   // Primeira pintura sem esperar tique nenhum.
   pintaRelogio(true);
   pintaMes();
-  criarFundoBakeado('brumaMirante', 'bruma.json', { w: 900, h: 1600, blurPx: 46, intervaloMs: 3000 });
-  criarFundoBakeado('auroraHora', 'aurora.json', { w: 600, h: 320, blurPx: 3, intervaloMs: 2500 });
+  // Parados (intervaloMs 0): animados, piscavam a cada troca de quadro.
+  criarFundoBakeado('brumaMirante', 'bruma.json', { w: 900, h: 1600, blurPx: 46, intervaloMs: 0 });
+  criarFundoBakeado('auroraHora', 'aurora.json', { w: 600, h: 320, blurPx: 3, intervaloMs: 0 });
   // Pequeno e sem blur: fica no lottie normal, 20 fps já é barato.
   musicaAnim = poeLottie('wOndas', 'ondas.json', {}, 20);
   buscaAgenda(false);
