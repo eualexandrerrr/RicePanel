@@ -78,7 +78,20 @@ async function wallpaperDoMonitorEmPe() {
 // recortada de cada um em `Themes\Transcoded_NNN`. O número não diz qual é o
 // monitor, mas o formato diz: a cópia em pé é a do monitor em pé. O arquivo
 // muda de conteúdo sem mudar de nome, então a data entra na identidade.
+// Wallpaper Engine desenha por cima do papel de parede do Windows (06/10/2026):
+// o Transcoded_NNN fica com a imagem de antes e o vidro saía de uma foto que
+// não está na tela (roxo sobre a cena azul). Cena animada não vira imagem, então
+// com ele rodando o vidro cai no véu escuro liso do CSS, que combina com qualquer
+// fundo.
+async function wallpaperEngineRodando() {
+  const out = await roda('tasklist', ['/FI', 'IMAGENAME eq wallpaper64.exe', '/FI', 'STATUS eq RUNNING', '/NH'], 5000);
+  if (/wallpaper64\.exe/i.test(out)) return true;
+  const out32 = await roda('tasklist', ['/FI', 'IMAGENAME eq wallpaper32.exe', '/NH'], 5000);
+  return /wallpaper32\.exe/i.test(out32);
+}
+
 async function wallpaperDoWindows() {
+  if (await wallpaperEngineRodando()) return null;
   const { screen } = require('electron');
   const emPe = screen.getAllDisplays().find(d => d.bounds.height > d.bounds.width);
   if (!emPe) return null;
@@ -144,7 +157,12 @@ async function atualiza() {
   if (!alvo) {
     // Sem daemon de wallpaper (ou saída diferente): o painel segue inteiro, com
     // as placas caindo no véu chapado do CSS.
-    if (estado.origem !== null) log('nenhum wallpaper reportado; vidro cai no véu chapado');
+    if (estado.origem !== null) {
+      log('nenhum wallpaper reportado; vidro cai no véu chapado');
+      estado = { arquivo: null, origem: null, largura: 0, altura: 0 };
+      // Avisa a tela: sem isto o vidro velho ficava pintado até reiniciar.
+      if (deps.empurra) deps.empurra('vidro-update', atual());
+    }
     estado = { arquivo: null, origem: null, largura: 0, altura: 0 };
     return estado;
   }
