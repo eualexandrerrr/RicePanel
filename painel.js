@@ -607,52 +607,27 @@ const LEITOR_ESTADO =
     '};' +
   '})()';
 
-// Reiniciar é o botão do próprio txAdmin, no menu que o painel esconde. Os
-// botões não têm title nem aria-label: o que identifica cada um é o desenho do
-// ícone. O de reiniciar é o lucide rotate-ccw, que começa com "M3 12a9 9 0 1 0".
-// Os vizinhos são desligar e anúncio — errar de botão aqui derruba o servidor,
-// por isso a checagem é pelo caminho do SVG e não por posição na lista.
-//
-// Depois de clicar, o txAdmin abre o diálogo dele. O painel lê o texto: se não
-// falar em reiniciar/restart, aperta Escape e devolve erro em vez de confirmar
-// às cegas.
+// Reiniciar vai pela API do próprio txAdmin, a mesma que o botão dele chama:
+// POST /fxserver/controls {action: "restart"}. Antes o painel clicava no botão
+// escondido e esperava o diálogo; às vezes o diálogo não abria e o painel dizia
+// "reinício pedido" sem nada acontecer. O token CSRF sai do HTML de "/", que o
+// txAdmin entrega com a sessão logada (txConsts.preAuth).
 const ROTEIRO_RELIGA =
   '(async () => {' +
-    'const espera = (ms) => new Promise(r => setTimeout(r, ms));' +
-    'const aside = document.querySelector("aside.tx-sidebar");' +
-    'if (!aside) return { ok: false, motivo: "menu do txAdmin não encontrado" };' +
-    'const alvo = Array.from(aside.querySelectorAll("button")).find(b => {' +
-      'const p = b.querySelector("svg path");' +
-      'return p && String(p.getAttribute("d") || "").indexOf("M3 12a9 9 0 1 0") === 0;' +
+    'const html = await (await fetch("/", { cache: "no-store" })).text();' +
+    'const marca = "\\"csrfToken\\":\\"";' +
+    'const a = html.indexOf(marca);' +
+    'if (a < 0) return { ok: false, motivo: "sessão do txAdmin sem token — faça login de novo" };' +
+    'const tok = html.slice(a + marca.length, html.indexOf("\\"", a + marca.length));' +
+    'const res = await fetch("/fxserver/controls", {' +
+      'method: "POST",' +
+      'headers: { "Content-Type": "application/json", "X-TxAdmin-CsrfToken": tok },' +
+      'body: JSON.stringify({ action: "restart" })' +
     '});' +
-    'if (!alvo) return { ok: false, motivo: "botão de reiniciar não encontrado" };' +
-    // Botão apagado no txAdmin (processo fora): click() não faz nada e o
-    // painel diria "reinício pedido" sem ter pedido.
-    'if (alvo.disabled) return { ok: false, motivo: "o txAdmin não deixa reiniciar agora" };' +
-    'alvo.click();' +
-    'await espera(900);' +
-    'const cx = document.querySelector("[role=alertdialog], [role=dialog]");' +
-    'if (!cx) return { ok: true, dialogo: false };' +
-    'const texto = (cx.textContent || "").toLowerCase();' +
-    'if (texto.indexOf("restart") < 0 && texto.indexOf("reinici") < 0) {' +
-      'document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));' +
-      'return { ok: false, motivo: "o diálogo aberto não era de reinício" };' +
-    '}' +
-    // O txAdmin rotula o confirmar de "Continue" — nao de Restart nem Confirm.
-    // Por isso aqui vao duas redes: a lista de palavras e, se ela falhar, o
-    // ultimo botao que nao seja Cancelar (o AlertDialog poe a acao por ultimo).
-    'const bts = Array.from(cx.querySelectorAll("button"));' +
-    'const rotulo = (b) => (b.textContent || "").trim().toLowerCase();' +
-    'const cancela = (b) => {' +
-      'const t = rotulo(b);' +
-      'return t.indexOf("cancel") >= 0 || t.indexOf("voltar") >= 0 || t.indexOf("fechar") >= 0;' +
-    '};' +
-    'const palavras = ["continue", "continuar", "restart", "reinici", "confirm", "proceed", "sim", "yes"];' +
-    'let sim = bts.find(b => !cancela(b) && palavras.some(p => rotulo(b).indexOf(p) >= 0));' +
-    'if (!sim) { const sobra = bts.filter(b => !cancela(b) && rotulo(b)); sim = sobra[sobra.length - 1]; }' +
-    'if (!sim) return { ok: false, motivo: "não achei o confirmar do txAdmin" };' +
-    'sim.click();' +
-    'return { ok: true, dialogo: true };' +
+    'let j = null;' +
+    'try { j = await res.json(); } catch (e) {}' +
+    'if (j && j.type === "success") return { ok: true, dialogo: true };' +
+    'return { ok: false, motivo: (j && j.msg) || ("txAdmin respondeu HTTP " + res.status) };' +
   '})()';
 
 // Ligar: o botao aparece no MESMO menu, no lugar do desligar, quando o txAdmin
