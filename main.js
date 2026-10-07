@@ -64,6 +64,12 @@ if (process.env.RICEPANEL_COM_GPU === '1') {
   // No Windows a janela transparente não passa pelo Wayland, e a falha acima
   // não se aplica: lá a aceleração fica no padrão do Electron.
   app.disableHardwareAcceleration();
+} else {
+  // Windows: o decodificador de vídeo por hardware trava o VP9 720p60 do
+  // YouTube na parede (medido em 07/10/2026: buffer cheio, readyState 2,
+  // player parado em "carregando" e CPU zerada). Decodificando na CPU, toca
+  // em sincronia com o Chrome. O resto da GPU segue ligado.
+  app.commandLine.appendSwitch('disable-accelerated-video-decode');
 }
 app.setAppUserModelId('com.alexandre.mirante');
 

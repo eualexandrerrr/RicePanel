@@ -247,24 +247,28 @@ function roteiro(volume) {
   // a orelha. Relógio = posição lida pela extensão + tempo desde a leitura
   // (leitura com mais de 6 s não vale: Chrome pausado, extensão parada).
   // Desvio pequeno se corrige pela TAXA do elemento (a parede é muda, ninguém
-  // ouve o 1,1×), proporcional ao erro; salto com `seekTo` só acima de 2 s,
+  // ouve o 1,5×), proporcional ao erro; salto com `seekTo` só acima de 8 s,
   // porque salto rebufferiza e deixa a parede atrás de novo. Live: só taxa, e
   // desvio acima de 20 s é linha do tempo diferente — não mexe.
   '  function sinc(){' +
   '    try{ var ref=window.__ricepanelPos, v=document.querySelector("video"), p=document.getElementById("movie_player");' +
   '      var velo=window.__ricepanelVelo||1;' +
   '      if(!ref||!v||v.paused||Date.now()-ref.em>6000){ if(v&&window.__ricepanelTaxa){ v.playbackRate=velo; window.__ricepanelTaxa=0; } return; }' +
+  // Bufferizando, currentTime fica parado e o desvio cresce sozinho: medir aí
+  // gerava salto atrás de salto, cada um com novo buffer (spinner sem fim).
+  // A espera do próximo salto conta a partir de quando o vídeo volta a andar.
+  '      if(v.seeking||v.readyState<3){ window.__ricepanelSinc=Date.now(); return; }' +
   '      var esperado=ref.pos+(Date.now()-ref.em)/1000*velo, desvio=v.currentTime-esperado;' +
   '      if(Date.now()-(window.__ricepanelSincLog||0)>30000){ window.__ricepanelSincLog=Date.now();' +
   '        console.log("ricepanel: sinc desvio="+(desvio>0?"+":"")+desvio.toFixed(2)+" s taxa="+v.playbackRate.toFixed(3)+(ref.aoVivo?" ao-vivo":"")); }' +
   '      if(ref.aoVivo&&Math.abs(desvio)>20) return;' +
-  '      if(!ref.aoVivo&&Math.abs(desvio)>2){' +
+  '      if(!ref.aoVivo&&Math.abs(desvio)>8){' +
   '        if(p&&typeof p.seekTo==="function"&&Date.now()-(window.__ricepanelSinc||0)>5000){' +
   '          window.__ricepanelSinc=Date.now(); p.seekTo(esperado+0.5,true);' +
   '          console.log("ricepanel: acertou com o Chrome ("+(desvio>0?"+":"")+desvio.toFixed(1)+" s)"); }' +
   '        return; }' +
-  '      var lim=ref.aoVivo?0.25:0.15;' +
-  '      var taxa=Math.abs(desvio)<0.06?velo:velo*(1-Math.max(-lim,Math.min(lim,desvio*0.6)));' +
+  '      var lim=ref.aoVivo?0.25:0.5;' +
+  '      var taxa=Math.abs(desvio)<0.06?velo:velo*(1-Math.max(-lim,Math.min(lim,desvio*(ref.aoVivo?0.6:0.3))));' +
   '      if(Math.abs(v.playbackRate-taxa)>0.004){ v.playbackRate=taxa; window.__ricepanelTaxa=(taxa!==velo)?1:0; }' +
   '    }catch(err){} }' +
   '  if(window.__ricepanelSincVigia) clearInterval(window.__ricepanelSincVigia);' +
