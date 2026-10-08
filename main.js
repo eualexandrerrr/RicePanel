@@ -1387,6 +1387,26 @@ ipcMain.handle('serv-local-sobe', async (e, indice) => {
   const r = comoSobe(alvo);
   if (!r) return { ok: false, error: 'o servidor local ' + ((alvo && alvo.nome) || '') + ' não tem bat nem comando válido' };
   r.nome = alvo.nome;
+  // FXServer já rodando ocupa a 30120 e o novo morre em "Could not bind" (08/10/2026:
+  // um VisaoRoleplay solto, sem txAdmin, travava o Michigan). Sem txAdmin na 40120
+  // a tela acha que está tudo desligado, então a checagem é por processo.
+  const vivos = await fxRodando();
+  if (vivos.length) {
+    const lista = vivos.map(v => '• ' + v.pasta + ' (PID ' + v.pid + ', desde ' + v.desde + ')').join('\n');
+    const resp = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      title: 'Servidor já rodando',
+      message: 'Já tem FXServer rodando nesta máquina',
+      detail: lista + '\n\nEle ocupa a porta do jogo e o ' + r.nome + ' não sobe junto. Matar e subir o ' + r.nome + '?',
+      buttons: ['Matar e subir', 'Cancelar'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    });
+    if (resp.response !== 0) return { ok: false, error: 'cancelado: já tem FXServer rodando' };
+    const m = await mataFx();
+    if (!m.ok) return m;
+  }
   try {
     const { spawn } = require('child_process');
     const env = Object.assign({}, process.env, r.env);
@@ -1431,7 +1451,31 @@ ipcMain.handle('serv-local-sobe', async (e, indice) => {
 // Desligar o local é matar: todo processo FX* da máquina, sem passar pelo
 // txAdmin. O cmd da bat vai junto — ela termina em `pause`, e com o console
 // escondido ninguém aperta a tecla, então ele ficaria vivo para sempre.
-ipcMain.handle('serv-local-mata', async () => {
+ipcMain.handle('serv-local-mata', () => mataFx());
+
+// FXServer de topo rodando agora (o filho `-dumpserver` fica de fora): PID,
+// pasta do servidor (a de cima do txData) e hora de início.
+function fxRodando() {
+  if (process.platform !== 'win32') return Promise.resolve([]);
+  const ps =
+    "$fx = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'FX*' });" +
+    "$ids = @($fx | ForEach-Object { $_.ProcessId });" +
+    "$fx | Where-Object { $ids -notcontains $_.ParentProcessId } | ForEach-Object {" +
+    " $_.ProcessId.ToString() + '|' + $_.ExecutablePath + '|' + $_.CreationDate.ToString('dd/MM HH:mm') }";
+  return new Promise((resolve) => {
+    require('child_process').execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps],
+      { windowsHide: true, timeout: 15000 }, (err, stdout) => {
+        resolve(String(stdout || '').split(/\r?\n/).filter(Boolean).map(l => {
+          const [pid, exe, desde] = l.split('|');
+          let pasta = path.dirname(exe || '');
+          if (/^txData$/i.test(path.basename(pasta))) pasta = path.dirname(pasta);
+          return { pid: Number(pid), pasta, desde };
+        }));
+      });
+  });
+}
+
+async function mataFx() {
   if (process.platform !== 'win32') return { ok: false, error: 'só no Windows' };
   const ps =
     "$todos = @(Get-CimInstance Win32_Process);" +
@@ -1456,7 +1500,7 @@ ipcMain.handle('serv-local-mata', async () => {
           : { ok: true, mortos: mortos || 0 });
       });
   });
-});
+}
 
 // --- Trava do teclado ------------------------------------------------------
 // Limpar o teclado sem desligar o PC. No Hyprland dá para desligar o dispositivo
