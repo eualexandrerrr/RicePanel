@@ -791,12 +791,15 @@ function aplicaBotoesQuentes(i) {
 
   // Sem resposta do txAdmin nenhum botão promete nada: quem não sabe o estado
   // não manda comando.
-  const podeDesligar = vivo && ligado === true;
+  // FXServer no ar sem txAdmin (subido fora do painel): dá para matar, não para
+  // subir outro por cima — ele morreria em "Could not bind".
+  const foraTx = fxSemTx(i);
+  const podeDesligar = (vivo && ligado === true) || foraTx;
   // Duas maneiras de ligar: pela página do txAdmin, quando ele está de pé e o
   // servidor parado; ou subindo o processo aqui na máquina, quando nem o
   // txAdmin responde. A segunda só vale para o servidor local.
   const podeLigar = vivo && ligado === false;
-  const podeSubirLocal = !vivo && !!receitaDaTela(i);
+  const podeSubirLocal = !vivo && !!receitaDaTela(i) && !foraTx;
 
   if (desliga) { desliga.disabled = !podeDesligar; desliga.hidden = podeLigar || podeSubirLocal; }
   if (religa) religa.disabled = !podeDesligar;
@@ -812,7 +815,7 @@ function aplicaBotoesQuentes(i) {
   // Uma linha no log a cada mudança: é como se confere de fora que o botão
   // seguiu o estado do servidor, sem precisar abrir a página.
   const marca = (vivo ? 'tx-ok' : 'tx-fora') + '/' +
-    (ligado === true ? 'no-ar' : ligado === false ? 'parado' : 'sem-leitura');
+    (foraTx ? 'fx-sem-tx' : ligado === true ? 'no-ar' : ligado === false ? 'parado' : 'sem-leitura');
   if (ultimoBotoes[i] !== marca) {
     ultimoBotoes[i] = marca;
     window.api.diag('botões ' + (i === 0 ? 'remoto' : 'local') + ': ' + marca +
@@ -883,11 +886,20 @@ function contagemDinamica(i) {
   return v ? v.n : null;
 }
 
+// O servidor responde na porta do jogo mas o txAdmin dele não: foi subido fora do
+// painel (ou o txAdmin morreu sozinho). Só vale para o local, que é onde o
+// dynamic.json é lido em 127.0.0.1.
+function fxSemTx(i) {
+  return i === 1 && caiuEm[1] !== null && contagemDinamica(1) != null;
+}
+
 function pintaJogadoresServ() {
   [0, 1].forEach(i => {
     const n = contagemDinamica(i);
     if (n != null && caiuEm[i] === null) pintaContagem(i, n);
   });
+  // Chegou (ou sumiu) o sinal da porta do jogo com o txAdmin fora: repinta o cartão.
+  if (caiuEm[1] !== null) marcaCaido(1, ultimoMotivo[1]);
   document.querySelectorAll('.chave-n').forEach(el => {
     const v = jogadoresServ[el.dataset.chave];
     el.textContent = v ? String(v.n) : '';
@@ -1499,6 +1511,7 @@ document.getElementById('desligaOk').addEventListener('click', async () => {
 // uma batida de fora, do processo principal, a cada 15 s.
 const PULSO_INTERVALO = 15000;
 const caiuEm = [null, null];
+const ultimoMotivo = [null, null];
 
 // Códigos de rede do Chromium que valem por queda de verdade.
 const CODIGO_REDE = {
@@ -1540,8 +1553,11 @@ function marcaCaido(i, motivo) {
   const titulo = caixa.querySelector('.titulo');
   const boot = document.getElementById('bootLog' + i);
   const acompanhando = i === 1 && !!subindo;
-  if (titulo) titulo.textContent = acompanhando ? 'Subindo ' + subindo.nome : 'Sem resposta';
+  ultimoMotivo[i] = motivo;
+  const foraTx = !acompanhando && fxSemTx(i);
+  if (titulo) titulo.textContent = acompanhando ? 'Subindo ' + subindo.nome : foraTx ? 'Servidor no ar, sem txAdmin' : 'Sem resposta';
   if (acompanhando) document.getElementById('offMotivo' + i).textContent = 'O txAdmin ainda não abriu a porta. Saída do servidor:';
+  if (foraTx) document.getElementById('offMotivo' + i).textContent = 'O FXServer responde na porta do jogo, mas o txAdmin não abriu a porta. Foi subido fora do painel. Desligar mata o processo.';
   if (boot) boot.hidden = !acompanhando;
   if (caiuEm[i] === null) {
     caiuEm[i] = Date.now();
@@ -1554,6 +1570,9 @@ function marcaCaido(i, motivo) {
   if (acompanhando) {
     est.textContent = 'subindo ' + subindo.nome;
     est.classList.remove('ruim');
+  } else if (foraTx) {
+    est.textContent = 'no ar, sem txAdmin';
+    est.classList.remove('ruim');
   } else {
     est.textContent = 'sem resposta';
     est.classList.add('ruim');
@@ -1563,6 +1582,12 @@ function marcaCaido(i, motivo) {
   sv.textContent = '';
   sv.className = 'pastilha';
   document.getElementById('jogCaixa' + i).style.display = 'none';
+  // Exceto o que a porta do jogo prova: servidor no ar, com a contagem dela.
+  if (foraTx) {
+    sv.textContent = 'No ar';
+    sv.className = 'pastilha no-ar';
+    pintaContagem(i, contagemDinamica(i));
+  }
   // Com o txAdmin fora do ar, nenhum botão quente tem a quem falar.
   estadoLigado[i] = null;
   aplicaBotoesQuentes(i);
