@@ -2891,6 +2891,27 @@ telasBtn.addEventListener('click', async () => {
   if (!r || !r.ok) piscaFeito(telasBtn, telasRot, 'Falhou', 'Telas');
 });
 
+// Reiniciar do alto, ao lado do fechar: mesmo rito de dois cliques do botão da placa.
+const reiniciaTopo = document.getElementById('reiniciaTopo');
+let reiniciaTopoArmado = false;
+reiniciaTopo.addEventListener('click', async () => {
+  if (!reiniciaTopoArmado) {
+    reiniciaTopoArmado = true;
+    reiniciaTopo.classList.add('on');
+    reiniciaTopo.title = 'Clique de novo para reiniciar o painel';
+    setTimeout(() => {
+      if (!reiniciaTopoArmado) return;
+      reiniciaTopoArmado = false;
+      reiniciaTopo.classList.remove('on');
+      reiniciaTopo.title = 'Reiniciar o painel';
+    }, 4000);
+    return;
+  }
+  reiniciaTopoArmado = false;
+  reiniciaTopo.classList.add('girando');
+  await window.api.painelReiniciar();
+});
+
 const painelBtn = document.getElementById('painelBtn');
 const painelRot = document.getElementById('painelRot');
 let painelArmado = false;
