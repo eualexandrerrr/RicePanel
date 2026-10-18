@@ -1304,6 +1304,29 @@ const ROTEIRO_FATIA = `
       leEstadoServidor(wv, i);
       clearInterval(wv._relogio);
       wv._relogio = setInterval(() => leEstadoServidor(wv, i), 10000);
+      // A sessão do txAdmin expira com a página aberta: o app React troca para a
+      // tela de login sem recarregar, então o dom-ready não dispara e o login de
+      // cima nunca roda. Este vigia olha de tempos em tempos e refaz o login.
+      // Teto de 3 tentativas seguidas: senha errada não pode virar martelada no
+      // txAdmin (ele bloqueia por excesso de tentativas).
+      clearInterval(wv._vigiaLogin);
+      let tentativas = 0;
+      wv._vigiaLogin = setInterval(async () => {
+        try {
+          const c = txCred || await credPronta;
+          if (!c) return;
+          const r = await wv.executeJavaScript(
+            '({ senha: !!document.querySelector("input[type=password]"), caminho: location.pathname })', false);
+          if (!r || !r.senha || /^\/addMaster/i.test(r.caminho || '')) {
+            tentativas = 0;
+            return;
+          }
+          if (tentativas >= 3) return;
+          tentativas++;
+          window.api.diag('vigia de login ' + i + ': caiu na tela de login, refazendo (' + tentativas + ')');
+          await wv.executeJavaScript(roteiroLogin(c), false);
+        } catch (e) {}
+      }, 15000);
     }, 7000);
   });
 });
