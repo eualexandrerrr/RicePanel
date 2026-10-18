@@ -406,6 +406,9 @@ function roteiroLogin(cred) {
           'bts.find(b => /login|entrar/i.test(texto(b)) && !/cfx/i.test(texto(b)));' +
         'if (entrar) entrar.click();' +
         'else if (form.requestSubmit) form.requestSubmit();' +
+        // Solta a trava: o txAdmin é SPA, a página não recarrega quando a sessão
+        // cai, e com a trava presa o próximo login (do vigia) voltava "ja".
+        'setTimeout(() => { window.__mesaEntrando = false; }, 3000);' +
       '}, 150);' +
     '}, 500);' +
     'return "tentando";' +
