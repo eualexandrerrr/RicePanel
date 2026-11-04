@@ -1642,8 +1642,6 @@
   function pintaProducao() {
     const placa = $('wProducao');
     const grade = $('wProdGrade');
-    const rotTotal = $('wProdTotalNum');
-    const boxTotal = $('wProdTotal');
     if (!placa || !grade) return;
 
     if (!producaoLista || !producaoLista.length) {
@@ -1652,18 +1650,11 @@
     }
     placa.hidden = false;
 
-    let somaOnline = 0;
-    let algumNoAr = false;
-
     let html = '';
     producaoLista.forEach((s, idx) => {
       const chave = 'producao:' + s.nome;
       const dado = producaoJogadores[chave];
       const noAr = dado != null && dado.n != null;
-      if (noAr) {
-        somaOnline += dado.n;
-        algumNoAr = true;
-      }
       const qtdTexto = noAr ? String(dado.n) : '—';
       const statusTexto = noAr ? (dado.max ? dado.n + ' / ' + dado.max + ' players' : 'No ar') : 'Fora do ar';
       const classeStatus = noAr ? 'no-ar' : 'fora';
@@ -1686,8 +1677,6 @@
     });
 
     grade.innerHTML = html;
-    if (rotTotal) rotTotal.textContent = somaOnline;
-    if (boxTotal) boxTotal.classList.toggle('vivo', algumNoAr && somaOnline > 0);
 
     grade.querySelectorAll('.prod-card').forEach(card => {
       card.addEventListener('click', () => {

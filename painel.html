@@ -1862,20 +1862,6 @@
       font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.16em; color: var(--lavender); font-size: 11.5px;
     }
-    .m-producao .total-prod {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-family: 'JetBrains Mono', monospace; font-size: 11px;
-      font-weight: 600; color: var(--subtext0);
-      background: rgba(17, 17, 27, 0.65);
-      border: 1px solid var(--vidro-aresta);
-      border-radius: 999px; padding: 3px 10px;
-    }
-    .m-producao .total-prod.vivo {
-      color: var(--verde); border-color: rgba(166, 227, 161, 0.35);
-    }
-    .m-producao .total-prod .bolinha {
-      width: 6px; height: 6px; border-radius: 50%; background: currentColor;
-    }
     .prod-grade {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;
     }
@@ -2692,7 +2678,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="placa m-producao" id="wProducao" hidden>
         <header>
           <span class="rotulo">Servidores · Produção</span>
-          <span class="total-prod" id="wProdTotal"><i class="bolinha"></i><b class="num" id="wProdTotalNum">0</b> online</span>
         </header>
         <div class="prod-grade" id="wProdGrade"></div>
       </div>
