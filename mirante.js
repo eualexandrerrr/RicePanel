@@ -1631,6 +1631,90 @@
 
   window.api.onPacotes(pintaPacotes);
 
+  // ------------------------------------------ servidores de produção no Mirante
+  let producaoLista = [];
+  let producaoJogadores = {};
+
+  function nomeCurtoServ(nome) {
+    return String(nome || '').replace(/\s*role\s*play$/i, '') || nome;
+  }
+
+  function pintaProducao() {
+    const placa = $('wProducao');
+    const grade = $('wProdGrade');
+    const rotTotal = $('wProdTotalNum');
+    const boxTotal = $('wProdTotal');
+    if (!placa || !grade) return;
+
+    if (!producaoLista || !producaoLista.length) {
+      placa.hidden = true;
+      return;
+    }
+    placa.hidden = false;
+
+    let somaOnline = 0;
+    let algumNoAr = false;
+
+    let html = '';
+    producaoLista.forEach((s, idx) => {
+      const chave = 'producao:' + s.nome;
+      const dado = producaoJogadores[chave];
+      const noAr = dado != null && dado.n != null;
+      if (noAr) {
+        somaOnline += dado.n;
+        algumNoAr = true;
+      }
+      const qtdTexto = noAr ? String(dado.n) : '—';
+      const statusTexto = noAr ? (dado.max ? dado.n + ' / ' + dado.max + ' players' : 'No ar') : 'Fora do ar';
+      const classeStatus = noAr ? 'no-ar' : 'fora';
+
+      const logoHtml = s.logo
+        ? '<img class="prod-card-logo" src="' + esc(s.logo) + '" alt="" aria-hidden="true">'
+        : '<span class="prod-card-icone"><svg viewBox="0 0 16 16"><use href="#ic-servidor"/></svg></span>';
+
+      html += '<div class="prod-card ' + classeStatus + '" data-serv-idx="' + idx + '" title="Abrir console de ' + esc(s.nome) + '">\n' +
+        logoHtml +
+        '<div class="prod-card-corpo">\n' +
+          '<span class="prod-card-nome">' + esc(nomeCurtoServ(s.nome)) + '</span>\n' +
+          '<span class="prod-card-status"><i class="prod-card-led"></i>' + esc(statusTexto) + '</span>\n' +
+        '</div>\n' +
+        '<div class="prod-card-jogadores">\n' +
+          '<b class="n">' + qtdTexto + '</b>\n' +
+          '<span class="rot">' + (noAr ? 'online' : 'off') + '</span>\n' +
+        '</div>\n' +
+      '</div>';
+    });
+
+    grade.innerHTML = html;
+    if (rotTotal) rotTotal.textContent = somaOnline;
+    if (boxTotal) boxTotal.classList.toggle('vivo', algumNoAr && somaOnline > 0);
+
+    grade.querySelectorAll('.prod-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const idx = Number(card.dataset.servIdx);
+        if (window.vaiParaServidor) window.vaiParaServidor('producao', idx);
+      });
+    });
+  }
+
+  function carregaProducao() {
+    window.api.servCatalogo().then(cat => {
+      if (cat && cat.producao) {
+        producaoLista = cat.producao;
+        pintaProducao();
+      }
+    }).catch(() => {});
+    window.api.jogadoresGet().then(d => {
+      producaoJogadores = d || {};
+      pintaProducao();
+    }).catch(() => {});
+  }
+
+  window.api.onJogadores((d) => {
+    producaoJogadores = d || {};
+    pintaProducao();
+  });
+
   // Um tique de um segundo só para o relógio. É barato: fora da virada do
   // minuto ele só troca a opacidade do dois-pontos.
   setInterval(() => { if (acordado) pintaRelogio(false); }, 1000);
@@ -1651,11 +1735,13 @@
     pintaAgenda();
     pintaRetrato(ultimoRetrato);
     pintaHypr(ultimoHypr);
+    pintaProducao();
   }
 
   // Primeira pintura sem esperar tique nenhum.
   pintaRelogio(true);
   pintaMes();
+  carregaProducao();
   // Parados (intervaloMs 0): animados, piscavam a cada troca de quadro.
   criarFundoBakeado('brumaMirante', 'bruma.json', { w: 900, h: 1600, blurPx: 46, intervaloMs: 0 });
   criarFundoBakeado('auroraHora', 'aurora.json', { w: 600, h: 320, blurPx: 3, intervaloMs: 0 });
@@ -1670,5 +1756,14 @@
     pintaMusica(d.musica);
   }).catch(() => {});
 
-  window.mirante = { acorda: acorda };
+  window.mirante = {
+    acorda: acorda,
+    atualizaCatalogo: (cat) => {
+      if (cat && cat.producao) {
+        producaoLista = cat.producao;
+        pintaProducao();
+      }
+    },
+    pintaProducao: pintaProducao
+  };
 })();

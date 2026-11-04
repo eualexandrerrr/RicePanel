@@ -1812,11 +1812,12 @@
        duas placas caem na mesma coluna, e o olho desce reto de uma para a
        outra. Com cada uma centrada do seu jeito, as duas pareciam de páginas
        diferentes. */
-    .m-jogo, .m-lancamento, .m-cota { padding: 14px 22px; }
+    .m-jogo, .m-lancamento, .m-cota, .m-producao { padding: 14px 22px; }
     /* As três placas de baixo são lembrete, não painel de leitura: mais
        estreitas que a coluna (600 contra 760), centradas, para não pesarem
        tanto quanto calendário e vitais lá em cima. */
     body.em-mirante .tapete > .m-vitais,
+    body.em-mirante .tapete > .m-producao,
     body.em-mirante .tapete > .m-jogo,
     body.em-mirante .tapete > .m-lancamento,
     body.em-mirante .tapete > .m-cota {
@@ -1849,6 +1850,97 @@
     .m-cota .limite .pct .u { color: var(--subtext0); }
     .m-cota .limite .rst { flex: 0 0 88px; }
     .m-cota .contador { font-size: 11.5px; }
+
+    /* Servidores de Produção no Mirante */
+    .m-producao { padding: 12px 20px; }
+    .m-producao header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px; padding: 0 2px;
+    }
+    .m-producao header .rotulo {
+      font-family: 'Archivo Narrow', 'Segoe UI', sans-serif;
+      font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.16em; color: var(--lavender); font-size: 11.5px;
+    }
+    .m-producao .total-prod {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      font-weight: 600; color: var(--subtext0);
+      background: rgba(17, 17, 27, 0.65);
+      border: 1px solid var(--vidro-aresta);
+      border-radius: 999px; padding: 3px 10px;
+    }
+    .m-producao .total-prod.vivo {
+      color: var(--verde); border-color: rgba(166, 227, 161, 0.35);
+    }
+    .m-producao .total-prod .bolinha {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+    }
+    .prod-grade {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;
+    }
+    .prod-card {
+      display: flex; align-items: center; gap: 12px;
+      background: rgba(24, 24, 37, 0.65);
+      border: 1px solid rgba(205, 214, 244, 0.10);
+      border-radius: 16px; padding: 10px 14px;
+      cursor: pointer;
+      transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+    }
+    .prod-card:hover {
+      background: rgba(49, 50, 68, 0.65);
+      border-color: rgba(205, 214, 244, 0.25);
+      transform: translateY(-1px);
+    }
+    .prod-card-logo {
+      width: 36px; height: 36px; border-radius: 10px;
+      object-fit: cover; background: var(--sulco); flex: none;
+    }
+    .prod-card-icone {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: rgba(49, 50, 68, 0.8);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--mauve); flex: none;
+    }
+    .prod-card-icone svg { width: 18px; height: 18px; }
+    .prod-card-corpo {
+      flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+    }
+    .prod-card-nome {
+      font-size: 13.5px; font-weight: 700; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .prod-card-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--subtext0);
+    }
+    .prod-card-led {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--surface1);
+    }
+    .prod-card.no-ar .prod-card-led {
+      background: var(--verde);
+      box-shadow: 0 0 6px rgba(166, 227, 161, 0.6);
+    }
+    .prod-card.fora .prod-card-led {
+      background: var(--vermelho); opacity: 0.6;
+    }
+    .prod-card-jogadores {
+      display: flex; flex-direction: column; align-items: flex-end; flex: none;
+    }
+    .prod-card-jogadores .n {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px; font-weight: 800; letter-spacing: -0.03em;
+      color: var(--verde); line-height: 1;
+    }
+    .prod-card.fora .prod-card-jogadores .n {
+      color: var(--overlay0); font-size: 14px;
+    }
+    .prod-card-jogadores .rot {
+      font-family: 'Archivo Narrow', sans-serif;
+      font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--serigrafia-fraca); margin-top: 2px;
+    }
     .jogo, .lancamento {
       display: grid; grid-template-columns: 104px minmax(0, 1fr) auto;
       align-items: center; gap: 18px;
@@ -2490,6 +2582,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <path d="M8 2.6 13 5.3v5.4L8 13.4 3 10.7V5.3z"/>
         <path d="M8 8.1 13 5.3M8 8.1v5.3M8 8.1 3 5.3"/>
       </g>
+      <g id="ic-servidor" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="2.5" width="12" height="4.5" rx="1"/>
+        <rect x="2" y="9" width="12" height="4.5" rx="1"/>
+        <line x1="4.5" y1="4.7" x2="4.6" y2="4.7" stroke-width="1.8"/>
+        <line x1="4.5" y1="11.2" x2="4.6" y2="11.2" stroke-width="1.8"/>
+      </g>
       <!-- Marca de terceiro, como a do Sentry: o "VI" do GTA VI
            redesenhado na grade, com o degradê de pôr do sol da própria marca.
            Grade 63x40, então quem usar precisa do viewBox no <svg>. -->
@@ -2588,6 +2686,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <span class="rotulo" id="wRedeIface"></span>
           </div>
         </div>
+      </div>
+
+      <!-- 3.5 · servidores de produção no Mirante -->
+      <div class="placa m-producao" id="wProducao" hidden>
+        <header>
+          <span class="rotulo">Servidores · Produção</span>
+          <span class="total-prod" id="wProdTotal"><i class="bolinha"></i><b class="num" id="wProdTotalNum">0</b> online</span>
+        </header>
+        <div class="prod-grade" id="wProdGrade"></div>
       </div>
 
       <!-- 4 · a máquina em si, sem recipiente -->

@@ -107,6 +107,12 @@ function trocaModo(modo) {
   // Os widgets param de desenhar quando a página sai da frente: animação em
   // section com display:none continua custando quadro.
   if (window.mirante) window.mirante.acorda(noMirante);
+  if (modo === 'servidores') {
+    [0, 1].forEach(i => {
+      const wv = document.getElementById('wv' + i);
+      if (wv) leEstadoServidor(wv, i);
+    });
+  }
 }
 
 // Produção em cima ou embaixo: a escolha fica no localStorage do painel, que
@@ -300,7 +306,19 @@ function pintaEscolha(i) {
 function aplicaRespostaServidores(r) {
   servidores = r.servidores;
   catalogo = r.catalogo;
+  if (window.mirante && window.mirante.atualizaCatalogo) {
+    try { window.mirante.atualizaCatalogo(catalogo); } catch (e) {}
+  }
 }
+
+window.vaiParaServidor = async function(grupo, indice) {
+  trocaModo('servidores');
+  if (grupo === 'producao') {
+    await escolheServidor(0, indice);
+  } else if (grupo === 'local') {
+    await escolheServidor(1, indice);
+  }
+};
 
 async function escolheServidor(i, j) {
   const grupo = GRUPO_DA_TELA[i];
@@ -830,7 +848,7 @@ function aplicaBotoesQuentes(i) {
 async function leEstadoServidor(wv, i) {
   // Terminal caido segura a pagina antiga inteira: ler dali repintaria "No ar"
   // e a contagem de jogadores de minutos atras. A chapa manda enquanto durar.
-  if (caiuEm[i] !== null) return;
+  if (caiuEm[i] !== null || modoAtual !== 'servidores') return;
   let r = null;
   try { r = await wv.executeJavaScript(LEITOR_ESTADO, false); } catch (e) {}
   const sv = document.getElementById('sv' + i);
@@ -1315,6 +1333,7 @@ const ROTEIRO_FATIA = `
       clearInterval(wv._vigiaLogin);
       let tentativas = 0;
       wv._vigiaLogin = setInterval(async () => {
+        if (modoAtual !== 'servidores') return;
         try {
           const c = txCred || await credPronta;
           if (!c) return;
@@ -1656,7 +1675,8 @@ async function conferePulso() {
   } catch (e) {
     window.api.diag('batida do txadmin falhou: ' + e.message);
   }
-  setTimeout(conferePulso, PULSO_INTERVALO);
+  const espera = modoAtual === 'mirante' ? 30000 : PULSO_INTERVALO;
+  setTimeout(conferePulso, espera);
 }
 setTimeout(conferePulso, 3000);
 
@@ -2314,10 +2334,15 @@ function pintaCotaBarra() {
 function atualizaContadores() {
   document.querySelectorAll('.contador[data-resets]').forEach(el => {
     const resta = new Date(el.dataset.resets) - new Date();
-    if (!Number.isFinite(resta) || resta <= 0) { el.textContent = ''; return; }
-    el.textContent = fmtRelogio(resta);
+    if (!Number.isFinite(resta) || resta <= 0) {
+      if (el.textContent !== '') el.textContent = '';
+      return;
+    }
+    const txt = fmtRelogio(resta);
+    if (el.textContent !== txt) el.textContent = txt;
     const horas = resta / 3600000;
-    el.className = 'contador' + (horas < 1 ? ' crit' : horas < 6 ? ' warn' : '');
+    const cls = 'contador' + (horas < 1 ? ' crit' : horas < 6 ? ' warn' : '');
+    if (el.className !== cls) el.className = cls;
   });
 }
 
@@ -2377,32 +2402,42 @@ const LANC_GTA = new Date(2026, 10, 19, 0, 0, 0);
 
 // Dias, horas e minutos. Sem segundos de propósito: a barra fica acesa no canto
 // do olho o dia todo, e dígito virando toda hora ali é movimento à toa.
+let ultimoGtaChave = '';
 function pintaContagemGta() {
   const alvo = document.getElementById('gtaConta');
   if (!alvo) return;
   const resta = LANC_GTA - new Date();
   if (resta <= 0) {
     const hoje = new Date().toDateString() === LANC_GTA.toDateString();
-    alvo.innerHTML = '<span class="cr chegou"><b>' + (hoje ? 'É hoje' : 'Lançado') +
-      '</b><i>19 nov 2026</i></span>';
+    const txt = hoje ? 'É hoje' : 'Lançado';
+    if (ultimoGtaChave !== txt) {
+      ultimoGtaChave = txt;
+      alvo.innerHTML = '<span class="cr chegou"><b>' + txt +
+        '</b><i>19 nov 2026</i></span>';
+    }
     return;
   }
   const t = Math.floor(resta / 1000);
   const d = Math.floor(t / 86400);
   const h = Math.floor((t % 86400) / 3600);
   const m = Math.floor((t % 3600) / 60);
+  const chave = d + ':' + h + ':' + m;
+  if (chave === ultimoGtaChave) return;
+  ultimoGtaChave = chave;
   const cel = (v, rot) => '<span class="cr"><b class="num">' + v + '</b><i>' + rot + '</i></span>';
   alvo.innerHTML = cel(d, d === 1 ? 'dia' : 'dias') +
     cel(h, h === 1 ? 'hora' : 'horas') +
     cel(m, 'min');
 }
 
+let ultimoClockMin = -1;
 function tickRestantes() {
   document.querySelectorAll('.sub[data-resets]').forEach(el => {
     const iso = el.dataset.resets;
     if (!iso) return;
     const resta = new Date(iso) - new Date();
-    el.textContent = resta <= 0 ? 'resetando' : fmtRestante(resta);
+    const txt = resta <= 0 ? 'resetando' : fmtRestante(resta);
+    if (el.textContent !== txt) el.textContent = txt;
     el.classList.toggle('agora', resta > 0 && resta < 3600000);
     el.classList.toggle('perto', resta >= 3600000 && resta < 6 * 3600000);
   });
@@ -2410,12 +2445,16 @@ function tickRestantes() {
   atualizaContadores();
   pintaContagemGta();
   const agora = new Date();
-  const dia = agora.toLocaleDateString('pt-BR', { weekday: 'long' }).split('-')[0];
-  const data = agora.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
-  document.getElementById('clockDia').textContent =
-    dia.charAt(0).toUpperCase() + dia.slice(1) + ' · ' + data;
-  document.getElementById('clock').textContent =
-    agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const minAtual = agora.getHours() * 60 + agora.getMinutes();
+  if (minAtual !== ultimoClockMin) {
+    ultimoClockMin = minAtual;
+    const dia = agora.toLocaleDateString('pt-BR', { weekday: 'long' }).split('-')[0];
+    const data = agora.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+    const elDia = document.getElementById('clockDia');
+    const elClock = document.getElementById('clock');
+    if (elDia) elDia.textContent = dia.charAt(0).toUpperCase() + dia.slice(1) + ' · ' + data;
+    if (elClock) elClock.textContent = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
 }
 
 const POLL_MS = 5 * 60 * 1000;

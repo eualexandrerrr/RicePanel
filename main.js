@@ -1273,7 +1273,7 @@ let jogadoresRodando = false;
 
 async function leDinamico(url) {
   const ctrl = new AbortController();
-  const prazo = setTimeout(() => ctrl.abort(), 3000);
+  const prazo = setTimeout(() => ctrl.abort(), 2200);
   try {
     const r = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
     if (!r.ok) return null;
@@ -1317,7 +1317,10 @@ function vigiaJogadores() {
   passo();
 }
 
-ipcMain.handle('jogadores-get', async () => jogadoresAgora);
+ipcMain.handle('jogadores-get', async () => {
+  if (!Object.keys(jogadoresAgora).length) await leJogadores();
+  return jogadoresAgora;
+});
 
 // Trocar qual servidor a tela mostra. `grupo` é 'producao' ou 'local'.
 ipcMain.handle('serv-ativa', async (e, grupo, indice) => {

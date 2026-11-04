@@ -381,6 +381,7 @@ async function lerGpusNvidia() {
 // AMD não tem um `nvidia-smi`: tudo sai de /sys/class/hwmon e da pasta do
 // dispositivo PCI logo acima dele. É leitura de arquivo, custa microssegundos.
 async function lerGpusAmd() {
+  if (WIN) return [];
   const raiz = '/sys/class/hwmon';
   let nomes;
   try { nomes = fs.readdirSync(raiz); } catch (e) { return []; }
@@ -453,6 +454,7 @@ let vmCache = { quando: 0, linhas: [], buscando: false };
 // Placas de vídeo que estão no vfio-pci. Classe 0x0300 é "VGA compatible
 // controller"; o link `driver` some quando nenhum módulo assumiu o slot.
 function slotsNoVfio() {
+  if (WIN) return [];
   const raiz = '/sys/bus/pci/devices';
   let itens;
   try { itens = fs.readdirSync(raiz); } catch (e) { return []; }
@@ -520,6 +522,7 @@ async function atualizaVm() {
 // tique de 2 s. O retrato usa o que está em cache e dispara a próxima leitura
 // por fora, sem segurar a resposta.
 async function lerGpusVfio() {
+  if (WIN) return [];
   const slots = slotsNoVfio();
   if (!slots.length) return [];
 
@@ -584,7 +587,10 @@ function lerMemoria() {
 
 // statfs do próprio Node: sem `df`, sem parse de tabela, sem alias do shell
 // (nesta máquina `df` é apelido de `duf`, que imprime outro formato).
+let discosCache = { t: 0, dados: [] };
 function lerDiscos() {
+  const agora = Date.now();
+  if (agora - discosCache.t < 10000 && discosCache.dados.length) return discosCache.dados;
   const pontos = WIN ? ['C:\\', 'D:\\'] : ['/', os.homedir()];
   const vistos = new Set();
   const saida = [];
@@ -604,6 +610,7 @@ function lerDiscos() {
       });
     } catch (e) {}
   }
+  discosCache = { t: agora, dados: saida };
   return saida;
 }
 
@@ -644,10 +651,18 @@ function deltaRede(rx, tx, iface) {
 
 // `netstat -e` soma todas as interfaces numa linha só. A palavra "Bytes" é a
 // mesma em português e em inglês; o cabeçalho acima dela, não.
+// Cache de 3,5 s: corta o spawn de processos netstat pela metade sem perda de precisão.
+let redeWinCache = { t: 0, valor: null };
 async function lerRedeWin() {
+  const agora = Date.now();
+  if (agora - redeWinCache.t < 3500 && redeWinCache.valor) {
+    return redeWinCache.valor;
+  }
   const m = (await roda('netstat', ['-e'], 1500)).match(/^Bytes\s+(\d+)\s+(\d+)/m);
-  if (!m) return { rxs: null, txs: null, iface: '' };
-  return deltaRede(Number(m[1]), Number(m[2]), '');
+  if (!m) return redeWinCache.valor || { rxs: null, txs: null, iface: '' };
+  redeWinCache.valor = deltaRede(Number(m[1]), Number(m[2]), '');
+  redeWinCache.t = agora;
+  return redeWinCache.valor;
 }
 
 // ------------------------------------------------------------------ o resto
