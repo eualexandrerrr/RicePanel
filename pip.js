@@ -73,8 +73,26 @@ function mexeVolume(delta) {
   aplicaVolume(volumeMostrado);
 }
 
-document.getElementById('volmenos').addEventListener('click', () => mexeVolume(-PASSO_VOLUME));
-document.getElementById('volmais').addEventListener('click', () => mexeVolume(PASSO_VOLUME));
+// Segurar repete: um passo na hora e, depois de uma pausa curta, segue sozinho
+// até soltar. Teclado (Enter/Espaço) chega como click sem ponteiro e dá um passo.
+function seguraRepete(b, acao) {
+  let espera = null;
+  let ritmo = null;
+  const para = () => { clearTimeout(espera); clearInterval(ritmo); espera = ritmo = null; };
+  b.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    para();
+    try { b.setPointerCapture(e.pointerId); } catch {}
+    acao();
+    espera = setTimeout(() => { ritmo = setInterval(acao, 80); }, 380);
+  });
+  for (const t of ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave']) b.addEventListener(t, para);
+  b.addEventListener('click', (e) => { if (e.detail === 0) acao(); });
+}
+
+seguraRepete(document.getElementById('volmenos'), () => mexeVolume(-PASSO_VOLUME));
+seguraRepete(document.getElementById('volmais'), () => mexeVolume(PASSO_VOLUME));
 
 const elAuto = document.getElementById('auto');
 let autoplay = null;

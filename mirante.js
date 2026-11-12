@@ -985,8 +985,8 @@
     });
     $('wVideoVel').addEventListener('change', (e) => { window.api.videoVelocidade(Number(e.target.value)).catch(() => {}); e.target.blur(); });
     $('wVideoQual').addEventListener('change', (e) => { window.api.videoQualidade(e.target.value).catch(() => {}); e.target.blur(); });
-    $('wVideoVolMenos').addEventListener('click', () => mexeVolume(-PASSO_VOLUME));
-    $('wVideoVolMais').addEventListener('click', () => mexeVolume(PASSO_VOLUME));
+    seguraRepete($('wVideoVolMenos'), () => mexeVolume(-PASSO_VOLUME));
+    seguraRepete($('wVideoVolMais'), () => mexeVolume(PASSO_VOLUME));
     $('wVideoMudo').addEventListener('click', () => {
       window.api.videoMudo().then(pintaMudo).catch(() => {});
     });
@@ -1169,6 +1169,24 @@
     const txt = volumeMostrado == null ? '--' : textoVolume(volumeMostrado * 100);
     el.textContent = txt;
     el.title = 'Volume do player no Chrome' + (volumeMostrado == null ? '' : ': ' + txt);
+  }
+
+  // Segurar repete: um passo na hora e, depois de uma pausa curta, segue sozinho
+  // até soltar. Teclado (Enter/Espaço) chega como click sem ponteiro e dá um passo.
+  function seguraRepete(b, acao) {
+    let espera = null;
+    let ritmo = null;
+    const para = () => { clearTimeout(espera); clearInterval(ritmo); espera = ritmo = null; };
+    b.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      para();
+      try { b.setPointerCapture(e.pointerId); } catch {}
+      acao();
+      espera = setTimeout(() => { ritmo = setInterval(acao, 80); }, 380);
+    });
+    for (const t of ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave']) b.addEventListener(t, para);
+    b.addEventListener('click', (e) => { if (e.detail === 0) acao(); });
   }
 
   function mexeVolume(delta) {
