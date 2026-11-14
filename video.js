@@ -177,7 +177,7 @@ const PERFIS = [
 function miolo(titulo) {
   return String(titulo || '')
     .replace(/^\(\d+\)\s*/, '')
-    .replace(/\s+[-–]\s+(YouTube|Globoplay)\s*$/i, '')
+    .replace(/\s+[-–]\s+(YouTube|Globoplay|Netflix)\s*$/i, '')
     .trim()
     .toLowerCase();
 }
@@ -503,7 +503,7 @@ function olhaPelaPonte() {
   }
 
   const id = idDaUrlYoutube(aba.url);
-  const drm = !id && /^https:\/\/globoplay\.globo\.com\//.test(aba.url || '');
+  const drm = !id && /^https:\/\/(globoplay\.globo\.com\/|www\.netflix\.com\/watch\/)/.test(aba.url || '');
   if (!id && !drm) { limpa(); return estado; }
   // Volume do PLAYER do YouTube (0 a 100, o da barra), não o do <video>, que
   // já vem normalizado. Extensão antiga sem esse campo: vale o do elemento.
@@ -606,7 +606,7 @@ async function olha() {
       // Ordem: capa (barato) → histórico (uma cópia de arquivo por minuto).
       let id = leYoutubeDaCapa(m.capa);
       if (!id) id = idDaUrlYoutube(await urlDoTitulo(m.titulo, '%youtube.com/watch%'));
-      const drm = !id && !!(await urlDoTitulo(m.titulo, '%globoplay%'));
+      const drm = !id && !!(await urlDoTitulo(m.titulo, '%globoplay%') || await urlDoTitulo(m.titulo, '%netflix.com/watch%'));
       if (!id && !drm) continue;
 
       const vol = await volumeDoNavegador();

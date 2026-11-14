@@ -1090,6 +1090,9 @@
     pintaMusica(ultimaMusica);
     const botao = document.getElementById('wEspelhoBotao');
     if (botao) botao.addEventListener('click', ligaEspelho);
+    // No Windows não há diálogo de portal: quem escolhe a janela é o main
+    // (a do Chrome com o título do vídeo). Então o espelho já liga sozinho.
+    if (/Windows/.test(navigator.userAgent)) ligaEspelho();
   }
 
   // O volume vem do fluxo do navegador (PipeWire): o painel toca o mesmo vídeo,
