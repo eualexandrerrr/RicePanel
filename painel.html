@@ -456,7 +456,11 @@
     body.em-mirante .banca {
       width: min(100%, 620px); margin: 0 auto;
       gap: 10px; padding: 0; min-height: 0;
+      justify-content: center;
     }
+    /* Sem a pílula do Sentry (14/11/2026) o vão empurrava o grupo do sistema
+       para a direita: no Mirante sobra um grupo só, e ele fica no centro. */
+    body.em-mirante .banca > .vao { display: none; }
     body.em-mirante .banca .celula {
       background: rgba(30, 30, 46, 0.82);
       border: 1px solid rgba(49, 50, 68, 0.9);
