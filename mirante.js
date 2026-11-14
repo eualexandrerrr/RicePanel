@@ -1298,6 +1298,16 @@
           '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-mais"/></svg></button>' +
         '<button class="video-acao" id="wVideoMudo" type="button"></button>' +
       '</span>';
+    // Cursor parado em cima do filme some depois de 1,5 s, como num player.
+    const quadroDrm = elVideo.querySelector('.video-quadro');
+    let prazoCursor = null;
+    const mexeuCursor = () => {
+      quadroDrm.classList.remove('sem-cursor');
+      clearTimeout(prazoCursor);
+      prazoCursor = setTimeout(() => quadroDrm.classList.add('sem-cursor'), 1500);
+    };
+    quadroDrm.addEventListener('mousemove', mexeuCursor);
+    quadroDrm.addEventListener('mouseleave', () => clearTimeout(prazoCursor));
     seguraRepete($('wVideoVolMenos'), () => mexeVolume(-PASSO_VOLUME_DRM));
     seguraRepete($('wVideoVolMais'), () => mexeVolume(PASSO_VOLUME_DRM));
     $('wVideoMudo').addEventListener('click', () => {
