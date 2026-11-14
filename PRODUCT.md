@@ -26,7 +26,7 @@ por causa de um cliente reclamando.
 ## Positioning
 
 Não é dashboard de time nem produto para vender: é um painel pessoal, de um usuário só, que junta
-serviços que normalmente não se falam (Sentry, txAdmin, cota do Claude Code, agenda) porque quem
+serviços que normalmente não se falam (txAdmin, cota do Claude Code, agenda) porque quem
 usa é a mesma pessoa em todos eles.
 
 ## Operating Context
@@ -44,13 +44,10 @@ usa é a mesma pessoa em todos eles.
 **Prioridade confirmada de leitura (do mais para o menos importante):**
 1. O que os servidores estão cuspindo (console remoto `IP-DO-SERVIDOR:40120` e local `localhost:40120`)
 2. Quanto sobrou da cota do Claude Code (sessão 5h, semana 7d, por modelo)
-3. Se tem erro novo no Sentry
 
 **Dados que o painel tem hoje:**
 - Cota do Claude Code: percentual e horário de reset por limite.
-- Sentry: issues não resolvidas de todos os projetos da org, nível, contagem de eventos e usuários,
-  quando aconteceu por último. Ação de resolver escreve na API.
-- (As Anotações do Discord saíram do painel em 30/09/2026, a pedido dele: só o Sentry fica.)
+- (O Sentry e as Anotações do Discord saíram do painel: o Discord em 30/09/2026, o Sentry em 14/11/2026.)
 - Temperaturas de CPU/GPU (LibreHardwareMonitor na porta 8085), relógio, limpeza de cache do Windows
   e troca de credencial do Claude Code entre assinatura Max e API/gateway.
 
@@ -69,8 +66,7 @@ dele — não é compromisso.
 
 ## Evidence on Hand
 
-Dados reais, ao vivo, em 27/08/2026: 5 projetos no Sentry com 3 a 7 issues abertas; canal do Discord
-com 659 mensagens e 182 sem reação; cota semanal em 73%. Nada precisa ser inventado — todo número do
+Dados reais, ao vivo, em 27/08/2026: cota semanal em 73%. Nada precisa ser inventado — todo número do
 painel vem de API real. Não há usuários além dele, nem métricas de negócio, nem provas comerciais.
 
 ## Product Principles

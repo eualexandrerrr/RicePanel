@@ -107,7 +107,7 @@ Além disso, pendente e combinado:
 
 - **Limpar os arquivos mortos da era Windows**, num commit separado: `maintenance.ps1`,
   `trava-teclado.ps1`, `telas-dormir.ps1`, `encaixar-emulador.ps1`, `watchdog-widget.ps1`,
-  `register-*.ps1`, `foreground-watch.ps1`, `restart-widget.ps1`, `index.html`, `widget.log.old`.
+  `register-*.ps1`, `foreground-watch.ps1`, `restart-widget.ps1`, `widget.log.old`.
 - **Ligar a agenda**: falta ele colar o endereço iCal no ajuste do widget Agenda. Sem isso a placa
   fica no estado vazio.
 - **Trava de teclado**: achar como desligar o dispositivo no Hyprland 0.56, ou aceitar que a tecla

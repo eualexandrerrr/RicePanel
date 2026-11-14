@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('api', {
   espelhoPede: (aba) => ipcRenderer.invoke('espelho-pede', aba),
   espelhoResposta: (sessao, sdp) => ipcRenderer.invoke('espelho-resposta', sessao, sdp),
   espelhoPara: () => ipcRenderer.invoke('espelho-para'),
+  espelhoAtraso: (sessao, ms) => ipcRenderer.invoke('espelho-atraso', sessao, ms),
   onEspelho: (cb) => ipcRenderer.on('espelho-sinal', (e, d) => cb(d)),
   onVideo: (cb) => ipcRenderer.on('video-update', (e, d) => cb(d)),
 
@@ -79,16 +80,6 @@ contextBridge.exposeInMainWorld('api', {
   telasDormir: () => ipcRenderer.invoke('telas-dormir'),
   painelReiniciar: () => ipcRenderer.invoke('painel-reiniciar'),
   closeApp: () => ipcRenderer.send('close-app'),
-
-  // Sentry
-  sentryGet: () => ipcRenderer.invoke('sentry-get'),
-  sentryRefresh: () => ipcRenderer.invoke('sentry-refresh'),
-  sentrySeen: () => ipcRenderer.invoke('sentry-seen'),
-  sentryResolve: (id, status) => ipcRenderer.invoke('sentry-resolve', id, status),
-  sentryOpen: (url) => ipcRenderer.send('sentry-open', url),
-  sentryDetalhe: (id) => ipcRenderer.invoke('sentry-detalhe', id),
-  // O main empurra a lista a cada varredura; nao precisa o renderer ficar pedindo.
-  onSentry: (cb) => ipcRenderer.on('sentry-update', (e, payload) => cb(payload)),
 
 
   // servidores (txAdmin)

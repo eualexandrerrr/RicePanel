@@ -22,51 +22,6 @@ function haQuanto(iso) {
 
 function icone(nome) { return '<svg viewBox="0 0 16 16"><use href="#ic-' + nome + '"/></svg>'; }
 
-// Data absoluta para a janela: "há 3 d" serve para bater o olho na barra, mas
-// quando ele abre para ler quer saber o dia e a hora.
-function fmtDataHora(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return '';
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' +
-    d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-}
-
-// Dia e hora do jeito que ele lê: hoje e ontem por nome, o resto por dia e mês
-// escrito. "26/08 13:20" obrigava a converter data em cabeça.
-function fmtQuando(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return '';
-  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  const hoje = new Date();
-  const ontem = new Date(hoje.getTime() - 86400000);
-  const mesmo = (a, b) => a.toDateString() === b.toDateString();
-  if (mesmo(d, hoje)) return 'Hoje · ' + hora;
-  if (mesmo(d, ontem)) return 'Ontem · ' + hora;
-  const dia = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
-  return dia + ' · ' + hora;
-}
-
-// De qual lado do projeto veio o erro. 'javascript' começa com 'java': a ordem
-// dos testes aqui é o que impede o erro de web virar erro de back-end.
-function marcaPlataforma(p, titulo) {
-  // O campo platform do Sentry e do PROJETO: num app React Native ele vem
-  // "java" tanto no crash de Android quanto no de iPhone. Quando o titulo
-  // entrega a origem (NSInvalidArgument, java.lang, EXC_), ele manda.
-  const tt = String(titulo || '');
-  if (/^(NS|EXC_|SIG|\*\*\*)/.test(tt) || /Objective-C|Swift|UIKit|CoreFoundation/i.test(tt)) return 'apple';
-  if (/java\.lang|android\.|androidx\.|ANR\b/i.test(tt)) return 'android';
-  const t = String(p || '').toLowerCase();
-  if (t.indexOf('android') >= 0) return 'android';
-  if (t.indexOf('apple') >= 0 || t.indexOf('cocoa') >= 0 || t.indexOf('ios') >= 0 || t.indexOf('swift') >= 0) return 'apple';
-  if (t.indexOf('react') >= 0 || t.indexOf('flutter') >= 0) return 'atomo';
-  if (t.indexOf('javascript') >= 0 || t.indexOf('node') >= 0 || t.indexOf('typescript') >= 0 ||
-      t.indexOf('php') >= 0 || t.indexOf('python') >= 0 || t.indexOf('ruby') >= 0) return 'codigo';
-  if (t.indexOf('java') === 0 || t.indexOf('kotlin') >= 0) return 'java';
-  return 'cubo';
-}
-
 function fmtRestante(ms) {
   // resets_at ausente ou ilegível vinha como NaN e a travessa mostrava
   // "NaN:NaNm". Sem número é melhor do que número quebrado.
@@ -98,7 +53,6 @@ function trocaModo(modo) {
   document.getElementById('modo' + modo.charAt(0).toUpperCase() + modo.slice(1)).classList.add('on');
   document.body.classList.toggle('em-mirante', noMirante);
   try { localStorage.setItem('modo', modo); } catch (e) {}
-  garanteModuloEmCasa();
   posicionaBarra(modo);
   // A janela do emulador é do Hyprland, não do painel: ela não some sozinha
   // quando o barramento muda. Some/reaparece junto com o modo Dev.
@@ -168,46 +122,6 @@ document.getElementById('barramento').addEventListener('click', (e) => {
   trocaModo(t.dataset.modo);
 });
 
-
-// Clicar num indicador abre a lista numa janela de 60% da tela, por cima do que
-// ele estava fazendo. Trocar de barramento tirava os consoles da frente inteira
-// só para consultar quatro linhas.
-//
-// O módulo é MOVIDO para dentro da janela e devolvido ao fechar: é o mesmo nó do
-// barramento Monitor, então continua sendo atualizado pelo mesmo código.
-const janela = document.getElementById('janelaLista');
-let moduloNaJanela = null;
-
-function abreJanelaLista(moduloId, titulo) {
-  const modulo = document.getElementById(moduloId);
-  if (!modulo) return;
-  moduloNaJanela = { modulo: modulo, pai: modulo.parentElement, proximo: modulo.nextElementSibling };
-  document.getElementById('janelaTitulo').textContent = titulo;
-  document.getElementById('janelaCorpo').appendChild(modulo);
-  abre(janela);
-}
-
-function fechaJanelaLista() {
-  fecha(janela);
-  if (!moduloNaJanela) return;
-  const { modulo, pai, proximo } = moduloNaJanela;
-  pai.insertBefore(modulo, proximo);
-  moduloNaJanela = null;
-}
-
-document.getElementById('indSentry').addEventListener('click', () => {
-  abreJanelaLista('blocoSentry', 'Erros em aberto');
-  buscaVitimas();
-});
-document.getElementById('janelaFechar').addEventListener('click', fechaJanelaLista);
-janela.addEventListener('click', (e) => { if (e.target === janela) fechaJanelaLista(); });
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && janela.classList.contains('on')) fechaJanelaLista();
-});
-
-// Entrar no barramento Monitor com a janela aberta deixaria o módulo preso
-// dentro dela e o Monitor com um buraco.
-function garanteModuloEmCasa() { if (moduloNaJanela) fechaJanelaLista(); }
 
 // ---------------------------------------------------------------- servidores
 let servidores = [];
@@ -2407,14 +2321,11 @@ function pintaContagemGta() {
   const alvo = document.getElementById('gtaConta');
   if (!alvo) return;
   const resta = LANC_GTA - new Date();
+  // Lançou: a placa sai sozinha (pedido dele, 14/11/2026). Contagem que já
+  // chegou a zero é só peso na coluna.
   if (resta <= 0) {
-    const hoje = new Date().toDateString() === LANC_GTA.toDateString();
-    const txt = hoje ? 'É hoje' : 'Lançado';
-    if (ultimoGtaChave !== txt) {
-      ultimoGtaChave = txt;
-      alvo.innerHTML = '<span class="cr chegou"><b>' + txt +
-        '</b><i>19 nov 2026</i></span>';
-    }
+    const placa = document.getElementById('placaGta');
+    if (placa && !placa.hidden) placa.hidden = true;
     return;
   }
   const t = Math.floor(resta / 1000);
@@ -2574,163 +2485,6 @@ async function atualizaTemps() {
   setTimeout(atualizaTemps, 3000);
 }
 atualizaTemps();
-
-// Um momento de movimento só: o canal bate quando chega alerta; a marca fica.
-function bate(moduloId, marcadorId) {
-  const modulo = document.getElementById(moduloId);
-  modulo.classList.add('batendo');
-  document.getElementById(marcadorId).classList.add('aceso');
-  setTimeout(() => modulo.classList.remove('batendo'), 60000);
-}
-
-// -------------------------------------------------------------------- Sentry
-const COR_NIVEL = {
-  fatal: 'var(--vermelho)', error: 'var(--vermelho)',
-  warning: 'var(--ambar)', info: 'var(--azul)', debug: 'var(--serigrafia-fraca)'
-};
-let sy = { issues: [], novos: [], erro: null, atualizadoEm: null, alerta: null };
-// Quem pegou cada erro. Guardado por issue porque a busca custa uma chamada por
-// erro; sem cache, cada varredura refaria tudo.
-const detalhesSentry = {};
-
-async function buscaVitimas() {
-  for (const i of sy.issues) {
-    if (detalhesSentry[i.id] !== undefined) continue;
-    detalhesSentry[i.id] = null;   // marca como em busca, evita pedir duas vezes
-    try {
-      const d = await window.api.sentryDetalhe(i.id);
-      detalhesSentry[i.id] = d || { lugar: '', aparelho: '', sistema: '', versao: '', usuario: '' };
-    } catch (e) {
-      detalhesSentry[i.id] = { lugar: 'não deu para descobrir', aparelho: '', sistema: '', versao: '', usuario: '' };
-    }
-    renderSentry();
-  }
-}
-let syAlertaEm = null, syAviso = false, syAvisoTimer = null;
-
-function renderSentry() {
-  const total = sy.issues.length;
-  const novos = (sy.novos || []).length;
-  const marcados = new Set(sy.novos || []);
-
-  const cnt = document.getElementById('sentryCount');
-  cnt.textContent = sy.erro ? '--' : (total === 0 ? 'limpo' : String(total));
-  cnt.classList.toggle('limpo', total === 0 && !sy.erro);
-  document.getElementById('ledSentry').className =
-    'led' + (novos ? ' clip' : (total ? ' ambar' : ' verde'));
-  document.getElementById('sentryWhen').textContent =
-    sy.erro ? 'sem resposta' : (sy.atualizadoEm ? 'varrido ' + haQuanto(sy.atualizadoEm) : '');
-  document.getElementById('sentryNovos').textContent =
-    novos ? novos + (novos === 1 ? ' novo' : ' novos') : '';
-
-  const aviso = (syAviso && sy.alerta)
-    ? '<div class="aviso">' + icone('alerta') + '<span>' + esc(sy.alerta.resumo) + '</span></div>'
-    : '';
-  const fita = document.getElementById('sentryList');
-  if (!total) {
-    fita.innerHTML = aviso + (sy.erro
-      ? '<div class="quebrado">Sentry não respondeu: ' + esc(sy.erro) + '</div>'
-      : '<div class="quieto">Nenhum erro em aberto nos últimos 90 dias.</div>');
-    return;
-  }
-  fita.innerHTML = aviso + sy.issues.map(i => {
-    const ev = i.eventos + (i.eventos === 1 ? ' evento' : ' eventos');
-    const us = i.usuarios ? ' · ' + i.usuarios + (i.usuarios === 1 ? ' usuário' : ' usuários') : '';
-    const cor = COR_NIVEL[i.nivel] || 'var(--ambar)';
-    const d = detalhesSentry[i.id];
-    // Mesma anatomia da anotação: marca colorida no lugar do avatar, projeto no
-    // lugar do nome, data em destaque e o corpo abaixo.
-    const vitima = d
-      ? [d.lugar, d.aparelho, d.sistema, d.versao].filter(Boolean).join(' · ')
-      : 'procurando quem pegou o erro…';
-    return '<div class="dc-msg linha' + (marcados.has(i.id) ? ' nova' : '') + '" data-id="' + esc(i.id) + '">' +
-      '<span class="dc-marca-nivel" style="color:' + cor + '" title="' + esc(i.plataforma || 'plataforma desconhecida') + '">' +
-        icone(marcaPlataforma(i.plataforma, i.titulo)) + '</span>' +
-      '<div class="dc-corpo">' +
-        '<div class="dc-cabeca">' +
-          '<span class="dc-nome" style="color:' + cor + '">' + esc(i.projeto) + '</span>' +
-          '<span class="dc-nivel">' + esc((i.nivel || '').toUpperCase()) + '</span>' +
-        '</div>' +
-        '<div class="dc-quando">' + (fmtQuando(i.ultimo) || '—') +
-          '<span class="atras">há ' + haQuanto(i.ultimo) + '</span></div>' +
-        '<div class="dc-titulo">' + esc(i.titulo) + '</div>' +
-        '<div class="dc-vitima">' + esc(vitima) +
-          (d && d.usuario ? '<span class="quem">usuário ' + esc(d.usuario) + '</span>' : '') +
-        '</div>' +
-        (i.detalhe ? '<div class="dc-cru">' + esc(i.detalhe) + '</div>' : '') +
-        '<div class="dc-rodape">' + ev + us + ' · desde ' + (fmtDataHora(i.primeiro) || '—') +
-          ' · ' + esc(i.shortId) + '</div>' +
-      '</div>' +
-      '<div class="acoes">' +
-        '<button class="botao" data-act="abrir" data-link="' + esc(i.link) + '" title="Abrir no Sentry" aria-label="Abrir no Sentry">' + icone('sai') + '</button>' +
-        '<button class="botao" data-act="resolver" title="Marcar como resolvido" aria-label="Marcar como resolvido">' + icone('ok') + '</button>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-
-document.getElementById('sentryList').addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('.botao');
-  if (!btn) return;
-  if (btn.dataset.act === 'abrir') return window.api.sentryOpen(btn.dataset.link);
-  // Resolver escreve no Sentry de verdade: pede o segundo clique.
-  if (!btn.classList.contains('confirma-morna')) {
-    btn.classList.add('confirma-morna');
-    btn.innerHTML = '<span class="rot">Confirmar</span>';
-    clearTimeout(btn._t);
-    btn._t = setTimeout(() => {
-      btn.classList.remove('confirma-morna');
-      btn.innerHTML = icone('ok');
-    }, 4000);
-    return;
-  }
-  clearTimeout(btn._t);
-  btn.disabled = true;
-  const linha = btn.closest('.dc-msg') || btn.closest('.linha');
-  cardTrabalhando(linha, 'resolvendo no Sentry…');
-  const r = await window.api.sentryResolve(btn.closest('.linha').dataset.id, 'resolved');
-  if (!r || !r.ok) {
-    btn.disabled = false;
-    btn.classList.remove('confirma-morna');
-    btn.innerHTML = icone('ok');
-    cardPronto(linha, (r && r.error) || 'não deu para resolver', true);
-    return;
-  }
-  if (linha) linha.classList.add('resolvida');
-  cardPronto(linha, 'resolvido');
-});
-
-document.getElementById('sentryRefresh').addEventListener('click', async (e) => {
-  const btn = e.currentTarget;
-  btn.classList.add('girando');
-  sy = await window.api.sentryRefresh();
-  btn.classList.remove('girando');
-  window.api.sentrySeen();
-  sy.novos = [];
-  document.getElementById('marcadorMonitor').classList.remove('aceso');
-  renderSentry();
-});
-
-window.api.onSentry((p) => {
-  const novo = p.alerta && p.alerta.em !== syAlertaEm;
-  sy = p;
-  if (novo) {
-    syAlertaEm = p.alerta.em;
-    syAviso = true;
-    bate('blocoSentry', 'marcadorMonitor');
-    clearTimeout(syAvisoTimer);
-    syAvisoTimer = setTimeout(() => { syAviso = false; renderSentry(); }, 60000);
-  }
-  renderSentry();
-});
-
-(async () => {
-  sy = await window.api.sentryGet();
-  syAlertaEm = sy.alerta ? sy.alerta.em : null;
-  renderSentry();
-})();
-
-setInterval(renderSentry, 30000);
 
 // --------------------------------------------------------------- manutenção
 const maintBtns = Array.from(document.querySelectorAll('[data-maint]'));

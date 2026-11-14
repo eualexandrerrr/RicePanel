@@ -12,7 +12,6 @@ const { app, BrowserWindow, ipcMain, screen, safeStorage, Notification, shell, d
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const sentry = require('./sentry');
 const sistema = require('./sistema');
 const agenda = require('./agenda');
 const tarefas = require('./tarefas');
@@ -384,7 +383,6 @@ function createWindow() {
   }, { useSystemPicker: true });
 
   const deps = { app, safeStorage, Notification, shell, session, log, getWindow: () => mainWindow };
-  sentry.iniciar(deps);
   agenda.iniciar(deps);
   tarefas.aoMudar(() => empurra('agenda-update', Object.assign(agenda.atual(), { tarefas: tarefas.atual() })));
   tarefas.iniciar(deps);
@@ -729,6 +727,13 @@ ipcMain.handle('espelho-pede', async (e, aba) => {
 });
 ipcMain.handle('espelho-resposta', async (e, sessao, sdp) => require('./ponte').envia({ tipo: 'espelho-resposta', sessao, sdp }));
 ipcMain.handle('espelho-para', async () => require('./ponte').envia({ tipo: 'espelho-para' }));
+// Quanto o vídeo do espelho leva para chegar aqui: a extensão atrasa o som da
+// aba na mesma medida, senão a boca mexe depois da fala.
+let atrasoLogado = -1000;
+ipcMain.handle('espelho-atraso', async (e, sessao, ms) => {
+  if (Math.abs(ms - atrasoLogado) >= 40) { atrasoLogado = ms; log('espelho da aba: vídeo chega ' + ms + ' ms depois, som atrasado igual'); }
+  return require('./ponte').envia({ tipo: 'espelho-atraso', sessao, ms });
+});
 ipcMain.handle('video-pausa-navegador', async () => video.pausaNavegador());
 ipcMain.handle('video-toca-navegador', async () => video.tocaNavegador());
 
@@ -965,36 +970,11 @@ ipcMain.handle('set-auth', async (e, opts) => {
   }
 });
 
-// --- Sentry ----------------------------------------------------------------
-ipcMain.handle('sentry-get', async () => sentry.atual());
-ipcMain.handle('sentry-refresh', async () => { await sentry.forcar(); return sentry.atual(); });
-ipcMain.handle('sentry-seen', async () => sentry.marcarVistos());
-ipcMain.handle('sentry-resolve', async (e, id, status) => {
-  try {
-    return await sentry.resolve(id, status);
-  } catch (err) {
-    log('sentry-resolve ERRO: ' + err.message);
-    return { ok: false, error: err.message };
-  }
-});
-ipcMain.handle('sentry-detalhe', async (e, id) => {
-  try {
-    return await sentry.detalhe(id);
-  } catch (err) {
-    log('sentry-detalhe ERRO: ' + err.message);
-    return null;
-  }
-});
-ipcMain.on('sentry-open', (e, url) => {
-  // So abre link do proprio Sentry: evita virar abridor generico de URL.
-  if (typeof url === 'string' && /^https:\/\/[a-z0-9.-]*sentry\.io\//i.test(url)) shell.openExternal(url);
-});
-
 // --- txAdmin ---------------------------------------------------------------
 // A senha nunca mora no repositorio nem no HTML: vem de um arquivo fora do git e
 // fica cifrada com safeStorage em userData.
 const TX_ENV = path.join(os.homedir(), '.config', 'mirante', 'txadmin.env');
-// No Windows os segredos moram em D:\Claude\.secrets, junto do sentry.env.
+// No Windows os segredos moram em D:\Claude\.secrets.
 const TX_ENV_CLAUDE = path.join('D:', 'Claude', '.secrets', 'txadmin.env');
 const TX_ENV_ANTIGO = path.join(os.homedir(), 'Downloads', 'Apps', '_CLAUDE', '.secrets', 'txadmin.env');
 const TX_CRED = () => path.join(app.getPath('userData'), 'txadmin-cred.bin');
@@ -1756,7 +1736,7 @@ ipcMain.on('abrir-url', (e, url) => {
   const servs = cat.producao.concat(cat.locais.map(l => ({ host: 'localhost', porta: l.porta })));
   const doTx = servs.some(s =>
     url.startsWith('http://' + s.host + ':' + s.porta + '/'));
-  if (/^https:\/\/[a-z0-9.-]*sentry\.io\//i.test(url) || doTx) shell.openExternal(url);
+  if (doTx) shell.openExternal(url);
 });
 
 ipcMain.on('close-app', () => {

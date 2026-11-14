@@ -19,7 +19,7 @@ Spotify com controles, o próximo jogo do Flamengo e a contagem para o GTA VI.
 
 **Estação** — a página de trabalho. Dois consoles do txAdmin lado a lado
 (remoto e local), com detector de erro que avisa por notificação; uma coluna de
-projetos Expo com emulador Android; e um monitor de cotas e Sentry.
+projetos Expo com emulador Android; e um monitor de cotas.
 
 Desde setembro de 2026 o **Mirante roda nativo no COSMIC**: um app em Rust com
 libcosmic, em [`cosmic/`](cosmic/README.md), desenhado numa layer surface abaixo

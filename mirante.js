@@ -1040,7 +1040,39 @@
   let pcEspelho = null;            // WebRTC do espelho da aba (Windows)
   let sessaoEspelho = 0;
   let modoEspelho = '';            // 'aba' | 'janela'
+  // O som sai da aba do Chrome na hora, e o quadro do espelho chega depois de
+  // passar por captura, codificação e decodificação. A cada 2 s o painel mede a
+  // parte dele (fila + decodificação) e manda para a extensão, que atrasa o som
+  // da aba no mesmo tanto mais a parte dela (codificação).
+  let medidorAtraso = null;
+  function medeAtraso(pc, sessao) {
+    clearInterval(medidorAtraso);
+    let antes = null, enviado = -1;
+    medidorAtraso = setInterval(async () => {
+      if (pcEspelho !== pc) { clearInterval(medidorAtraso); return; }
+      let r = null;
+      try { (await pc.getStats()).forEach(s => { if (s.type === 'inbound-rtp' && s.kind === 'video') r = s; }); } catch (e) {}
+      if (!r || !r.framesDecoded) return;
+      const agora = { q: r.framesDecoded, proc: r.totalProcessingDelay || 0, jit: r.jitterBufferDelay || 0, emit: r.jitterBufferEmittedCount || 0, dec: r.totalDecodeTime || 0 };
+      if (antes && agora.q > antes.q) {
+        const n = agora.q - antes.q;
+        // totalProcessingDelay já vai do primeiro pacote até o quadro decodificado.
+        let s = (agora.proc - antes.proc) / n;
+        if (!(s > 0)) s = (agora.emit > antes.emit ? (agora.jit - antes.jit) / (agora.emit - antes.emit) : 0) + (agora.dec - antes.dec) / n;
+        // + um quadro de tela até o compositor mostrar.
+        const ms = Math.round(s * 1000 + 17);
+        if (ms > 0 && ms < 1500 && Math.abs(ms - enviado) >= 15) {
+          enviado = ms;
+          window.api.espelhoAtraso(sessao, ms).catch(() => {});
+        }
+      }
+      antes = agora;
+    }, 2000);
+  }
+
   function paraEspelho() {
+    clearInterval(medidorAtraso);
+    tarjas = [];
     if (pcEspelho) {
       try { pcEspelho.close(); } catch (e) {}
       pcEspelho = null;
@@ -1056,24 +1088,66 @@
   // tira abas, barra e moldura do Chrome; na da ABA, o que for página em volta
   // do player (Globoplay). Ampliado e centrado como um `contain`.
   let recorteEspelho = null;
+  // Faixas pretas: a Netflix desenha o filme com tarja (2,39:1 dentro de um
+  // <video> 16:9) e o quadro preto em volta ficava feio na placa. A cada 2 s
+  // uma amostra pequena do quadro mede as tarjas; vale a MENOR das últimas 8,
+  // porque cena escura parece tarja por um instante e tarja de verdade não some.
+  let tarjas = [];
+  const amostra = document.createElement('canvas');
+  amostra.width = 96; amostra.height = 54;
+  function medeTarja() {
+    const quadro = document.getElementById('wEspelhoQuadro');
+    const r = recorteEspelho || { x: 0, y: 0, w: 1, h: 1 };
+    if (!quadro || !quadro.videoWidth) return;
+    const vw = quadro.videoWidth, vh = quadro.videoHeight;
+    const g = amostra.getContext('2d', { willReadFrequently: true });
+    try { g.drawImage(quadro, r.x * vw, r.y * vh, r.w * vw, r.h * vh, 0, 0, 96, 54); } catch (e) { return; }
+    const px = g.getImageData(0, 0, 96, 54).data;
+    const claro = (i) => Math.max(px[i], px[i + 1], px[i + 2]) > 28;
+    const linhaTem = (y) => { for (let x = 0; x < 96; x++) if (claro((y * 96 + x) * 4)) return true; return false; };
+    const colunaTem = (x) => { for (let y = 0; y < 54; y++) if (claro((y * 96 + x) * 4)) return true; return false; };
+    let t = 0; while (t < 27 && !linhaTem(t)) t++;
+    let b = 0; while (b < 27 && !linhaTem(53 - b)) b++;
+    let l = 0; while (l < 48 && !colunaTem(l)) l++;
+    let d = 0; while (d < 48 && !colunaTem(95 - d)) d++;
+    if (t >= 27 || l >= 48) return;   // quadro todo escuro: não diz nada
+    tarjas.push({ t: t / 54, b: b / 54, l: l / 96, r: d / 96 });
+    if (tarjas.length > 8) tarjas.shift();
+    aplicaRecorte();
+  }
+  setInterval(medeTarja, 2000);
+  function corteTarja() {
+    if (!tarjas.length) return { t: 0, b: 0, l: 0, r: 0 };
+    const min = (k) => Math.min.apply(null, tarjas.map(x => x[k]));
+    return { t: min('t'), b: min('b'), l: min('l'), r: min('r') };
+  }
+
+  // O quadro toma a proporção do que sobra depois do recorte e das tarjas:
+  // largura da placa até o teto de altura, sem moldura preta em volta.
   function aplicaRecorte() {
     const quadro = document.getElementById('wEspelhoQuadro');
     if (!quadro) return;
-    const r = recorteEspelho;
-    const vw = quadro.videoWidth, vh = quadro.videoHeight;
     const caixa = quadro.parentElement;
-    const W = caixa.clientWidth, H = caixa.clientHeight;
-    if (!r || !vw || !vh || !W || !H || r.w <= 0 || r.h <= 0) {
-      quadro.removeAttribute('style');
-      return;
-    }
+    const base = recorteEspelho || { x: 0, y: 0, w: 1, h: 1 };
+    const vw = quadro.videoWidth, vh = quadro.videoHeight;
+    if (!vw || !vh || base.w <= 0 || base.h <= 0) { quadro.removeAttribute('style'); caixa.removeAttribute('style'); return; }
+    const c = corteTarja();
+    const r = {
+      x: base.x + base.w * c.l, y: base.y + base.h * c.t,
+      w: base.w * (1 - c.l - c.r), h: base.h * (1 - c.t - c.b)
+    };
     const cw = r.w * vw, ch = r.h * vh;
-    const s = Math.min(W / cw, H / ch);
+    const larg = elVideo.clientWidth;
+    const teto = window.innerHeight * 0.33;
+    let W = larg, H = W * ch / cw;
+    if (H > teto) { H = teto; W = H * cw / ch; }
+    caixa.style.cssText = 'aspect-ratio:auto;max-height:none;background:transparent;' +
+      'width:' + Math.round(W) + 'px;height:' + Math.round(H) + 'px;';
+    const s = W / cw;
     quadro.style.cssText =
-      'inset:auto;object-fit:fill;' +
+      'inset:auto;object-fit:fill;background:transparent;' +
       'width:' + (vw * s) + 'px;height:' + (vh * s) + 'px;' +
-      'left:' + ((W - cw * s) / 2 - r.x * vw * s) + 'px;' +
-      'top:' + ((H - ch * s) / 2 - r.y * vh * s) + 'px;';
+      'left:' + (-r.x * vw * s) + 'px;top:' + (-r.y * vh * s) + 'px;';
   }
   function recorteDo(v) {
     if (!v) return null;
@@ -1153,6 +1227,7 @@
       // Sem buffer de jitter: é loopback, o quadro tem que sair na hora.
       try { ev.receiver.playoutDelayHint = 0; ev.receiver.jitterBufferTarget = 0; } catch (e) {}
       tentativasEspelho = 0;
+      medeAtraso(pc, m.sessao);
       espelho = ev.streams[0] || new MediaStream([ev.track]);
       mostraEspelho(espelho);
     };
@@ -1675,21 +1750,36 @@
     const temPlacar = j.casa.placar != null && j.fora.placar != null;
     const perto = quando - agora < 24 * 3600e3;
     const local = j.local ? String(j.local).replace(/^est[aá]dio\s+/i, '') : '';
-    const lado = (rolando || terminou)
-      ? (temPlacar
-        ? '<span class="resumo-placar' + (rolando ? ' vivo' : '') + '"><b>' + j.casa.placar + '</b><i>×</i><b>' + j.fora.placar + '</b></span>'
-        : '')
-      : '<span class="resumo-destaque conta' + (perto ? ' hoje' : '') + '">' + esc(restaCurto(quando - agora).replace(/^em /, '')) + '</span>';
+    // Nos Servidores o jogo é o que mais importa da faixa (14/11/2026): a
+    // contagem vira número grande com a unidade embaixo. Dias pelo calendário
+    // ("amanhã" é 1 dia mesmo faltando 10 h); no dia do jogo, horas e minutos.
+    let lado = '';
+    if (rolando || terminou) {
+      if (temPlacar) lado = '<span class="resumo-placar' + (rolando ? ' vivo' : '') + '"><b>' + j.casa.placar + '</b><i>×</i><b>' + j.fora.placar + '</b></span>';
+    } else {
+      const dias = Math.round((inicioDoDia(quando) - hojeIni) / 86400000);
+      let num, unid;
+      if (dias >= 1) { num = String(dias); unid = dias === 1 ? 'dia · amanhã' : 'dias'; }
+      else {
+        const m = Math.max(0, Math.floor((quando - agora) / 60000));
+        num = m >= 60 ? Math.floor(m / 60) + 'h' + doisDig(m % 60) : String(m);
+        unid = m >= 60 ? 'hoje' : 'min';
+      }
+      lado = '<span class="resumo-conta' + (dias < 1 ? ' hoje' : dias === 1 ? ' perto' : '') + '"><b>' + esc(num) + '</b><i>' + esc(unid) + '</i></span>';
+    }
+    const camp = j.competicao ? esc(j.competicao) + (j.fase ? ' · ' + esc(j.fase) : '') : '';
+    const tv = Array.isArray(j.transmissao) && j.transmissao.length
+      ? '<span class="resumo-tv"><b>TV</b>' + j.transmissao.map(esc).join(' · ') + '</span>' : '';
     const sub = rolando
       ? '<span class="resumo-sub vivo">' + esc(aoVivo(j)) + '</span>'
       : terminou
         ? '<span class="resumo-sub">Fim de jogo</span>'
-        : '<span class="resumo-sub' + (perto ? ' quente' : '') + '">' + esc(quandoCurto(quando)) + '</span>';
+        : '<span class="resumo-sub' + (perto ? ' quente' : '') + '">' + esc(quandoCurto(quando)) + (camp ? ' · ' + camp : '') + '</span>';
     elJ.innerHTML = '<div class="resumo-bloco jogo">' +
       '<span class="resumo-escudos">' + escudo(j.casa) + escudo(j.fora) + '</span>' +
       '<span class="resumo-texto">' +
         '<span class="resumo-titulo">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span>' +
-        sub +
+        sub + tv +
         (local ? '<span class="resumo-sub local">' + esc(local) + '</span>' : '') +
       '</span>' + lado + '</div>';
   }

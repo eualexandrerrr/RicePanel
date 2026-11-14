@@ -672,6 +672,9 @@
       mask-image: radial-gradient(60% 60% at 50% 50%, #000 30%, transparent 78%);
       pointer-events: none;
     }
+    /* A hora grande saiu do Mirante em 14/11/2026, a pedido dele ("não precisa"):
+       saudação, relógio, data e a linha semana/dia/uptime. O relógio do rodapé fica. */
+    body.em-mirante .m-hora { display: none; }
     .m-saudacao {
       position: relative;
       font-family: 'Archivo Narrow', sans-serif;
@@ -1375,8 +1378,6 @@
     }
     .canto-sistema { display: flex; align-items: center; gap: 8px; align-self: center; }
 
-    /* Só o Sentry desde 30/09/2026 (as anotações do Discord saíram): coluna única. */
-    .baia { display: grid; grid-template-columns: 1fr; gap: 14px; min-height: 0; }
     .modulo {
       display: flex; flex-direction: column; min-height: 0;
       background: var(--vidro); border: 1px solid var(--vidro-aresta); border-radius: 14px;
@@ -1446,35 +1447,6 @@
     }
     .celula, .grupo { display: flex; align-items: center; gap: 14px; }
     .cap { display: none; }
-    .indicador {
-      display: flex; align-items: center; gap: 9px;
-      background: none; border: none; cursor: pointer;
-      font-family: inherit; padding: 3px 4px 3px 3px; border-radius: 6px;
-    }
-    .indicador:hover { background: rgba(255, 255, 255, 0.035); }
-    .indicador .marca-svc { display: flex; flex: none; color: var(--serigrafia-fraca); }
-    .indicador .marca-svc svg { width: 19px; height: 19px; display: block; }
-    .indicador:hover .marca-svc { color: var(--serigrafia); }
-    /* Clipe aceso puxa a marca junto: o canal inteiro fica quente, não só o LED. */
-    .indicador:has(.led.clip) .marca-svc { color: #ff9d9d; }
-    .indicador .pilha-ind {
-      display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
-    }
-    .indicador .leitura-ind { display: flex; align-items: center; gap: 7px; }
-    .indicador .contagem {
-      font-size: 17px; font-weight: 800; letter-spacing: -0.03em;
-      font-variant-numeric: tabular-nums; color: var(--leitura); line-height: 1;
-    }
-    .indicador .contagem.limpo { color: var(--verde); font-size: 13px; font-weight: 700; }
-    .indicador .serigrafia { font-size: 10px; letter-spacing: 0.14em; }
-    .indicador:hover .serigrafia { color: var(--leitura); }
-    .led {
-      width: 10px; height: 10px; border-radius: 50%;
-      background: var(--led-off); border: 1px solid #07080a; flex: none;
-    }
-    .led.verde { background: radial-gradient(circle at 50% 32%, #b6f5d5 0%, var(--verde) 46%, #1d8c53 100%); }
-    .led.ambar { background: radial-gradient(circle at 50% 32%, #ffe3a8 0%, var(--ambar) 46%, #9e6f10 100%); }
-    .led.clip { background: radial-gradient(circle at 50% 32%, #ffc4c4 0%, var(--vermelho) 44%, #a51f1f 100%); }
     .rodape .temp { display: flex; align-items: baseline; gap: 6px; }
     .rodape .temp .v { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
     /* Data em duas linhas: o dia é referência, a hora é o que ele consulta. */
@@ -1580,10 +1552,6 @@
     #faixaMeio .celula > :not(.cap) { margin-top: auto; margin-bottom: auto; }
     #faixaMeio .cel-relogio > .relogio { margin: 0; }
     #faixaMeio .cel-temp .grupo { flex-direction: column; align-items: flex-start; gap: 8px; }
-    #faixaMeio .indicador { gap: 10px; flex: none; padding: 2px 8px 2px 6px; }
-    #faixaMeio .indicador .marca-svc svg { width: 24px; height: 24px; }
-    #faixaMeio .indicador .contagem { font-size: 30px; line-height: 0.9; }
-    #faixaMeio .indicador .contagem.limpo { font-size: 18px; }
     #faixaMeio .temp { align-items: center; gap: 9px; }
     #faixaMeio .temp .v { font-size: 17px; }
     /* A célula do relógio dispensa rótulo: a data já é o rótulo da hora, e ela
@@ -1613,7 +1581,7 @@
        outros modos a barra continua rasa. */
     .resumo { display: none; }
     body.faixa-no-meio #faixaMeio .resumo {
-      display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 1.35fr);
+      display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.7fr) minmax(0, 1.9fr);
       border-top: 1px solid #06070a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
     /* Logo do servidor (myLogo.png da pasta dele) no cabeçalho e nas chaves. */
@@ -1676,6 +1644,49 @@
     .resumo-placar.vivo b { color: var(--red); }
     .resumo .tarefa-conclui:hover::after { font-size: 11px; }
 
+    /* Tarefas e próximo compromisso são consulta de canto (14/11/2026): menores,
+       uma linha de título. O jogo do Flamengo é o destaque da faixa. */
+    #faixaMeio .resumo-tarefas .resumo-destaque,
+    #faixaMeio .resumo-agenda .resumo-destaque { font-size: 21px; min-width: 24px; }
+    #faixaMeio .resumo-tarefas .resumo-destaque.ok svg,
+    #faixaMeio .resumo-agenda .resumo-destaque.ok svg { width: 20px; height: 20px; }
+    #faixaMeio .resumo-tarefas .resumo-titulo,
+    #faixaMeio .resumo-agenda .resumo-titulo { font-size: 12.5px; -webkit-line-clamp: 1; }
+    #faixaMeio .resumo-tarefas .resumo-sub,
+    #faixaMeio .resumo-agenda .resumo-sub { font-size: 11px; }
+    #faixaMeio .resumo-tarefas .resumo-bloco,
+    #faixaMeio .resumo-agenda .resumo-bloco { gap: 10px; }
+    #faixaMeio .resumo-jogo { background: linear-gradient(90deg, rgba(200, 16, 46, 0.12), rgba(200, 16, 46, 0) 75%); }
+    #faixaMeio .resumo-jogo .resumo-bloco { gap: 16px; }
+    #faixaMeio .resumo-jogo .resumo-escudos img { width: 50px; height: 50px; }
+    #faixaMeio .resumo-jogo .resumo-escudos img + img { margin-left: -8px; }
+    #faixaMeio .resumo-jogo .resumo-titulo { font-size: 17px; font-weight: 700; -webkit-line-clamp: 1; }
+    #faixaMeio .resumo-jogo .resumo-sub { font-size: 12.5px; }
+    .resumo-tv {
+      font-family: 'Archivo Narrow', 'Segoe UI', sans-serif;
+      font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .resumo-tv b { color: var(--overlay1); margin-right: 6px; }
+    /* Contagem do jogo: número grande, unidade gravada embaixo. Esquenta perto. */
+    .resumo-conta {
+      flex: none; margin-left: auto; display: flex; flex-direction: column; align-items: center;
+      padding-left: 16px; border-left: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .resumo-conta b {
+      font-size: 46px; font-weight: 200; line-height: 0.95; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums; color: var(--text);
+    }
+    .resumo-conta i {
+      font-style: normal; margin-top: 4px;
+      font-family: 'Archivo Narrow', 'Segoe UI', sans-serif;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--overlay1);
+    }
+    .resumo-conta.perto b { color: var(--yellow); }
+    .resumo-conta.hoje b { color: #ff4d5e; text-shadow: 0 0 18px rgba(255, 60, 80, 0.35); }
+    .resumo-conta.hoje i { color: #ff8a95; }
+
     /* ---------- prateleira ----------
        Canal rebaixado sob a bancada. O que mora aqui não é leitura de serviço:
        é coisa dele. Por isso o fundo é o sulco, e não a face do módulo.
@@ -1728,9 +1739,9 @@
       max-height: 28vh; margin: 0 auto;
       background: #000; display: block; overflow: hidden;
     }
-    /* Com vídeo na tela, o que é lembrete some: a contagem do GTA e a ficha da
-       máquina voltam quando o vídeo sai. */
-    body.com-video .m-lancamento, body.com-video .m-maquina { display: none; }
+    /* Com vídeo na tela, o que é lembrete some: a ficha da
+       máquina volta quando o vídeo sai. O GTA fica (pedido dele, 14/11). */
+    body.com-video .m-maquina { display: none; }
     .video-quadro webview, .video-quadro iframe {
       position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
     }
@@ -1794,6 +1805,7 @@
       justify-content: center; background: rgba(17, 17, 27, 0.86);
     }
     .video-drm[hidden] { display: none; }
+    .m-lancamento[hidden] { display: none; }
     .video-quadro video { position: absolute; inset: 0; width: 100%; height: 100%;
       object-fit: contain; background: #000; }
     .botao-espelho {
@@ -2024,7 +2036,7 @@
       color: var(--leitura); font-variant-numeric: tabular-nums; flex: none;
     }
 
-    /* Marca de terceiro, como a do Sentry: entra pelo desenho dela, não
+    /* Marca de terceiro: entra pelo desenho dela, não
        pelo traço da casa. Único lugar da mesa onde cor não é estado. */
     .lancamento .marca-gta { height: 38px; width: auto; display: block; justify-self: center; }
     .lanc-data, .jogo-quando {
@@ -2062,145 +2074,12 @@
       text-transform: uppercase; color: var(--subtext0);
       border: 1px solid var(--vidro-aresta); border-radius: 999px; padding: 4px 10px;
     }
-
-    /* ---------- janela de leitura ----------
-       A chapa do painel é escura porque fica acesa o dia todo no canto do olho.
-       A janela é o oposto: só abre quando ele PARA para ler. Então ela sobe de
-       tom e o texto sobe de contraste — aqui o trabalho é leitura, não vigília. */
-    .caixa.janela {
-      background: #262b34;
-      border-color: #3d4552;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
-    }
-    .caixa.janela .janela-topo .serigrafia {
-      font-size: 13px; color: #eef2f7; letter-spacing: 0.16em;
-    }
-    .janela-corpo .modulo > header { border-bottom-color: #3d4552; }
-    .janela-corpo .marcador-txt { color: #9aa5b4; }
-    .janela-corpo .linha { border-bottom: 1px solid #333b47; }
-    .janela-corpo .linha:hover { background: rgba(255, 255, 255, 0.028); }
-    .janela-corpo .linha .titulo { color: #f4f7fb; font-size: 15px; font-weight: 700; }
-    .janela-corpo .quando b { color: #ffffff; font-size: 14.5px; }
-    .janela-corpo .quando .ha { color: #97a2b1; font-size: 11.5px; }
-    .janela-corpo .vitima { color: #d2dae6; font-size: 13px; }
-    .janela-corpo .vitima .quem { color: #9aa5b4; }
-    .janela-corpo .etiqueta { background: #3b4453; color: #e4eaf2; }
-    .etiqueta.reencaminhada { background: #2a3b4d; color: #9fd0ff; }
-    .janela-corpo .descricao {
-      color: #dbe2ec;
-      background: #1b2027;
-      border-left: 2px solid #4a5464;
-      border-radius: 4px;
-      padding: 8px 10px;
-      font-size: 12.5px;
-    }
-    .janela-corpo .rodape-linha { color: #9aa5b4; border-top-color: #333b47; }
-    .janela-corpo .quieto { color: #b3bcc9; font-size: 14px; }
-    .janela-corpo .nota { color: #d8c98a; font-size: 12.5px; }
-    .janela-corpo .fita::-webkit-scrollbar-track { background: #1b2027; }
-    .janela-corpo .fita::-webkit-scrollbar-thumb { background: #4b5566; border-color: #1b2027; }
-
-    /* ---------- lista de erros do Sentry ----------
-       Anatomia de mensagem de chat: marca de nível à esquerda, projeto na cor
-       da plataforma, hora abaixo, título e detalhe. As classes `dc-` ficaram
-       das anotações do Discord, que saíram do painel em 30/09/2026. */
-    .dc-msg {
-      display: grid;
-      grid-template-columns: 40px 1fr auto;
-      gap: 14px;
-      padding: 9px 14px;
-      border: none;
-      align-items: start;
-    }
-    .dc-msg:hover { background: #2e3035; }
-    .dc-msg.nova { box-shadow: inset 2px 0 0 var(--vermelho); }
-    .dc-corpo { min-width: 0; }
-    .dc-cabeca { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    /* Quando aconteceu e leitura de apoio: sai da linha do nome e vira uma
-       linha só dele, logo abaixo — nome em cima, tempo embaixo. */
-    .dc-quando {
-      display: flex; align-items: baseline; gap: 8px; margin-top: 3px;
-      font-family: 'Archivo Narrow', sans-serif;
-      font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-      color: #cbd2dc; font-variant-numeric: tabular-nums;
-    }
-    .dc-quando .atras {
-      font-weight: 500; letter-spacing: 0.06em; text-transform: none;
-      color: #8d94a0;
-    }
-    .dc-nome {
-      font-size: 15px; font-weight: 600; color: #f2f3f5;
-      letter-spacing: -0.01em;
-    }
-
-    /* Erro do Sentry na mesma anatomia: marca de nível no lugar do avatar. */
-    .dc-marca-nivel {
-      width: 40px; height: 40px; border-radius: 9px; flex: none;
-      display: flex; align-items: center; justify-content: center;
-      background: #232833; border: 1px solid currentColor;
-    }
-    .dc-marca-nivel svg { width: 22px; height: 22px; display: block; }
-    .dc-nivel {
-      font-family: 'Archivo Narrow', sans-serif;
-      font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em;
-      color: #ff9d9d; border: 1px solid #6b2626; border-radius: 3px; padding: 1px 6px;
-    }
-    .dc-titulo {
-      margin-top: 4px;
-      font-size: 15px; font-weight: 700; line-height: 1.35; color: #f4f7fb;
-    }
-    .dc-vitima {
-      margin-top: 4px;
-      font-family: 'Archivo Narrow', sans-serif;
-      font-size: 12.5px; color: #b5bdc9; letter-spacing: 0.03em;
-    }
-    .dc-vitima .quem { color: #8d94a0; margin-left: 8px; }
-    .dc-cru {
-      margin-top: 7px; padding: 8px 10px;
-      background: #232428; border-left: 2px solid #4a5464; border-radius: 4px;
-      font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-      font-size: 12px; line-height: 1.5; color: #cfd6e0; word-break: break-word;
-    }
-    .dc-rodape {
-      margin-top: 7px;
-      font-family: 'Archivo Narrow', sans-serif;
-      font-size: 11.5px; color: #8d94a0; letter-spacing: 0.04em;
-    }
-
-    /* O card inteiro avisa que está trabalhando: uma barra fina correndo na
-       borda de cima e o corpo levemente apagado. Botão pequeno piscando passa
-       despercebido, e a espera vira sensação de travamento. */
-    .dc-msg.trabalhando { position: relative; }
-    .dc-msg.trabalhando .dc-corpo { opacity: 0.55; }
-    .dc-msg.trabalhando::before {
-      content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px;
-      background: linear-gradient(90deg, transparent, var(--ambar), transparent);
-      background-size: 40% 100%;
-      background-repeat: no-repeat;
-      animation: correndo 1.1s linear infinite;
-    }
-    @keyframes correndo {
-      from { background-position: -40% 0; }
-      to { background-position: 140% 0; }
-    }
-    .dc-status {
-      grid-column: 2 / -1;
-      margin-top: 7px;
-      font-family: 'Archivo Narrow', sans-serif;
-      font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--ambar);
-    }
-    .dc-status.ruim { color: var(--vermelho); }
-
     .campo textarea {
       width: 100%; background: var(--sulco); border: 1px solid var(--aresta);
       border-radius: 4px; color: var(--leitura); font-family: inherit;
       font-size: 13.5px; line-height: 1.45; padding: 8px 10px; resize: vertical;
     }
     .campo textarea:focus { outline: none; border-color: var(--ambar); }
-    /* Dentro da janela a lista do Sentry usa fundo de leitura escuro. */
-    .janela-corpo #blocoSentry { background: #313338; border-radius: 6px; }
-    .janela-corpo #blocoSentry > header { border-bottom-color: #3f4147; padding: 10px 14px; }
 
     #maintStatus {
       display: none;
@@ -2225,30 +2104,6 @@
       background: var(--face); border: 1px solid var(--aresta); border-radius: 5px;
       box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6); padding: 18px;
     }
-    /* A janela toma o tamanho do que tem dentro, com teto: lista curta não
-       abre uma tela vazia, lista longa não estoura o monitor. */
-    .caixa.janela {
-      width: auto; max-width: 88vw; min-width: 560px;
-      max-height: 84vh;
-      display: flex; flex-direction: column; gap: 10px; padding: 14px;
-    }
-    .janela-topo { display: flex; align-items: center; gap: 10px; }
-    .janela-corpo { flex: 1; min-height: 0; display: flex; overflow: hidden; }
-    .janela-corpo .modulo { flex: 1; min-width: 0; border: none; background: none; box-shadow: none; }
-    /* O título já está na barra da janela; repetir dentro do módulo é ruído. */
-    .janela-corpo .modulo > header > .serigrafia { display: none; }
-    .janela-corpo .modulo > header { padding-top: 0; }
-    /* Dentro da janela é para ler tudo: título inteiro e, antes dele, quando
-       aconteceu e com quem. Título sozinho não diz se é caso isolado. */
-    .janela-corpo .linha { align-items: start; padding: 12px; }
-    .janela-corpo .linha .titulo { white-space: normal; overflow: visible; line-height: 1.35; }
-    .janela-corpo .linha .cabeca { align-items: flex-start; margin-top: 2px; }
-    .janela-corpo .quando,
-    .janela-corpo .vitima,
-    .janela-corpo .descricao,
-    .janela-corpo .rodape-linha { display: flex; }
-    .janela-corpo .descricao { display: block; }
-    .janela-corpo .linha .meta { display: none; }
 
     .quando, .vitima, .descricao, .rodape-linha { display: none; }
     .quando { align-items: baseline; gap: 9px; margin-bottom: 3px; }
@@ -2310,26 +2165,6 @@
       background: var(--face); border: 1px solid var(--aresta); border-radius: 5px;
       box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6); padding: 18px;
     }
-    /* A janela toma o tamanho do que tem dentro, com teto: lista curta não
-       abre uma tela vazia, lista longa não estoura o monitor. */
-    .caixa.janela {
-      width: auto; max-width: 88vw; min-width: 560px;
-      max-height: 84vh;
-      display: flex; flex-direction: column; gap: 10px; padding: 14px;
-    }
-    .janela-topo { display: flex; align-items: center; gap: 10px; }
-    .janela-corpo { flex: 1; min-height: 0; display: flex; overflow: hidden; }
-    .janela-corpo .modulo { flex: 1; min-width: 0; border: none; background: none; box-shadow: none; }
-    /* O título já está na barra da janela; repetir dentro do módulo é ruído. */
-    .janela-corpo .modulo > header > .serigrafia { display: none; }
-    .janela-corpo .modulo > header { padding-top: 0; }
-    /* Dentro da janela é para ler tudo: título inteiro, sem corte, e os dados
-       que na barra estreita não cabiam. */
-    .janela-corpo .linha { align-items: start; padding: 11px 12px; }
-    .janela-corpo .linha .titulo { white-space: normal; overflow: visible; line-height: 1.35; }
-    .janela-corpo .linha .meta { white-space: normal; overflow: visible; }
-    .janela-corpo .linha .cabeca { align-items: flex-start; }
-    .janela-corpo .extra { display: block; }
     .extra {
       display: none;
       margin-top: 5px;
@@ -2437,7 +2272,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <g id="ic-x" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
         <path d="M4 4l8 8M12 4l-8 8"/>
       </g>
-      <!-- Marca de terceiro, como o Sentry e o GTA: o desenho é dela, então
+      <!-- Marca de terceiro, como o GTA: o desenho é dela, então
            entra com a cor dela e sem o traço da casa. Grade 16x16. -->
       <g id="ic-spotify" fill="#1DB954">
         <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.67 11.55a.62.62 0 0 1-.86.2c-2.34-1.43-5.29-1.75-8.76-.96a.62.62 0 1 1-.28-1.21c3.8-.87 7.06-.5 9.69 1.11.3.18.39.57.21.86zm.98-2.19a.78.78 0 0 1-1.07.26C9 8.1 5.4 7.68 2.6 8.53a.78.78 0 1 1-.45-1.49c3.2-.97 7.17-.5 10.02 1.25.37.23.48.71.26 1.07zm.08-2.28C10.2 5.5 5.68 5.36 3.2 6.11a.93.93 0 1 1-.54-1.78C5.5 3.47 10.5 3.63 13.68 5.52a.93.93 0 1 1-.95 1.6z"/>
@@ -2533,53 +2368,16 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <rect x="2.6" y="2.6" width="10.8" height="10.8" rx="1.4"/>
         <path d="M5.6 5.6h4.8v4.8H5.6z"/>
       </g>
-      <!-- Marca do Sentry: as arcadas do logo, redesenhadas no traco da casa. -->
-      <g id="ic-sentry" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M1.7 12.7c1.9-5.5 4.2-9.2 6.2-9.2s4.3 3.7 6.2 9.2"/>
-        <path d="M5.6 12.7c1-2.7 1.7-4.2 2.3-4.2s1.3 1.5 2.3 4.2"/>
-      </g>
       <g id="ic-power" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <path d="M8 2.4v5.8"/>
         <path d="M11.7 4.5a5.2 5.2 0 1 1-7.4 0"/>
       </g>
-      <!-- Marcas de plataforma do Sentry: dizem de qual lado do projeto veio o
-           erro (Android, iPhone, back-end Java, front-end web). -->
-      <g id="ic-android" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3.4 10.4a4.6 4.6 0 0 1 9.2 0z"/>
-        <path d="M5.4 6.6 4.1 4.4M10.6 6.6l1.3-2.2"/>
-        <circle cx="6.2" cy="8" r="0.6" fill="currentColor" stroke="none"/>
-        <circle cx="9.8" cy="8" r="0.6" fill="currentColor" stroke="none"/>
-      </g>
-      <g id="ic-apple" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M10.9 8.5c0-1.5 1.2-2.2 1.2-2.3-.6-1-1.6-1.1-2-1.1-.9-.1-1.7.5-2.1.5s-1.1-.5-1.8-.5c-.9 0-1.8.5-2.3 1.4-1 1.7-.3 4.2.7 5.6.5.7 1 1.4 1.8 1.4s1-.5 1.8-.5 1 .5 1.8.5 1.3-.7 1.8-1.4c.3-.5.5-.9.6-1-.1 0-1.5-.6-1.5-2.6z"/>
-        <path d="M9.3 3.9c.4-.5.7-1.2.6-1.9-.6 0-1.3.4-1.7.9-.4.5-.7 1.2-.6 1.8.7.1 1.3-.3 1.7-.8z"/>
-      </g>
-      <g id="ic-java" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3.2 8.2h7.2v2.6a2.2 2.2 0 0 1-2.2 2.2H5.4a2.2 2.2 0 0 1-2.2-2.2z"/>
-        <path d="M10.4 8.9h1a1.5 1.5 0 0 1 0 3h-1"/>
-        <path d="M5.9 5.6c.7-.9-.5-1.5 0-2.4M8.3 5.6c.7-.9-.5-1.5 0-2.4"/>
-      </g>
-      <g id="ic-codigo" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M6 4.2 2.6 8 6 11.8"/>
-        <path d="M10 4.2 13.4 8 10 11.8"/>
-      </g>
-      <g id="ic-atomo" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="8" cy="8" r="1.2"/>
-        <ellipse cx="8" cy="8" rx="5.6" ry="2.3"/>
-        <ellipse cx="8" cy="8" rx="5.6" ry="2.3" transform="rotate(60 8 8)"/>
-        <ellipse cx="8" cy="8" rx="5.6" ry="2.3" transform="rotate(120 8 8)"/>
-      </g>
-      <g id="ic-cubo" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M8 2.6 13 5.3v5.4L8 13.4 3 10.7V5.3z"/>
-        <path d="M8 8.1 13 5.3M8 8.1v5.3M8 8.1 3 5.3"/>
-      </g>
-      <g id="ic-servidor" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
         <rect x="2" y="2.5" width="12" height="4.5" rx="1"/>
         <rect x="2" y="9" width="12" height="4.5" rx="1"/>
         <line x1="4.5" y1="4.7" x2="4.6" y2="4.7" stroke-width="1.8"/>
         <line x1="4.5" y1="11.2" x2="4.6" y2="11.2" stroke-width="1.8"/>
       </g>
-      <!-- Marca de terceiro, como a do Sentry: o "VI" do GTA VI
+      <!-- Marca de terceiro: o "VI" do GTA VI
            redesenhado na grade, com o degradê de pôr do sol da própria marca.
            Grade 63x40, então quem usar precisa do viewBox no <svg>. -->
       <linearGradient id="deg-gta6" x1="0" y1="0" x2="0.5" y2="1">
@@ -2945,20 +2743,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </button>
       </div>
     </div>
-
-    <div class="baia">
-      <div class="modulo" id="blocoSentry">
-        <header>
-          <span class="serigrafia">Erros em aberto</span>
-          <span class="marcador-txt" id="sentryNovos"></span>
-          <span class="vao"></span>
-          <span class="marcador-txt" id="sentryWhen"></span>
-          <button class="botao" id="sentryRefresh" title="Varrer agora" aria-label="Varrer o Sentry agora"><svg viewBox="0 0 16 16"><use href="#ic-recarrega"/></svg></button>
-        </header>
-        <div class="fita" id="sentryList"></div>
-      </div>
-
-    </div>
   </section>
 
   <div class="rodape">
@@ -2972,18 +2756,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="celula cel-cota">
         <span class="serigrafia cap">Cota Claude</span>
         <span class="cota-barra" id="cotaBarra"></span>
-      </div>
-      <div class="celula cel-canais">
-        <span class="serigrafia cap">Canais</span>
-        <span class="grupo">
-          <button class="indicador" id="indSentry" title="Abrir os erros do Sentry">
-            <span class="marca-svc"><svg viewBox="0 0 16 16"><use href="#ic-sentry"/></svg></span>
-            <span class="pilha-ind">
-              <span class="serigrafia">Sentry</span>
-              <span class="leitura-ind"><span class="contagem num" id="sentryCount">--</span><span class="led" id="ledSentry"></span></span>
-            </span>
-          </button>
-        </span>
       </div>
       <span class="vao"></span>
       <div class="celula cel-temp" id="celTemp">
@@ -3039,17 +2811,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   </div>
 
   <div id="maintStatus"></div>
-
-  <div id="janelaLista" class="cortina">
-    <div class="caixa janela">
-      <div class="janela-topo">
-        <span class="serigrafia" id="janelaTitulo"></span>
-        <span class="vao"></span>
-        <button class="botao" id="janelaFechar" title="Fechar" aria-label="Fechar"><svg viewBox="0 0 16 16"><use href="#ic-x"/></svg></button>
-      </div>
-      <div class="janela-corpo" id="janelaCorpo"></div>
-    </div>
-  </div>
 
 
   <div id="maintModal" class="cortina">

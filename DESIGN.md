@@ -266,15 +266,8 @@ Dia com compromisso ganha **ponto** no calendário, nunca cor de fundo: estado n
   a mesma linha — rótulo com período, trilho, leitura e cronômetro de reset. O medidor vertical de
   18 segmentos saiu em 27/08/2026: a mesma cota aparecia em dois desenhos diferentes na mesma
   tela. Na travessa a linha vira pastilha, com fio de nível de 46px ao lado do número.
-- **Canal de estado** (Sentry; as Anotações do Discord saíram em 30/09/2026) com a marca do serviço, contagem grande e lâmpada de
-  clipe — contagem não é nível, então **não finge barra**.
-- **Baia de detalhe**: um módulo de lista, o do Sentry (coluna única desde 30/09/2026). Linha de
-  erro com anatomia de mensagem — marca à esquerda (**marca da plataforma**, com aro e traço na cor do
-  nível), nome e selo de nível na primeira linha, **quando aconteceu numa linha só dele logo
-  abaixo** ("Hoje · 20:21", "Ontem · 13:20", "24 ago · 18:52" + "há 3 d"), corpo e ações à direita.
-  A plataforma sai do título quando ele entrega a origem (`NS…`/`EXC_` = Apple, `java.lang`/`ANR` =
-  Android): o campo `platform` do Sentry é do projeto e vem igual para os dois lados de um app
-  React Native.
+- O Sentry e as Anotações do Discord saíram do painel (Discord em 30/09/2026, Sentry em 14/11/2026):
+  não há mais canal de estado nem baia de detalhe no barramento Monitor.
 - **Barra master**: identificação, relógio grande (hora e minuto — segundo virando no canto do
   olho é movimento à toa) e o botão de limpar cache, que segue a faixa em qualquer barramento.
 - **Barra central** (28/08/2026): no barramento Servidores a barra de estado deixa de ser rodapé e
@@ -337,7 +330,7 @@ Dia com compromisso ganha **ponto** no calendário, nunca cor de fundo: estado n
   de plataforma, e a contagem regressiva encostada na borda direita — dias, horas e minutos, **sem
   segundos**, pela mesma razão do relógio. Chegado o dia, a contagem vira recado ("É hoje",
   depois "Lançado"). É o único ponto da mesa onde cor não é estado: marca de terceiro entra pelo
-  desenho dela, como a do Sentry.
+  desenho dela.
 
 A barra central tem **exatamente 1080px** e não pode vazar por baixo de dado nenhum. Quem cede
 espaço é sempre a **cota**: o trilho encurta e o medidor segue legível pela proporção, que é o que
@@ -379,7 +372,7 @@ emoji e nenhum glifo Unicode fazendo papel de ícone.
 Ícone usado acima de 16px **precisa de `viewBox="0 0 16 16"` no `<svg>`** — sem ele o desenho fica
 de 16px no canto de uma caixa maior. O helper `icone()` já emite com viewBox.
 
-Exceção: **marca de serviço**. O Sentry entra pela marca dele (redesenhada no traço da casa), porque
+Exceção: **marca de serviço**. Um serviço entra pela marca dele (redesenhada no traço da casa), porque
 reconhecer o
 serviço é mais rápido que ler a palavra. Ícone que cresce acima de 16px precisa de `viewBox` no
 `<svg>` — sem ele o desenho fica de 16px no canto de uma caixa maior.

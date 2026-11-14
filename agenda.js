@@ -19,7 +19,7 @@ const os = require('os');
 const path = require('path');
 
 // Cópia que sobrevive à formatação: o userData some junto com o sistema, o
-// D:\Claude\.secrets fica (mesmo lugar do txadmin.env e do sentry.env).
+// D:\Claude\.secrets fica (mesmo lugar do txadmin.env).
 // Formato: AGENDA_ICAL_URL=https://calendar.google.com/...
 const AGENDA_ENV = [
   path.join('D:', 'Claude', '.secrets', 'agenda.env'),
