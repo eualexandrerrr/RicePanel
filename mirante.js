@@ -1109,11 +1109,12 @@
   // Windows: a extensão captura a ABA da Netflix (segue renderizando atrás de
   // outras abas) e manda por WebRTC local. Oferta e resposta passam pela ponte.
   let videoAtual = null;
+  let tentativasEspelho = 0;
   async function ligaEspelhoAba(v) {
     paraEspelho();
     modoEspelho = 'aba';
     const r = await window.api.espelhoPede(v.aba).catch(() => null);
-    if (!r || !r.ok) { ligaEspelhoJanela(); return; }
+    if (!r || !r.ok) { voltaCapa('Extensão desconectada do painel'); return; }
     sessaoEspelho = r.sessao;
   }
   if (window.api.onEspelho) window.api.onEspelho(async (m) => {
@@ -1126,9 +1127,16 @@
       return;
     }
     if (m.erro) {
-      // Sem a aba (extensão antiga, permissão negada): volta para a janela.
+      // No Windows a janela mostraria a aba que estiver na frente, não o
+      // vídeo: em vez disso, tenta a aba de novo (a extensão solta a captura
+      // velha antes) até três vezes.
       sessaoEspelho = 0;
-      ligaEspelhoJanela();
+      if (tentativasEspelho++ < 3 && videoAtual && videoAtual.site === 'drm') {
+        voltaCapa('Ligando o espelho da aba…');
+        setTimeout(() => { if (videoAtual && videoAtual.site === 'drm' && !sessaoEspelho) ligaEspelhoAba(videoAtual); }, 2000);
+      } else {
+        voltaCapa('Não deu para espelhar a aba: ' + m.erro);
+      }
       return;
     }
     if (m.estado) {
@@ -1144,6 +1152,7 @@
     pc.ontrack = (ev) => {
       // Sem buffer de jitter: é loopback, o quadro tem que sair na hora.
       try { ev.receiver.playoutDelayHint = 0; ev.receiver.jitterBufferTarget = 0; } catch (e) {}
+      tentativasEspelho = 0;
       espelho = ev.streams[0] || new MediaStream([ev.track]);
       mostraEspelho(espelho);
     };
