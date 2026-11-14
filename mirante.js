@@ -1566,12 +1566,18 @@
       alvo.innerHTML = '<span class="cr chegou"><b>Já vai</b><i>começar</i></span>';
       return;
     }
+    alvo.innerHTML = celulasContagem(resta);
+  }
+
+  // Dias, horas e minutos até o apito. A mesma conta no Mirante e na faixa dos
+  // Servidores: os dois lugares têm que dizer o mesmo número.
+  function celulasContagem(resta) {
     const t = Math.floor(resta / 1000);
     const d = Math.floor(t / 86400);
     const h = Math.floor((t % 86400) / 3600);
     const m = Math.floor((t % 3600) / 60);
     const cel = (v, rot) => '<span class="cr"><b class="num">' + v + '</b><i>' + rot + '</i></span>';
-    alvo.innerHTML = cel(d, d === 1 ? 'dia' : 'dias') + cel(h, h === 1 ? 'hora' : 'horas') + cel(m, 'min');
+    return cel(d, d === 1 ? 'dia' : 'dias') + cel(h, h === 1 ? 'hora' : 'horas') + cel(m, 'min');
   }
 
   // "Ao vivo · 67'", ou "Intervalo". O minuto vem do scoreboard do ESPN, a cada 20 s.
@@ -1750,23 +1756,18 @@
     const temPlacar = j.casa.placar != null && j.fora.placar != null;
     const perto = quando - agora < 24 * 3600e3;
     const local = j.local ? String(j.local).replace(/^est[aá]dio\s+/i, '') : '';
-    // Nos Servidores o jogo é o que mais importa da faixa (14/11/2026): a
-    // contagem vira número grande com a unidade embaixo. Dias pelo calendário
-    // ("amanhã" é 1 dia mesmo faltando 10 h); no dia do jogo, horas e minutos.
+    // Nos Servidores o jogo é o que mais importa da faixa (14/11/2026), com a
+    // mesma contagem do Mirante: dias, horas e minutos, e as mesmas cores.
     let lado = '';
     if (rolando || terminou) {
       if (temPlacar) lado = '<span class="resumo-placar' + (rolando ? ' vivo' : '') + '"><b>' + j.casa.placar + '</b><i>×</i><b>' + j.fora.placar + '</b></span>';
     } else {
-      const dias = Math.round((inicioDoDia(quando) - hojeIni) / 86400000);
-      let num, unid;
-      if (dias >= 1) { num = String(dias); unid = dias === 1 ? 'dia · amanhã' : 'dias'; }
-      else {
-        const m = Math.max(0, Math.floor((quando - agora) / 60000));
-        num = m >= 60 ? Math.floor(m / 60) + 'h' + doisDig(m % 60) : String(m);
-        unid = m >= 60 ? 'hoje' : 'min';
-      }
-      lado = '<span class="resumo-conta' + (dias < 1 ? ' hoje' : dias === 1 ? ' perto' : '') + '"><b>' + esc(num) + '</b><i>' + esc(unid) + '</i></span>';
+      const resta = quando - agora;
+      lado = resta <= 0
+        ? '<span class="conta-regressiva"><span class="cr chegou"><b>Já vai</b><i>começar</i></span></span>'
+        : '<span class="conta-regressiva">' + celulasContagem(resta) + '</span>';
     }
+    const nivelJogo = (!rolando && !terminou) ? NIVEIS_JOGO.find(n => quando - agora <= n.ate) : null;
     const camp = j.competicao ? esc(j.competicao) + (j.fase ? ' · ' + esc(j.fase) : '') : '';
     const tv = Array.isArray(j.transmissao) && j.transmissao.length
       ? '<span class="resumo-tv"><b>TV</b>' + j.transmissao.map(esc).join(' · ') + '</span>' : '';
@@ -1775,7 +1776,7 @@
       : terminou
         ? '<span class="resumo-sub">Fim de jogo</span>'
         : '<span class="resumo-sub' + (perto ? ' quente' : '') + '">' + esc(quandoCurto(quando)) + (camp ? ' · ' + camp : '') + '</span>';
-    elJ.innerHTML = '<div class="resumo-bloco jogo">' +
+    elJ.innerHTML = '<div class="resumo-bloco jogo' + (nivelJogo ? ' ' + nivelJogo.classe : '') + '">' +
       '<span class="resumo-escudos">' + escudo(j.casa) + escudo(j.fora) + '</span>' +
       '<span class="resumo-texto">' +
         '<span class="resumo-titulo">' + esc(j.casa.nome) + ' × ' + esc(j.fora.nome) + '</span>' +
@@ -1789,7 +1790,7 @@
 
   // Resolução de minuto: um tique de 20 s basta para o número nunca ficar um
   // minuto inteiro atrasado.
-  setInterval(() => { if (acordado) pintaContagemJogo(); }, 20000);
+  setInterval(() => { if (acordado) pintaContagemJogo(); pintaResumo(); }, 20000);
 
   window.api.onFlamengo(pintaJogo);
   // Tarefas chegam depois da agenda (Apps Script leva uns segundos) e mudam
