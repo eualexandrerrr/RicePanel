@@ -93,6 +93,7 @@ function arquivoChave() {
 // tocava, e o vídeo nunca mais vinha para a parede.
 let pendenteRetomar = null;      // { aba, url } lido do disco na subida
 let ultimoDiagChrome = '';
+let ultimoRecorteLog = '';
 
 function leChave() {
   try {
@@ -540,13 +541,18 @@ function olhaPelaPonte() {
       : (aba.duracao == null && Math.abs(Number(aba.velocidadeYoutube) - 1) <= 0.1 ? 1 : Number(aba.velocidadeYoutube)),
     qualidade: aba.qualidadeYoutube || null,
     qualidades: Array.isArray(aba.qualidadesYoutube) ? aba.qualidadesYoutube : [],
-    fixo: aba.configRice || null
+    fixo: aba.configRice || null,
+    // Onde o vídeo fica dentro da janela do Chrome: o espelho recorta por aqui.
+    recorte: aba.recorte || null,
+    recorteAba: aba.recorteAba || null
   };
   if (antes !== (id || estado.titulo)) {
     log('achou ' + estado.site + ' pela ponte: ' + estado.titulo + (id ? ' (' + id + ')' : '') +
       ' | volume ' + (ultimoVolume == null ? 'desconhecido' : Math.round(ultimoVolume * 100) + '%') +
       (aba.volumeYoutube != null ? ' (do player)' : ' (do elemento — extensão sem recarregar?)'));
   }
+  const rec = estado.recorte ? ['x', 'y', 'w', 'h'].map(k => k + '=' + estado.recorte[k].toFixed(3)).join(' ') : 'nenhum';
+  if (drm && rec !== ultimoRecorteLog) { ultimoRecorteLog = rec; log('recorte do espelho: ' + rec); }
   // Ele voltou para a aba: o que o painel pausou deixa de ser dele.
   if (estado.janelaVisivel) pausadoPeloPainel = false;
   // Aba muda sem ele ter pedido (sobra das versões que mutavam na troca de

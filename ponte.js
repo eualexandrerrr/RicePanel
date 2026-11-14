@@ -54,6 +54,7 @@ let ultimoResumo = '';
 // Quem quer saber na hora que chegou lista nova (video.js): trocar de janela
 // não pode esperar o próximo tique de 2 s.
 let aoReceberAbas = null;
+let aoSinalEspelho = null;
 const esperando = new Map();
 
 function log(msg) {
@@ -81,6 +82,12 @@ function trata(linha) {
     const resumo = abas.length + ' aba(s) de vídeo, ' + abas.filter(a => a.tocando).length + ' tocando';
     if (resumo !== ultimoResumo) { ultimoResumo = resumo; log(resumo); }
     if (aoReceberAbas) { try { aoReceberAbas(); } catch (e) {} }
+    return;
+  }
+  // Espelho da aba (WebRTC): oferta, estado ou erro vindo do offscreen da
+  // extensão. Quem trata é o main, que repassa ao Mirante.
+  if (m.tipo === 'espelho-sinal') {
+    if (aoSinalEspelho) { try { aoSinalEspelho(m); } catch (e) {} }
     return;
   }
   if (m.tipo === 'cookies' && esperando.has(m.pedido)) {
@@ -158,5 +165,6 @@ module.exports = {
   conectada: () => !!conexao,
   // Quando chegou a última lista: a posição do vídeo vale para esse instante.
   abasEm: () => abasEm,
-  aoMudar: (cb) => { aoReceberAbas = cb; }
+  aoMudar: (cb) => { aoReceberAbas = cb; },
+  aoEspelho: (cb) => { aoSinalEspelho = cb; }
 };

@@ -1037,35 +1037,151 @@
   // continua sendo o Chrome dele, com DRM e com o Premium que ele paga. O
   // preço é o diálogo do portal do Hyprland, uma vez por sessão.
   let espelho = null;              // MediaStream de pé
+  let pcEspelho = null;            // WebRTC do espelho da aba (Windows)
+  let sessaoEspelho = 0;
+  let modoEspelho = '';            // 'aba' | 'janela'
   function paraEspelho() {
+    if (pcEspelho) {
+      try { pcEspelho.close(); } catch (e) {}
+      pcEspelho = null;
+      window.api.espelhoPara().catch(() => {});
+    }
+    sessaoEspelho = 0;
     if (!espelho) return;
     try { espelho.getTracks().forEach(t => t.stop()); } catch (e) {}
     espelho = null;
   }
 
-  async function ligaEspelho() {
+  // O quadro mostra só o <video> da página: na captura da JANELA, o recorte
+  // tira abas, barra e moldura do Chrome; na da ABA, o que for página em volta
+  // do player (Globoplay). Ampliado e centrado como um `contain`.
+  let recorteEspelho = null;
+  function aplicaRecorte() {
+    const quadro = document.getElementById('wEspelhoQuadro');
+    if (!quadro) return;
+    const r = recorteEspelho;
+    const vw = quadro.videoWidth, vh = quadro.videoHeight;
+    const caixa = quadro.parentElement;
+    const W = caixa.clientWidth, H = caixa.clientHeight;
+    if (!r || !vw || !vh || !W || !H || r.w <= 0 || r.h <= 0) {
+      quadro.removeAttribute('style');
+      return;
+    }
+    const cw = r.w * vw, ch = r.h * vh;
+    const s = Math.min(W / cw, H / ch);
+    quadro.style.cssText =
+      'inset:auto;object-fit:fill;' +
+      'width:' + (vw * s) + 'px;height:' + (vh * s) + 'px;' +
+      'left:' + ((W - cw * s) / 2 - r.x * vw * s) + 'px;' +
+      'top:' + ((H - ch * s) / 2 - r.y * vh * s) + 'px;';
+  }
+  function recorteDo(v) {
+    if (!v) return null;
+    return (modoEspelho === 'aba' ? v.recorteAba : v.recorte) || null;
+  }
+  function mudaRecorte(v) {
+    const r = recorteDo(v);
+    const chave = (x) => x ? [x.x, x.y, x.w, x.h].map(n => Math.round(n * 1000)).join(',') : '';
+    const mudou = chave(r) !== chave(recorteEspelho);
+    recorteEspelho = r;
+    if (mudou) aplicaRecorte();
+  }
+
+  function mostraEspelho(fluxo) {
+    const quadro = document.getElementById('wEspelhoQuadro');
+    if (!quadro) { paraEspelho(); return false; }
+    quadro.srcObject = fluxo;
+    quadro.onloadedmetadata = aplicaRecorte;
+    quadro.onresize = aplicaRecorte;
+    quadro.play().catch(() => {});
+    recorteEspelho = recorteDo(videoAtual);
+    aplicaRecorte();
+    document.getElementById('wEspelhoCapa').hidden = true;
+    return true;
+  }
+  function voltaCapa(texto) {
+    const capa = document.getElementById('wEspelhoCapa');
+    if (capa) capa.hidden = false;
+    const aviso = document.getElementById('wEspelhoAviso');
+    if (aviso && texto) aviso.textContent = texto;
+  }
+
+  // Windows: a extensão captura a ABA da Netflix (segue renderizando atrás de
+  // outras abas) e manda por WebRTC local. Oferta e resposta passam pela ponte.
+  let videoAtual = null;
+  async function ligaEspelhoAba(v) {
+    paraEspelho();
+    modoEspelho = 'aba';
+    const r = await window.api.espelhoPede(v.aba).catch(() => null);
+    if (!r || !r.ok) { ligaEspelhoJanela(); return; }
+    sessaoEspelho = r.sessao;
+  }
+  if (window.api.onEspelho) window.api.onEspelho(async (m) => {
+    if (!m || m.sessao !== sessaoEspelho) return;
+    if (m.erro && m.precisaClique) {
+      // Chrome aberto sem o --allowlisted-extension-id: um clique no ícone da
+      // RiceExtension na aba libera, e a extensão refaz o pedido sozinha
+      // (mesma sessão). Espelhar a janela mostraria a aba errada.
+      voltaCapa('Clique no ícone da RiceExtension na aba do vídeo para liberar o espelho');
+      return;
+    }
+    if (m.erro) {
+      // Sem a aba (extensão antiga, permissão negada): volta para a janela.
+      sessaoEspelho = 0;
+      ligaEspelhoJanela();
+      return;
+    }
+    if (m.estado) {
+      if ((m.estado === 'failed' || m.estado === 'trilha-acabou') && videoAtual) {
+        voltaCapa('Espelho caiu, religando…');
+        setTimeout(() => { if (videoAtual && videoAtual.site === 'drm') ligaEspelhoAba(videoAtual); }, 1500);
+      }
+      return;
+    }
+    if (!m.oferta) return;
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    pcEspelho = pc;
+    pc.ontrack = (ev) => {
+      // Sem buffer de jitter: é loopback, o quadro tem que sair na hora.
+      try { ev.receiver.playoutDelayHint = 0; ev.receiver.jitterBufferTarget = 0; } catch (e) {}
+      espelho = ev.streams[0] || new MediaStream([ev.track]);
+      mostraEspelho(espelho);
+    };
+    await pc.setRemoteDescription({ type: 'offer', sdp: m.oferta });
+    const resposta = await pc.createAnswer();
+    await pc.setLocalDescription(resposta);
+    await new Promise((ok) => {
+      if (pc.iceGatheringState === 'complete') return ok();
+      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') ok(); };
+      setTimeout(ok, 1500);
+    });
+    if (pcEspelho !== pc) return;
+    window.api.espelhoResposta(m.sessao, pc.localDescription.sdp).catch(() => {});
+  });
+
+  async function ligaEspelhoJanela() {
+    modoEspelho = 'janela';
     try {
       espelho = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: 30 },
         audio: false
       });
     } catch (e) {
-      const aviso = document.getElementById('wEspelhoAviso');
-      if (aviso) aviso.textContent = 'Não deu para espelhar: ' + (e.message || e.name);
+      voltaCapa('Não deu para espelhar: ' + (e.message || e.name));
       return;
     }
-    const quadro = document.getElementById('wEspelhoQuadro');
-    if (!quadro) { paraEspelho(); return; }
-    quadro.srcObject = espelho;
-    quadro.play().catch(() => {});
-    document.getElementById('wEspelhoCapa').hidden = true;
+    if (!mostraEspelho(espelho)) return;
     // O compositor pode encerrar a partilha por fora; quando isso acontece a
     // placa volta ao convite em vez de ficar com um quadro congelado.
     espelho.getVideoTracks().forEach(t => t.addEventListener('ended', () => {
       paraEspelho();
-      const capa = document.getElementById('wEspelhoCapa');
-      if (capa) capa.hidden = false;
+      voltaCapa('');
     }));
+  }
+
+  function ligaEspelho() {
+    if (/Windows/.test(navigator.userAgent) && videoAtual && videoAtual.aba != null) ligaEspelhoAba(videoAtual);
+    else ligaEspelhoJanela();
   }
 
   function montaDrm(v) {
@@ -1077,7 +1193,7 @@
           '<span class="rotulo">Tocando no navegador</span>' +
           '<span class="video-titulo">' + esc(v.titulo || '—') + '</span>' +
           '<span class="rotulo">O serviço usa DRM e não roda dentro do painel</span>' +
-          '<button class="botao-espelho" id="wEspelhoBotao">Espelhar a janela aqui</button>' +
+          '<button class="botao-espelho" id="wEspelhoBotao">Espelhar aqui</button>' +
           '<span class="rotulo" id="wEspelhoAviso"></span>' +
         '</span>' +
       '</span>' +
@@ -1092,6 +1208,7 @@
     if (botao) botao.addEventListener('click', ligaEspelho);
     // No Windows não há diálogo de portal: quem escolhe a janela é o main
     // (a do Chrome com o título do vídeo). Então o espelho já liga sozinho.
+    videoAtual = v;
     if (/Windows/.test(navigator.userAgent)) ligaEspelho();
   }
 
@@ -1263,12 +1380,14 @@
       // play à aba, se foi ele quem pausou.
       if (videoMontado && /^youtube/.test(videoMontado) && chromeComSom === false) window.api.videoTocaNavegador().catch(() => {});
       chromeComSom = null;
+      videoAtual = null;
       paraEspelho();
       desmontaVideo();
       return;
     }
 
-    const assinatura = v.site + ':' + v.id;
+    // DRM não tem id: a aba é quem diz se trocou de vídeo (outra aba = outro espelho).
+    const assinatura = v.site + ':' + (v.site === 'youtube' ? v.id : v.aba);
     // O player nasce assim que o vídeo toca no Chrome, mesmo com ele olhando
     // para a aba (mudo, pip.js): montar só na hora em que ele saía do Chrome
     // custava carregar a página, os cookies e chegar ao ao vivo — segundos de
@@ -1286,7 +1405,7 @@
       pintaVelQual(v);
       pintaVolume(v.volume);
     }
-    if (v.site !== 'youtube') return;
+    if (v.site !== 'youtube') { videoAtual = v; mudaRecorte(v); return; }
 
     // Voltar para o Chrome não interrompe a parede (13/09/2026): os dois tocam
     // juntos, e o som é da aba — a janela do player fica muda (pip.js). Saindo

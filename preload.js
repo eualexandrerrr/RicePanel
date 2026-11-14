@@ -39,6 +39,10 @@ contextBridge.exposeInMainWorld('api', {
   videoQualidade: (valor) => ipcRenderer.invoke('video-qualidade', valor),
   // Volume do player do YouTube na aba do Chrome, em passos (delta -100 a 100).
   videoVolume: (delta) => ipcRenderer.invoke('video-volume', delta),
+  espelhoPede: (aba) => ipcRenderer.invoke('espelho-pede', aba),
+  espelhoResposta: (sessao, sdp) => ipcRenderer.invoke('espelho-resposta', sessao, sdp),
+  espelhoPara: () => ipcRenderer.invoke('espelho-para'),
+  onEspelho: (cb) => ipcRenderer.on('espelho-sinal', (e, d) => cb(d)),
   onVideo: (cb) => ipcRenderer.on('video-update', (e, d) => cb(d)),
 
   flamengoGet: () => ipcRenderer.invoke('flamengo-get'),

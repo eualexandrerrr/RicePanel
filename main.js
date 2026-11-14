@@ -708,6 +708,27 @@ ipcMain.handle('video-fecha', async () => {
   return r;
 });
 ipcMain.handle('video-entra', async () => video.entraComAContaDele());
+
+// Espelho da ABA de vídeo com DRM (Netflix, Globoplay): a extensão captura a
+// aba (chrome.tabCapture, segue mesmo fora da frente) e manda por WebRTC local.
+// Aqui só passa a oferta e a resposta entre a extensão e o Mirante.
+let espelhoSessao = 0;
+ipcMain.handle('espelho-pede', async (e, aba) => {
+  if (process.platform !== 'win32') return { ok: false };
+  const p = require('./ponte');
+  p.aoEspelho((m) => {
+    if (m.erro) log('espelho da aba: ' + m.erro);
+    else if (m.estado) log('espelho da aba: ' + m.estado);
+    else if (m.oferta) log('espelho da aba: oferta ' + (m.largura || '?') + 'x' + (m.altura || '?'));
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('espelho-sinal', m);
+  });
+  espelhoSessao++;
+  const ok = p.envia({ tipo: 'espelho', aba, sessao: espelhoSessao });
+  log('espelho da aba: pedindo a aba ' + aba + (ok ? '' : ' (extensão desconectada)'));
+  return { ok, sessao: espelhoSessao };
+});
+ipcMain.handle('espelho-resposta', async (e, sessao, sdp) => require('./ponte').envia({ tipo: 'espelho-resposta', sessao, sdp }));
+ipcMain.handle('espelho-para', async () => require('./ponte').envia({ tipo: 'espelho-para' }));
 ipcMain.handle('video-pausa-navegador', async () => video.pausaNavegador());
 ipcMain.handle('video-toca-navegador', async () => video.tocaNavegador());
 
