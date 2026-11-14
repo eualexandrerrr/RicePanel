@@ -599,7 +599,9 @@ function pipPadrao() {
 let pipMudo = { id: '', mudo: false };
 
 function mudoDoPlayer(v) {
-  return !!(v.id && pipMudo.id === v.id && pipMudo.mudo);
+  // DRM não tem id: o título faz as vezes de chave do vídeo.
+  const chave = v.id || v.titulo || '';
+  return !!(chave && pipMudo.id === chave && pipMudo.mudo);
 }
 
 function retratoVideo() {
@@ -683,7 +685,7 @@ ipcMain.handle('video-liga', async (e, valor) => { await video.liga(valor); retu
 // O mudo é do vídeo que está tocando: vídeo novo nasce com som.
 ipcMain.handle('video-mudo', async (e, valor) => {
   const v = video.atual();
-  pipMudo = { id: v.id || '', mudo: valor == null ? !mudoDoPlayer(v) : !!valor };
+  pipMudo = { id: v.id || v.titulo || '', mudo: valor == null ? !mudoDoPlayer(v) : !!valor };
   log('player: ' + (pipMudo.mudo ? 'mudo' : 'com som'));
   // O som é da aba do Chrome: o mudo do player é o mudo dela.
   video.mudoNoChrome(pipMudo.mudo);

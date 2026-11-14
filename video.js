@@ -557,7 +557,7 @@ function olhaPelaPonte() {
   if (estado.janelaVisivel) pausadoPeloPainel = false;
   // Aba muda sem ele ter pedido (sobra das versões que mutavam na troca de
   // janela): devolve o som, sem mexer na posição da live.
-  const querMudo = mudoPedido.id === id && mudoPedido.mudo;
+  const querMudo = mudoPedido.id === (id || estado.titulo || '') && mudoPedido.mudo;
   if (!!aba.mudaNoChrome !== querMudo && Date.now() - mudoConferidoEm > 4000) {
     mudoConferidoEm = Date.now();
     ponte.envia({ tipo: querMudo ? 'mutar' : 'desmutar', aba: aba.aba, semBorda: true });
@@ -572,7 +572,7 @@ let mudoPedido = { id: '', mudo: false };
 let mudoConferidoEm = 0;
 
 function mudoNoChrome(valor) {
-  mudoPedido = { id: estado.id || '', mudo: !!valor };
+  mudoPedido = { id: estado.id || estado.titulo || '', mudo: !!valor };
   mudoConferidoEm = 0;
   if (!WIN || !ponte || estado.aba == null) return { ok: false };
   mudoConferidoEm = Date.now();

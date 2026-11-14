@@ -1288,7 +1288,23 @@
       '<span class="video-pe">' +
         '<span class="video-titulo">' + esc(v.titulo || 'Vídeo') + '</span>' +
         '<span class="rotulo video-onde">Espelho</span>' +
+        // Mesmo volume e mudo do YouTube (14/11/2026): mexem no <video> da aba,
+        // que é de onde sai o som também no espelho.
+        '<span class="video-divisa" aria-hidden="true"></span>' +
+        '<button class="video-acao" id="wVideoVolMenos" type="button" title="Abaixar o volume" aria-label="Abaixar o volume">' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-menos"/></svg></button>' +
+        '<span class="video-volume" id="wVideoVolume" title="Volume do player no Chrome">--</span>' +
+        '<button class="video-acao" id="wVideoVolMais" type="button" title="Aumentar o volume" aria-label="Aumentar o volume">' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-mais"/></svg></button>' +
+        '<button class="video-acao" id="wVideoMudo" type="button"></button>' +
       '</span>';
+    seguraRepete($('wVideoVolMenos'), () => mexeVolume(-PASSO_VOLUME_DRM));
+    seguraRepete($('wVideoVolMais'), () => mexeVolume(PASSO_VOLUME_DRM));
+    $('wVideoMudo').addEventListener('click', () => {
+      window.api.videoMudo().then(pintaMudo).catch(() => {});
+    });
+    pintaMudo(v);
+    pintaVolume(v.volume);
     elVideo.hidden = false;
     document.body.classList.add('com-video');
     pintaMusica(ultimaMusica);
@@ -1359,6 +1375,9 @@
   // O som vem da janela do player (pip.html), que segue o mesmo volume no tique
   // seguinte; a leitura aqui já muda no clique para o botão não parecer solto.
   const PASSO_VOLUME = 0.5;
+  // Netflix e cia. não normalizam: o <video> vai de 0 a 100 direto, e meio
+  // ponto lá é imperceptível. Passo de 2, segurando repete.
+  const PASSO_VOLUME_DRM = 2;
   let volumeMostrado = null;
   // Depois do clique a extensão ainda relata o volume velho por um tique; sem
   // esta carência o número pulava para trás e voltava.
