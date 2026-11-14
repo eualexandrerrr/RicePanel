@@ -1689,6 +1689,9 @@
        por dentro: o quadro do vídeo JÁ é um retângulo, e vidro em volta de
        vidro só some com o conteúdo. */
     .m-video { padding: 0; overflow: hidden; }
+    /* Topo reto e sem aresta (14/11/2026, pedido dele): o filme começa na
+       linha de cima, sem canto redondo comendo a imagem nem fio de vidro. */
+    .m-video { border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; box-shadow: none; }
     /* No Mirante o vídeo passa da coluna de 760: o monitor tem 1080 e o filme
        é o que ele está vendo. Perto das bordas, mas com sobra de 32px. */
     body.em-mirante .tapete > .m-video { width: min(100% - 40px, 1016px); }

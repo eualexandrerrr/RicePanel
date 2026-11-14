@@ -1136,6 +1136,10 @@
       x: base.x + base.w * c.l, y: base.y + base.h * c.t,
       w: base.w * (1 - c.l - c.r), h: base.h * (1 - c.t - c.b)
     };
+    // Meio por cento a mais de corte em cada lado: a borda do quadro da
+    // Netflix tem um fio escuro que a amostra de 96x54 não enxerga.
+    const fio = 0.005;
+    r.x += r.w * fio; r.y += r.h * fio; r.w *= 1 - 2 * fio; r.h *= 1 - 2 * fio;
     const cw = r.w * vw, ch = r.h * vh;
     const larg = elVideo.clientWidth;
     const teto = window.innerHeight * 0.33;
